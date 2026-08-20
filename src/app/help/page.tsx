@@ -1,0 +1,69 @@
+import type { Metadata } from "next";
+import { ContentPage, Prose } from "@/components/layout/content-page";
+import { ButtonLink } from "@/components/ui/button";
+
+export const metadata: Metadata = {
+  title: "Help",
+  description:
+    "How to get around PDFKit today, what works, what does not, and where to report a problem.",
+};
+
+export default function HelpPage() {
+  return (
+    <ContentPage
+      title="Help"
+      intro="A short guide to what the current version of PDFKit can and cannot do."
+      breadcrumbs={[{ label: "Home", href: "/" }, { label: "Help" }]}
+    >
+      <Prose>
+        <h2>What works today</h2>
+        <ul>
+          <li>Browsing the tool catalog by category.</li>
+          <li>Searching tools by name, description or category.</li>
+          <li>Opening any tool page to see what the tool will do and what it accepts.</li>
+          <li>Switching between light, dark and system themes.</li>
+        </ul>
+
+        <h2>What does not work yet</h2>
+        <ul>
+          <li>
+            No tool processes documents. Upload areas on tool pages are intentionally
+            disabled and labelled <strong>Coming soon</strong>.
+          </li>
+          <li>There are no accounts, no cloud storage, no API keys and no billing.</li>
+        </ul>
+
+        <h2>Keyboard shortcuts</h2>
+        <ul>
+          <li>
+            <strong>Tab / Shift+Tab</strong> — move between interactive elements. The
+            first stop on every page is &ldquo;Skip to main content&rdquo;.
+          </li>
+          <li>
+            <strong>Escape</strong> — clear the search field, close the theme menu or
+            close the mobile navigation.
+          </li>
+          <li>
+            <strong>Enter</strong> in the homepage search — open the full catalog
+            filtered by your query.
+          </li>
+        </ul>
+
+        <h2>Reporting a problem</h2>
+        <ul>
+          <li>
+            PDFKit is developed in the open. Issues and suggestions belong in the
+            project&rsquo;s Git repository, which is the source of truth for the roadmap.
+          </li>
+        </ul>
+      </Prose>
+
+      <div className="mt-8 flex flex-wrap gap-3">
+        <ButtonLink href="/tools">Browse tools</ButtonLink>
+        <ButtonLink href="/faq" variant="secondary">
+          Read the FAQ
+        </ButtonLink>
+      </div>
+    </ContentPage>
+  );
+}
