@@ -1,8 +1,10 @@
 import { DeletePdfPagesWorkspace } from "@/components/tools/workspaces/delete-pdf-pages-workspace";
 import { ExtractPdfPagesWorkspace } from "@/components/tools/workspaces/extract-pdf-pages-workspace";
 import { MergePdfWorkspace } from "@/components/tools/workspaces/merge-pdf-workspace";
+import { ReorderPdfPagesWorkspace } from "@/components/tools/workspaces/reorder-pdf-pages-workspace";
 import { SplitPdfWorkspace } from "@/components/tools/workspaces/split-pdf-workspace";
 import { getProcessingLimits } from "@/lib/processing/limits";
+import { getThumbnailLimits } from "@/lib/thumbnails/limits";
 import { getInputRules } from "@/lib/processing/rules";
 
 /**
@@ -51,6 +53,18 @@ export function getToolWorkspace(toolId: string): React.ReactNode | null {
       const limits = getProcessingLimits();
       return <DeletePdfPagesWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
     }
+    case "reorder-pdf-pages": {
+      const limits = getProcessingLimits();
+      const thumbnails = getThumbnailLimits();
+      return (
+        <ReorderPdfPagesWorkspace
+          limits={{
+            maxFileSize: limits.maxFileSize,
+            thumbnailMaxPages: thumbnails.maxPages,
+          }}
+        />
+      );
+    }
     default:
       return null;
   }
@@ -61,6 +75,7 @@ const TOOLS_WITH_WORKSPACE = new Set([
   "split-pdf",
   "extract-pdf-pages",
   "delete-pdf-pages",
+  "reorder-pdf-pages",
 ]);
 
 export function hasToolWorkspace(toolId: string): boolean {
