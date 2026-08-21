@@ -1,12 +1,19 @@
 import "server-only";
 
-import { EncryptedPDFError, PDFDocument } from "pdf-lib";
+import { PDFDocument } from "pdf-lib";
 import type {
   ProcessingRequest,
   ProcessingSuccess,
   ToolProcessor,
 } from "@/lib/processing/contract";
-import { ProcessingError } from "@/lib/processing/errors";
+import {
+  copyPagesInto,
+  loadPdfDocument,
+  readPageCount,
+  readPageIndices,
+  savePdfDocument,
+  stampPdfKitMetadata,
+} from "@/lib/processing/pdf-document";
 import { MERGE_PDF_INPUT_RULES } from "@/lib/processing/rules";
 
 export interface MergePdfOptions {
@@ -38,61 +45,16 @@ export class MergePdfProcessor implements ToolProcessor<MergePdfOptions> {
 
     // Order matters: iterate exactly in the order the user arranged the files.
     for (const file of files) {
-      const source = await loadDocument(file.name, file.bytes);
+      const source = await loadPdfDocument(file.name, file.bytes);
+      const pageCount = readPageCount(source, file.name);
+      const pageIndices = readPageIndices(source, file.name);
 
-      // pdf-lib parses lazily: a damaged document often loads fine and only
-      // fails when its page tree is touched, so this is guarded too.
-      let pageCount: number;
-      let pageIndices: number[];
-      try {
-        pageCount = source.getPageCount();
-        pageIndices = source.getPageIndices();
-      } catch (cause) {
-        throw new ProcessingError("INVALID_PDF", "A PDF could not be read.", {
-          details: [`${file.name} could not be read — the file may be damaged.`],
-          cause,
-        });
-      }
-
-      if (pageCount === 0) {
-        throw new ProcessingError("INVALID_PDF", "A PDF contains no pages.", {
-          details: [`${file.name} has no pages to merge.`],
-        });
-      }
-
-      let copied;
-      try {
-        copied = await merged.copyPages(source, pageIndices);
-      } catch (cause) {
-        throw new ProcessingError(
-          "INVALID_PDF",
-          "A PDF could not be read completely.",
-          {
-            details: [`${file.name} could not be merged — the file may be damaged.`],
-            cause,
-          },
-        );
-      }
-
-      for (const page of copied) merged.addPage(page);
+      await copyPagesInto(merged, source, pageIndices, file.name);
       totalPages += pageCount;
     }
 
-    // pdf-lib always stamps its own Producer on save, so only Creator is set.
-    merged.setCreator("PDFKit");
-    merged.setCreationDate(new Date());
-    merged.setModificationDate(new Date());
-
-    let bytes: Uint8Array;
-    try {
-      bytes = await merged.save({ useObjectStreams: true });
-    } catch (cause) {
-      throw new ProcessingError(
-        "PROCESSING_ERROR",
-        "The merged PDF could not be created.",
-        { cause },
-      );
-    }
+    stampPdfKitMetadata(merged);
+    const bytes = await savePdfDocument(merged);
 
     return {
       status: "succeeded",
@@ -110,43 +72,6 @@ export class MergePdfProcessor implements ToolProcessor<MergePdfOptions> {
       },
     };
   }
-}
-
-/** Parse one document, mapping library failures onto the PDFKit error model. */
-async function loadDocument(name: string, bytes: Uint8Array): Promise<PDFDocument> {
-  try {
-    return await PDFDocument.load(bytes, {
-      // Encrypted documents must be reported, not silently mangled.
-      ignoreEncryption: false,
-      updateMetadata: false,
-    });
-  } catch (cause) {
-    if (isEncryptedPdfError(cause)) {
-      throw new ProcessingError(
-        "ENCRYPTED_PDF",
-        "Password-protected PDFs cannot be merged yet.",
-        {
-          details: [`${name} is password protected. Unlock it and try again.`],
-          cause,
-        },
-      );
-    }
-
-    throw new ProcessingError("INVALID_PDF", "A PDF could not be opened.", {
-      details: [`${name} is not a readable PDF document.`],
-      cause,
-    });
-  }
-}
-
-/**
- * pdf-lib's error classes are transpiled in a way that breaks `instanceof`
- * across module boundaries, so the message is checked as well.
- */
-function isEncryptedPdfError(error: unknown): boolean {
-  if (error instanceof EncryptedPDFError) return true;
-  const message = error instanceof Error ? error.message : "";
-  return /is encrypted/i.test(message);
 }
 
 export const mergePdfProcessor = new MergePdfProcessor();

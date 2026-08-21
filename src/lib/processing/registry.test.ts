@@ -16,14 +16,15 @@ import { makePdf } from "@/test/pdf-fixtures";
 
 describe("processor registry", () => {
   it("exposes the implemented tools", () => {
-    expect(getImplementedToolIds()).toEqual(["merge-pdf"]);
+    expect(getImplementedToolIds()).toEqual(["merge-pdf", "split-pdf"]);
     expect(hasProcessor("merge-pdf")).toBe(true);
-    expect(hasProcessor("split-pdf")).toBe(false);
+    expect(hasProcessor("split-pdf")).toBe(true);
+    expect(hasProcessor("compress-pdf")).toBe(false);
   });
 
   it("throws a safe error for tools that are not implemented", () => {
     try {
-      getProcessor("split-pdf");
+      getProcessor("compress-pdf");
       throw new Error("expected getProcessor to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(ProcessingError);
@@ -33,6 +34,9 @@ describe("processor registry", () => {
   });
 
   it("keeps the catalog and the registry in sync", () => {
+    // Phase 3 adds split-pdf; nothing else may claim to work.
+    expect(getImplementedToolIds()).toEqual(["merge-pdf", "split-pdf"]);
+
     // A tool may only claim to be usable if it really has an implementation…
     for (const tool of TOOLS) {
       expect(isToolUsable(tool)).toBe(hasProcessor(tool.id));
@@ -60,10 +64,13 @@ describe("getProcessingLimits", () => {
     vi.stubEnv("PDFKIT_MAX_UPLOAD_SIZE", "1024");
     vi.stubEnv("PDFKIT_MAX_TOTAL_UPLOAD_SIZE", "4096");
 
+    vi.stubEnv("PDFKIT_MAX_SPLIT_OUTPUTS", "7");
+
     expect(getProcessingLimits()).toEqual({
       maxFiles: 3,
       maxFileSize: 1024,
       maxTotalSize: 4096,
+      maxOutputs: 7,
     });
   });
 
@@ -106,7 +113,7 @@ describe("runProcessingJob", () => {
   });
 
   it("fails for a tool without an implementation", async () => {
-    const result = await runProcessingJob({ toolId: "split-pdf", files: [] });
+    const result = await runProcessingJob({ toolId: "compress-pdf", files: [] });
     expect(result).toMatchObject({
       status: "failed",
       error: { code: "TOOL_NOT_AVAILABLE" },

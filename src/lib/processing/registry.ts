@@ -3,6 +3,7 @@ import "server-only";
 import type { ToolProcessor } from "@/lib/processing/contract";
 import { ProcessingError } from "@/lib/processing/errors";
 import { mergePdfProcessor } from "@/lib/processing/processors/merge-pdf";
+import { splitPdfProcessor } from "@/lib/processing/processors/split-pdf";
 
 /**
  * Registry of implemented tool processors.
@@ -13,6 +14,7 @@ import { mergePdfProcessor } from "@/lib/processing/processors/merge-pdf";
  */
 const PROCESSORS = new Map<string, ToolProcessor<never>>([
   [mergePdfProcessor.toolId, mergePdfProcessor as ToolProcessor<never>],
+  [splitPdfProcessor.toolId, splitPdfProcessor as ToolProcessor<never>],
 ]);
 
 /** Tool ids with a working implementation. */
