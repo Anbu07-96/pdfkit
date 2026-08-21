@@ -4,7 +4,8 @@ This document describes how PDFKit is actually built today (Phase 1: foundation
 and product shell; Phase 2: the processing layer and Merge PDF; Phase 3:
 page-level infrastructure, multi-artifact processing and Split PDF; Phase 4:
 Extract and Delete PDF Pages on that same foundation; Phase 5: real page
-rasterisation and Reorder PDF Pages) and the boundaries that keep future phases
+rasterisation and Reorder PDF Pages; Phase 6: Rotate PDF and visual page
+selection) and the boundaries that keep future phases
 — more tools, OCR, AI, accounts, storage and billing — additive rather than a
 rewrite.
 
@@ -447,6 +448,45 @@ re-validates it against the real document before copying a single page.
 Page identity is kept separate from position throughout: a card knows it is
 page 5, and separately that it currently sits at position 2.
 
+## 5e. Rotate PDF and visual page selection (Phase 6)
+
+**Rotation model.** `pages.ts` gained a third page concept alongside selection
+and order: `PageRotation` is `0 | 90 | 180 | 270` — a union, not a number, so an
+impossible angle cannot be represented. `rotateClockwise`/`rotateCounterClockwise`
+are pure cycle helpers used by every control, and `addRotations` composes two
+angles. Validation rejects `45`, `-90`, `"90"`, `360`, `NaN` and decimals rather
+than rounding them: silently turning 45° into 90° would be a guess about intent.
+
+**Wire format.** `rotations={"1":90,"3":180}` — a JSON object parsed with
+`JSON.parse` (never `eval`), then strictly checked: plain object only, integer
+page keys only, numeric legal angles only. Omitted pages mean "unchanged", so a
+client can send just what it altered.
+
+**Additive semantics.** The processor adds the requested angle to the page's
+existing `/Rotate` value, because that is what pressing "rotate" on a sideways
+page means. Only that entry changes — no rasterising, no rebuilding — so the
+output stays a real vector/text PDF with the same pages in the same order.
+
+**Rotated previews.** Rather than re-saving the PDF and re-rendering it, the
+rasterised bitmap is turned by `rotate-pixels.ts`: exact, no resampling, and
+90°/270° swap width and height so the aspect ratio can never drift. The Phase 5
+`render({ width })` stretching trap stays fixed because rotation happens after
+scaling, and a test asserts the rotated area equals the original area.
+
+**Preview caching.** The rotate workspace caches previews by `page:rotation`, so
+turning a page back to an angle already seen costs nothing and a stale preview
+is never shown. It is browser-side state only — no server cache, no storage.
+
+**Visual page selection.** Extract and Delete gained a page picker built from
+the same `PdfPageThumbnail`, extracted into a shared `PagePreviewGrid`. It is an
+*alternative editor for the existing range field*, not a second model: clicking
+a page rewrites the range string, and typing in the field re-derives the
+highlighted pages. Split shows the same grid read-only — turning ranges into
+drag-selected regions would have meant a second selection model, which this
+phase deliberately avoided. Above the preview limit, or when rendering fails,
+all three fall back to the text field with an explanation rather than fake
+images.
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:
@@ -543,6 +583,9 @@ Every uploaded file is treated as untrusted input:
   de-duplicated.
 - **No empty documents.** Delete PDF Pages refuses to produce a zero-page PDF;
   the check runs before any page is copied.
+- **Rotation is validated server-side.** Angles and page numbers are re-checked
+  against the real document before anything is written, and an invalid request
+  produces no output document at all.
 - **Rasterisation is bounded.** Page count, render width and per-image bytes are
   all capped, with hard ceilings above the configurable values; a 4× aspect
   ratio cap bounds the bitmap for unusual page shapes. Rendering happens in

@@ -6,9 +6,9 @@ PDFKit is a fast, privacy-conscious web application for everyday PDF and
 document work — organising pages, converting formats, editing, securing, and
 later OCR and AI document intelligence.
 
-> ## Current status: Phase 5 — visual page organiser
+> ## Current status: Phase 6 — rotation and visual page selection
 >
-> **Five tools genuinely work:**
+> **Six tools genuinely work:**
 >
 > - **Merge PDF** — combine several PDFs in the order you choose.
 > - **Split PDF** — split every page into its own file, or split by page ranges;
@@ -16,6 +16,8 @@ later OCR and AI document intelligence.
 > - **Extract PDF Pages** — keep only the pages you list, in the order you list them.
 > - **Delete PDF Pages** — remove the pages you list and keep the rest.
 > - **Reorder PDF Pages** — real page previews, drag or keyboard reordering.
+> - **Rotate PDF** — turn individual pages or the whole document, with previews
+>   that update to match.
 >
 > **Every other tool is still unimplemented** and honestly marked
 > **Coming soon**, with its upload area disabled. There is no simulated
@@ -34,6 +36,7 @@ later OCR and AI document intelligence.
 - [Split PDF](#split-pdf)
 - [Extract and Delete PDF Pages](#extract-and-delete-pdf-pages)
 - [Reorder PDF Pages](#reorder-pdf-pages)
+- [Rotate PDF](#rotate-pdf)
 - [Page previews](#page-previews)
 - [Page ranges](#page-ranges)
 - [Processing limits](#processing-limits)
@@ -57,8 +60,8 @@ A single web app for common document tasks, built around three product rules:
    desktop screens, keyboard-accessible throughout.
 
 The catalog describes **42 tools** in six categories — Organize, Convert, Edit,
-Security, OCR and AI — of which **5 are implemented** today: Merge PDF, Split
-PDF, Extract PDF Pages, Delete PDF Pages and Reorder PDF Pages.
+Security, OCR and AI — of which **6 are implemented** today: Merge PDF, Split
+PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF Pages and Rotate PDF.
 
 ---
 
@@ -130,6 +133,20 @@ npm start
 ---
 
 ## What is implemented today
+
+**Rotate PDF (real, end to end)**
+
+- Rotate any page left or right, or every page at once, then reset
+- Previews are re-rendered by the server, so what you see is what is saved
+- Rotation is **additive** to any rotation the page already has
+- Only `/Rotate` changes: the output stays a real vector/text PDF
+
+**Visual page selection**
+
+- Extract and Delete show a page picker that stays in sync with the range field
+  in both directions — the range string remains the single source of truth
+- Split shows the same previews as read-only context, keeping its range workflow
+- Documents above the preview limit fall back to the text field, and say so
 
 **Reorder PDF Pages (real, end to end)**
 
@@ -369,6 +386,34 @@ order (`1,2,3,…`) is accepted and simply returns a copy.
 Responses are `application/pdf` named `<source>-reordered.pdf`, with
 `X-PDFKit-Pages`, `X-PDFKit-Output-Pages`, `no-store` and `nosniff`.
 
+## Rotate PDF
+
+```bash
+# Turn page 1 a quarter-turn clockwise and page 3 upside down
+curl -X POST http://localhost:3000/api/tools/rotate-pdf \
+  -F "files=@document.pdf;type=application/pdf" \
+  -F 'rotations={"1":90,"3":180}' \
+  -o document-rotated.pdf
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `files` | yes | Exactly one PDF |
+| `rotations` | no | JSON object of page → clockwise degrees |
+
+Only `0`, `90`, `180` and `270` are accepted, as JSON **numbers**. `45`, `-90`,
+`"90"` and `360` are rejected with `INVALID_PAGE_ROTATION` (400) rather than
+being rounded or normalised, and page numbers outside the document give
+`PAGE_OUT_OF_RANGE` (400). Pages that are absent keep their orientation, so a
+client can send only what changed; an empty request returns the document
+unchanged.
+
+**Additive semantics:** the angle is added to the page's existing `/Rotate`
+value, matching what "rotate this page" means in the interface — a page already
+at 90° plus a requested 90° is saved at 180°. Only the rotation entry changes;
+page content is never rasterised, so the output remains a real vector/text PDF
+with the same pages in the same order.
+
 ## Page previews
 
 ```bash
@@ -387,7 +432,9 @@ curl -X POST http://localhost:3000/api/documents/thumbnails \
 ```
 
 `pages` is optional — omitting it renders the first N pages, where N is
-`PDFKIT_THUMBNAIL_MAX_PAGES`. Pages are rendered by **pdfium compiled to
+`PDFKIT_THUMBNAIL_MAX_PAGES`. An optional `rotations` field (same JSON format as
+Rotate PDF) renders the preview turned by that angle; 90° and 270° swap the
+width and height, and nothing is stretched. Pages are rendered by **pdfium compiled to
 WebAssembly**, encoded to PNG by a small local encoder built on fflate, and
 returned as data URLs. No temporary files, no storage, no cache.
 
@@ -432,12 +479,12 @@ them if you want the hints to match exactly.
 
 ## What is deliberately not implemented
 
-Compress and rotate PDFs, JPG↔PDF, PDF↔Office, editing, security tools, OCR, AI,
+Compress PDF, JPG↔PDF, PDF↔Office, editing, security tools, OCR, AI,
 authentication, cloud storage, databases, payments, API keys, a public developer
 API, background workers and job queues are **not** implemented. There is no simulated processing anywhere: no fake
 progress bars, no fake results, no fake downloads, no placeholder page images.
-Only Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages and Reorder PDF
-Pages are real.
+Only Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF
+Pages and Rotate PDF are real.
 
 ---
 
@@ -452,6 +499,7 @@ src/
 │  ├─ api/tools/extract-pdf-pages/  # Extract endpoint (thin route handler)
 │  ├─ api/tools/delete-pdf-pages/   # Delete endpoint (thin route handler)
 │  ├─ api/tools/reorder-pdf-pages/  # Reorder endpoint (thin route handler)
+│  ├─ api/tools/rotate-pdf/         # Rotate endpoint (thin route handler)
 │  ├─ api/documents/thumbnails/     # Reusable page previews
 │  ├─ api/documents/inspect/ # Page count for page-level tools
 │  ├─ tools/                 # Catalog + dynamic tool pages
@@ -509,7 +557,17 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (31 files, 427 tests):
+Covered today (36 files, 539 tests):
+
+- **Rotation model** — the four legal angles, clockwise/counter-clockwise
+  cycles, composition, and rejection of 45°, `-90`, `"90"`, `NaN` and friends
+- **Rotate processor** — real rotations verified with `getRotation()`, additive
+  behaviour on pre-rotated pages, page order/count preserved, no output on
+  invalid input
+- **Rotated previews** — dimensions swap for 90°/270°, area is preserved (no
+  stretching), and a corner marker is tracked pixel-by-pixel around all four turns
+- **Visual page selection** — click-to-select ↔ range-field synchronisation in
+  both directions, zero-page protection, honest fallbacks
 
 - **Page order model** — permutation validation (missing, duplicate, extra,
   out-of-range, non-numeric, wrong length) and the pure move helper
@@ -561,10 +619,10 @@ Covered today (31 files, 427 tests):
 
 ## Future phases
 
-Phase 5 stops here on purpose. The planned order (see also `/roadmap`):
+Phase 6 stops here on purpose. The planned order (see also `/roadmap`):
 
-1. **Phase 6 — Rotate PDF:** per-page rotation reusing the page organiser and
-   the previews built in Phase 5.
+1. **Phase 7 — Compress PDF:** genuine size reduction with honest before/after
+   reporting.
 2. Convert tools (images ↔ PDF, Office ↔ PDF).
 3. Editing and security tools.
 4. OCR.
