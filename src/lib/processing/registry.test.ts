@@ -20,9 +20,11 @@ describe("processor registry", () => {
       "delete-pdf-pages",
       "extract-pdf-pages",
       "merge-pdf",
+      "reorder-pdf-pages",
       "split-pdf",
     ]);
     expect(hasProcessor("merge-pdf")).toBe(true);
+    expect(hasProcessor("reorder-pdf-pages")).toBe(true);
     expect(hasProcessor("split-pdf")).toBe(true);
     expect(hasProcessor("extract-pdf-pages")).toBe(true);
     expect(hasProcessor("delete-pdf-pages")).toBe(true);
@@ -41,11 +43,12 @@ describe("processor registry", () => {
   });
 
   it("keeps the catalog and the registry in sync", () => {
-    // Phase 4 adds the two page tools; nothing else may claim to work.
+    // Phase 5 adds reorder; nothing else may claim to work.
     expect(getImplementedToolIds()).toEqual([
       "delete-pdf-pages",
       "extract-pdf-pages",
       "merge-pdf",
+      "reorder-pdf-pages",
       "split-pdf",
     ]);
 

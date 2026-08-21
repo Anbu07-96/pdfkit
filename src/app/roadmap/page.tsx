@@ -59,11 +59,22 @@ const PHASES = [
     ],
   },
   {
-    title: "Phase 5 — Reorder pages and page previews",
+    title: "Phase 5 — Reorder PDF Pages and real page previews",
+    status: "Completed" as const,
+    items: [
+      "Reusable server-side page rasteriser (pdfium via WebAssembly)",
+      "POST /api/documents/thumbnails returning real page previews",
+      "Page permutation model with strict validation (no missing, no duplicates)",
+      "Reorder PDF Pages: visual page organiser with drag and keyboard controls",
+      "Reusable PdfPageThumbnail component for future page tools",
+    ],
+  },
+  {
+    title: "Phase 6 — Rotate PDF and shared page toolbox",
     status: "Planned" as const,
     items: [
-      "Reorder Pages using the same page-selection foundation",
-      "Page thumbnails and a visual page picker shared by the page tools",
+      "Rotate individual pages using the same previews",
+      "Reuse the page organiser across Split, Extract and Delete",
     ],
   },
   {

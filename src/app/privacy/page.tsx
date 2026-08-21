@@ -18,12 +18,19 @@ export default function PrivacyPage() {
         <h2>What the current version does</h2>
         <ul>
           <li>
-            The four working tools — <strong>Merge PDF</strong>,{" "}
-            <strong>Split PDF</strong>, <strong>Extract PDF Pages</strong> and{" "}
-            <strong>Delete PDF Pages</strong> — are the only ones that send data
-            anywhere. When you start the operation, the selected files are uploaded to
-            the PDFKit server, processed in memory and returned in the response. The
-            page tools also read the page count the same way.
+            The five working tools — <strong>Merge PDF</strong>,{" "}
+            <strong>Split PDF</strong>, <strong>Extract PDF Pages</strong>,{" "}
+            <strong>Delete PDF Pages</strong> and <strong>Reorder PDF Pages</strong> —
+            are the only ones that send data anywhere. When you start the operation,
+            the selected files are uploaded to the PDFKit server, processed in memory
+            and returned in the response. The page tools also read the page count the
+            same way.
+          </li>
+          <li>
+            <strong>Page previews</strong> are rendered on the server too, in memory,
+            and returned inside the response itself. They are not written to disk, not
+            cached and not reachable by any URL — they exist only in the browser tab
+            that requested them, until you leave or reload the page.
           </li>
           <li>
             Those files are never written to disk, never stored and never logged. The

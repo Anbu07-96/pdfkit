@@ -25,7 +25,7 @@ const POINTS = [
     icon: ServerCog,
     title: "Honest about the current state",
     description:
-      "Only the tools marked Available process documents — merging, splitting, extracting and deleting pages today. Every other tool says plainly that it is not built yet, instead of implying capabilities we do not have.",
+      "Only the tools marked Available process documents — merging, splitting, extracting, deleting and reordering pages today. Every other tool says plainly that it is not built yet, instead of implying capabilities we do not have.",
   },
 ];
 

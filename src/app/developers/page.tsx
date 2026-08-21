@@ -46,8 +46,10 @@ export default function DevelopersPage() {
             The internal endpoints (<code>POST /api/tools/merge-pdf</code>,{" "}
             <code>POST /api/tools/split-pdf</code>,{" "}
             <code>POST /api/tools/extract-pdf-pages</code>,{" "}
-            <code>POST /api/tools/delete-pdf-pages</code> and{" "}
-            <code>POST /api/documents/inspect</code>) already share the same validation,
+            <code>POST /api/tools/delete-pdf-pages</code>,{" "}
+            <code>POST /api/tools/reorder-pdf-pages</code>,{" "}
+            <code>POST /api/documents/inspect</code> and{" "}
+            <code>POST /api/documents/thumbnails</code>) already share the same validation,
             limits, multi-artifact delivery and structured error model a public API
             would need.
           </li>

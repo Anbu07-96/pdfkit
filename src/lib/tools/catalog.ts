@@ -11,8 +11,8 @@ import type { Tool } from "./types";
  * implemented. A tool is only `AVAILABLE` when it has a registered processor in
  * `src/lib/processing/registry.ts`; a test enforces that both sides agree.
  *
- * Implemented today: Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages.
- * Everything else is `COMING_SOON`.
+ * Implemented today: Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages,
+ * Reorder PDF Pages. Everything else is `COMING_SOON`.
  */
 
 const PDF_EXT = [".pdf"];
@@ -112,16 +112,18 @@ export const TOOLS: readonly Tool[] = [
     ],
   }),
   pdfTool({
-    id: "reorder-pages",
-    name: "Reorder Pages",
+    id: "reorder-pdf-pages",
+    name: "Reorder PDF Pages",
     description: "Drag pages into a new order inside the same document.",
     category: "organize",
     icon: "reorder",
+    // Implemented in Phase 5: server-side reordering with real page previews.
+    status: "AVAILABLE",
     plannedTier: "free",
-    keywords: ["rearrange", "sort pages", "move pages", "organise"],
+    keywords: ["rearrange", "sort pages", "move pages", "organise", "organize"],
     howItWorks: [
-      "Upload your PDF.",
-      "Drag the page thumbnails into the order you want.",
+      "Upload your PDF and see a preview of every page.",
+      "Drag the pages, or use the arrow buttons, until the order is right.",
       "Download the reordered document.",
     ],
   }),

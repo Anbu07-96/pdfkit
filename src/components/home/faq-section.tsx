@@ -8,7 +8,7 @@ export const HOME_FAQ: FaqItem[] = [
   {
     question: "What is PDFKit?",
     answer:
-      "PDFKit is a web app for everyday PDF and document tasks — organising pages, converting between formats, editing, securing and, later, OCR and AI document tools. It is in early development: merging, splitting, extracting and deleting PDF pages work today, and the remaining tools in the catalog are being built one at a time.",
+      "PDFKit is a web app for everyday PDF and document tasks — organising pages, converting between formats, editing, securing and, later, OCR and AI document tools. It is in early development: merging, splitting, extracting, deleting and reordering PDF pages work today, and the remaining tools in the catalog are being built one at a time.",
   },
   {
     question: "Do I need to install anything?",
@@ -29,10 +29,10 @@ export const HOME_FAQ: FaqItem[] = [
     question: "What tools does PDFKit support?",
     answer: (
       <>
-        The catalog lists {TOOLS.length} tools across six categories. Merge PDF, Split
-        PDF, Extract PDF Pages and Delete PDF Pages are implemented and free to use;
-        every other tool page states its availability clearly instead of pretending to
-        work. You can{" "}
+        The catalog lists {TOOLS.length} tools across six categories. Five are
+        implemented and free to use — Merge, Split, Extract, Delete and Reorder PDF
+        pages; every other tool page states its availability clearly instead of
+        pretending to work. You can{" "}
         <Link href="/tools" className="text-primary underline underline-offset-4">
           browse the full catalog
         </Link>{" "}

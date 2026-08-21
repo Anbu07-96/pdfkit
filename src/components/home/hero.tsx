@@ -23,7 +23,7 @@ export function Hero() {
             PDFKit is building the everyday PDF and document tools — organise, convert,
             edit, secure — into one fast, privacy-conscious web app.{" "}
             <strong className="font-medium text-foreground">
-              Merge, Split, Extract and Delete PDF pages work today.
+              Merge, Split, Extract, Delete and Reorder PDF pages work today.
             </strong>{" "}
             The rest of the {TOOLS.length} tools in the catalog go live only once they
             genuinely work.

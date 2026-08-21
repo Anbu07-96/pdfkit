@@ -35,6 +35,10 @@ export default function HelpPage() {
             <strong>Delete PDF Pages</strong> — remove the pages you list and keep
             everything else in its original order. You must keep at least one page.
           </li>
+          <li>
+            <strong>Reorder PDF Pages</strong> — see a real preview of every page,
+            then drag them or use the arrow buttons to put them in a new order.
+          </li>
           <li>Browsing the tool catalog by category.</li>
           <li>Searching tools by name, description or category.</li>
           <li>Opening any tool page to see what the tool will do and what it accepts.</li>
@@ -44,9 +48,8 @@ export default function HelpPage() {
         <h2>What does not work yet</h2>
         <ul>
           <li>
-            Every tool other than Merge PDF, Split PDF, Extract PDF Pages and Delete PDF
-            Pages. Their upload areas are intentionally disabled and labelled{" "}
-            <strong>Coming soon</strong>.
+            Every tool other than the five above. Their upload areas are intentionally
+            disabled and labelled <strong>Coming soon</strong>.
           </li>
           <li>There are no accounts, no cloud storage, no API keys and no billing.</li>
         </ul>
