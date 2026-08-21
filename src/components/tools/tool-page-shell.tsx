@@ -1,4 +1,5 @@
 import { ShieldCheck } from "lucide-react";
+import type { ReactNode } from "react";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { Container } from "@/components/layout/container";
 import { ToolCard } from "@/components/tools/tool-card";
@@ -14,48 +15,55 @@ import {
 } from "@/lib/tools";
 import { formatExtensionList } from "@/lib/utils/format";
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024;
-
 function toolFaq(tool: Tool): FaqItem[] {
+  const usable = isToolUsable(tool);
+
   return [
     {
       question: `Can I use ${tool.name} right now?`,
-      answer: isToolUsable(tool)
-        ? `Yes. ${tool.name} is available in PDFKit today.`
+      answer: usable
+        ? `Yes. ${tool.name} works today — select your files, arrange them and download the result.`
         : `Not yet. ${tool.name} is part of the planned catalog and its processing has not been built. The page is here so you can see what is coming — nothing is uploaded or converted at this stage.`,
     },
     {
-      question: "Which files will this tool accept?",
+      question: "Which files does this tool accept?",
       answer: `${tool.name} is designed for ${formatExtensionList(
         tool.supportedFileTypes,
-      )} files.`,
+      )} files. The server checks the actual file contents, not just the file name.`,
     },
     {
       question: "What happens to my files?",
-      answer:
-        "Nothing is sent anywhere in the current version, because no processing exists yet. When tools go live, files will be handled only for as long as a request needs them and will not be kept for any other purpose.",
+      answer: usable
+        ? "Your files are sent to the PDFKit server, held in memory only while the operation runs, and dropped as soon as the result is returned. They are never written to disk, never stored and never logged."
+        : "Nothing is sent anywhere on this page, because this tool has no processing yet. When it ships, files will be handled only for as long as the operation takes and will not be kept afterwards.",
     },
     {
-      question: "How will I know when it is ready?",
-      answer:
-        "Availability is shown on every tool card and tool page. A tool is only marked Available once its processing genuinely works.",
+      question: "Is there a size limit?",
+      answer: usable
+        ? "Yes. Limits are enforced by the server and shown in the upload area. Requests above the limits are rejected before any processing starts."
+        : "Limits will be published on this page when the tool ships.",
     },
   ];
 }
 
 export interface ToolPageShellProps {
   tool: Tool;
+  /**
+   * Interactive workspace for tools that are genuinely implemented. When it is
+   * omitted, the page shows the disabled upload area with a "Coming soon"
+   * explanation instead.
+   */
+  workspace?: ReactNode;
 }
 
 /**
- * Reusable layout for every tool page.
- *
- * Once a tool is genuinely implemented, its page can render its own controls in
- * place of the disabled upload area — the surrounding structure stays the same.
+ * Reusable layout for every tool page: breadcrumb, title, working area,
+ * privacy information, how it works, related tools and FAQ.
  */
-export function ToolPageShell({ tool }: ToolPageShellProps) {
+export function ToolPageShell({ tool, workspace }: ToolPageShellProps) {
   const category = getCategory(tool.category);
   const usable = isToolUsable(tool);
+  const hasWorkspace = usable && Boolean(workspace);
   const related = getToolsByCategory(tool.category)
     .filter((item) => item.id !== tool.id)
     .slice(0, 4);
@@ -89,28 +97,31 @@ export function ToolPageShell({ tool }: ToolPageShellProps) {
           </header>
 
           <div className="mt-8">
-            <UploadZone
-              label={`Upload your ${formatExtensionList(tool.supportedFileTypes)} files`}
-              extensions={tool.supportedFileTypes}
-              mimeTypes={tool.acceptedMimeTypes}
-              maxFileSize={MAX_FILE_SIZE}
-              disabled={!usable}
-              disabledBadge={usable ? undefined : "Coming soon"}
-              disabledReason={
-                <>
-                  <strong className="font-medium text-foreground">
-                    {tool.name} is not available yet.
-                  </strong>{" "}
-                  Processing for this tool has not been built, so file selection is
-                  turned off. Nothing here uploads, converts or edits a document.
-                </>
-              }
-            />
+            {hasWorkspace ? (
+              workspace
+            ) : (
+              <UploadZone
+                label={`Upload your ${formatExtensionList(tool.supportedFileTypes)} files`}
+                extensions={tool.supportedFileTypes}
+                mimeTypes={tool.acceptedMimeTypes}
+                disabled
+                disabledBadge="Coming soon"
+                disabledReason={
+                  <>
+                    <strong className="font-medium text-foreground">
+                      {tool.name} is not available yet.
+                    </strong>{" "}
+                    Processing for this tool has not been built, so file selection is
+                    turned off. Nothing here uploads, converts or edits a document.
+                  </>
+                }
+              />
+            )}
           </div>
 
           <section aria-labelledby="how-it-works" className="mt-12">
             <h2 id="how-it-works" className="text-xl font-semibold text-foreground">
-              How it will work
+              {usable ? "How it works" : "How it will work"}
             </h2>
             <ol className="mt-4 flex flex-col gap-3">
               {tool.howItWorks.map((step, index) => (
@@ -157,19 +168,39 @@ export function ToolPageShell({ tool }: ToolPageShellProps) {
               </h2>
             </div>
             <ul className="mt-3 flex flex-col gap-2.5 text-sm text-muted">
-              <li>
-                No document processing exists in this version, so no file leaves your
-                device from this page.
-              </li>
-              <li>
-                When processing ships, files will be used only to complete the
-                requested operation.
-              </li>
-              <li>
-                Temporary files will be removed automatically; documents will not be
-                retained for any other purpose.
-              </li>
-              <li>PDFKit has no advertising or tracking business model.</li>
+              {usable ? (
+                <>
+                  <li>
+                    Files are sent to the PDFKit server only when you start the
+                    operation.
+                  </li>
+                  <li>
+                    They are processed in memory, never written to disk and never
+                    stored.
+                  </li>
+                  <li>
+                    Documents are discarded as soon as the result is returned; only
+                    counts and timings are logged, never file names or contents.
+                  </li>
+                  <li>No account is required and there is no tracking or advertising.</li>
+                </>
+              ) : (
+                <>
+                  <li>
+                    No processing exists for this tool, so no file leaves your device
+                    from this page.
+                  </li>
+                  <li>
+                    When it ships, files will be used only to complete the requested
+                    operation.
+                  </li>
+                  <li>
+                    Temporary data will be discarded automatically; documents will not
+                    be retained for any other purpose.
+                  </li>
+                  <li>PDFKit has no advertising or tracking business model.</li>
+                </>
+              )}
             </ul>
           </div>
 
@@ -190,6 +221,12 @@ export function ToolPageShell({ tool }: ToolPageShellProps) {
               <dt className="text-muted">Availability</dt>
               <dd className="text-end font-medium text-foreground">
                 {usable ? "Available" : "Coming soon"}
+              </dd>
+            </div>
+            <div className="mt-3 flex items-start justify-between gap-4">
+              <dt className="text-muted">Processing</dt>
+              <dd className="text-end font-medium text-foreground">
+                {usable ? "Server-side, in memory" : "Not implemented"}
               </dd>
             </div>
           </dl>

@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
-import { UploadZone } from "@/components/upload/upload-zone";
+import { UploadZone, type SelectedFile } from "@/components/upload/upload-zone";
 
 function pdf(name = "document.pdf", size = 1024) {
   const file = new File(["x".repeat(size)], name, { type: "application/pdf" });
@@ -86,5 +87,81 @@ describe("UploadZone", () => {
     expect(
       screen.getByText(/processing for this tool has not been built/i),
     ).toBeInTheDocument();
+  });
+});
+
+describe("UploadZone ordering", () => {
+  function ControlledZone() {
+    const [files, setFiles] = React.useState<SelectedFile[]>([]);
+    return (
+      <UploadZone
+        extensions={[".pdf"]}
+        files={files}
+        onFilesChange={setFiles}
+        orderable
+      />
+    );
+  }
+
+  async function addTwo(user: ReturnType<typeof userEvent.setup>) {
+    const input = screen.getByLabelText(/upload your files/i);
+    await user.upload(input, pdf("first.pdf"));
+    await user.upload(input, pdf("second.pdf"));
+  }
+
+  it("numbers files and exposes accessible move controls", async () => {
+    const user = userEvent.setup();
+    render(<ControlledZone />);
+    await addTwo(user);
+
+    expect(screen.getByText(/documents are processed in this order/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /move first\.pdf up/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /move first\.pdf down/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /move second\.pdf down/i })).toBeDisabled();
+  });
+
+  it("moves a file down and back up again", async () => {
+    const user = userEvent.setup();
+    render(<ControlledZone />);
+    await addTwo(user);
+
+    const names = () =>
+      within(screen.getByRole("region", { name: /selected files/i }))
+        .getAllByText(/\.pdf$/)
+        .map((node) => node.textContent);
+
+    expect(names()).toEqual(["first.pdf", "second.pdf"]);
+
+    await user.click(screen.getByRole("button", { name: /move first\.pdf down/i }));
+    expect(names()).toEqual(["second.pdf", "first.pdf"]);
+
+    await user.click(screen.getByRole("button", { name: /move first\.pdf up/i }));
+    expect(names()).toEqual(["first.pdf", "second.pdf"]);
+  });
+
+  it("locks the selection while the page is busy", async () => {
+    const user = userEvent.setup();
+    function BusyZone() {
+      const [files, setFiles] = React.useState<SelectedFile[]>([]);
+      return (
+        <>
+          <UploadZone
+            extensions={[".pdf"]}
+            files={files}
+            onFilesChange={setFiles}
+            orderable
+            busy={files.length > 0}
+          />
+        </>
+      );
+    }
+
+    render(<BusyZone />);
+    await user.upload(screen.getByLabelText(/upload your files/i), pdf("a.pdf"));
+
+    expect(screen.getByTestId("upload-zone")).toHaveAttribute("data-state", "busy");
+    expect(screen.getByRole("button", { name: /browse files/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /remove a\.pdf/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /remove all/i })).toBeDisabled();
   });
 });

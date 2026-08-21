@@ -218,6 +218,19 @@ export function StyleguideClient() {
         />
       </Block>
 
+      <Block title="Upload zone — orderable (used by Merge PDF)">
+        <p className="mb-3 text-sm text-muted">
+          Position numbers plus move up/down controls, so ordering never depends on
+          drag and drop.
+        </p>
+        <UploadZone
+          label="Upload your PDF files"
+          extensions={[".pdf"]}
+          mimeTypes={["application/pdf"]}
+          orderable
+        />
+      </Block>
+
       <Block title="Upload zone — disabled (coming soon)">
         <UploadZone
           label="Upload your PDF files"

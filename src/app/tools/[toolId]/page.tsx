@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ToolPageShell } from "@/components/tools/tool-page-shell";
+import { getToolWorkspace } from "@/components/tools/workspaces";
 import { getTool, isToolUsable, TOOLS } from "@/lib/tools";
 
 export function generateStaticParams() {
@@ -15,7 +16,7 @@ export async function generateMetadata({
   if (!tool) return { title: "Tool not found" };
 
   const availability = isToolUsable(tool)
-    ? ""
+    ? " Free to use in your browser, with no account required."
     : " This tool is not available yet — processing has not been implemented.";
 
   return {
@@ -30,5 +31,9 @@ export default async function ToolPage({ params }: PageProps<"/tools/[toolId]">)
   const tool = getTool(toolId);
   if (!tool) notFound();
 
-  return <ToolPageShell tool={tool} />;
+  // The workspace is resolved on the server; tools without a real
+  // implementation get the "coming soon" shell instead.
+  const workspace = isToolUsable(tool) ? getToolWorkspace(tool.id) : null;
+
+  return <ToolPageShell tool={tool} workspace={workspace} />;
 }

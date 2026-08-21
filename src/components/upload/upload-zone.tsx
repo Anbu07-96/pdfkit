@@ -36,8 +36,23 @@ export interface UploadZoneProps extends FileConstraints {
   disabledReason?: React.ReactNode;
   /** Short badge shown in the corner, e.g. "Coming soon". */
   disabledBadge?: string;
+  /**
+   * Controlled selection. When provided, the component renders exactly these
+   * files and reports every change through `onFilesChange`.
+   */
+  files?: SelectedFile[];
   /** Notifies the page about the current selection. Never processes files. */
   onFilesChange?: (files: SelectedFile[]) => void;
+  /**
+   * Show position numbers and move up/down controls. Use for tools where the
+   * order of the documents changes the result (for example Merge PDF).
+   */
+  orderable?: boolean;
+  /**
+   * Work is in progress elsewhere on the page: selection stays visible but
+   * cannot be changed. Different from `disabled`, which means "not available".
+   */
+  busy?: boolean;
   className?: string;
 }
 
@@ -50,9 +65,9 @@ function nextFileId() {
 /**
  * Reusable file selection area.
  *
- * It is intentionally *only* a selection surface: it validates and lists files
- * and nothing else. It has no knowledge of PDF processing, uploading or any
- * backend, so it can be reused unchanged once real tools are implemented.
+ * It is intentionally *only* a selection surface: it validates, lists and
+ * orders files. It knows nothing about uploading, PDF processing or any
+ * backend, so every tool can reuse it unchanged.
  */
 export function UploadZone({
   label = "Upload your files",
@@ -61,19 +76,26 @@ export function UploadZone({
   disabled = false,
   disabledReason,
   disabledBadge,
+  files: controlledFiles,
   onFilesChange,
+  orderable = false,
+  busy = false,
   className,
   extensions,
   mimeTypes,
   maxFileSize,
   maxFiles,
 }: UploadZoneProps) {
-  const [files, setFiles] = React.useState<SelectedFile[]>([]);
+  const [uncontrolledFiles, setUncontrolledFiles] = React.useState<SelectedFile[]>([]);
   const [rejections, setRejections] = React.useState<FileRejection[]>([]);
   const [dragOver, setDragOver] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const dragCounter = React.useRef(0);
   const descriptionId = React.useId();
+
+  const isControlled = controlledFiles !== undefined;
+  const files = isControlled ? controlledFiles : uncontrolledFiles;
+  const locked = disabled || busy;
 
   const constraints: FileConstraints = React.useMemo(
     () => ({ extensions, mimeTypes, maxFileSize, maxFiles }),
@@ -82,15 +104,15 @@ export function UploadZone({
 
   const update = React.useCallback(
     (next: SelectedFile[]) => {
-      setFiles(next);
+      if (!isControlled) setUncontrolledFiles(next);
       onFilesChange?.(next);
     },
-    [onFilesChange],
+    [isControlled, onFilesChange],
   );
 
   const addFiles = React.useCallback(
     (incoming: FileList | File[]) => {
-      if (disabled) return;
+      if (locked) return;
       const list = Array.from(incoming);
       const { accepted, rejected } = validateFiles(list, constraints, files);
 
@@ -108,11 +130,19 @@ export function UploadZone({
         })),
       ]);
     },
-    [constraints, disabled, files, update],
+    [constraints, locked, files, update],
   );
 
   function removeFile(id: string) {
     update(files.filter((file) => file.id !== id));
+  }
+
+  function moveFile(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= files.length) return;
+    const next = [...files];
+    [next[index], next[target]] = [next[target], next[index]];
+    update(next);
   }
 
   function clearAll() {
@@ -128,23 +158,33 @@ export function UploadZone({
   const countHint = maxFiles ? `${maxFiles} file${maxFiles === 1 ? "" : "s"} max` : null;
   const details = [typeHint, sizeHint, countHint].filter(Boolean).join(" · ");
 
+  const state = disabled
+    ? "disabled"
+    : busy
+      ? "busy"
+      : dragOver
+        ? "drag-over"
+        : files.length
+          ? "selected"
+          : "empty";
+
   return (
     <div className={cn("flex flex-col gap-4", className)}>
       <div
         data-testid="upload-zone"
-        data-state={disabled ? "disabled" : dragOver ? "drag-over" : files.length ? "selected" : "empty"}
+        data-state={state}
         onDragEnter={(event) => {
-          if (disabled) return;
+          if (locked) return;
           event.preventDefault();
           dragCounter.current += 1;
           setDragOver(true);
         }}
         onDragOver={(event) => {
-          if (disabled) return;
+          if (locked) return;
           event.preventDefault();
         }}
         onDragLeave={(event) => {
-          if (disabled) return;
+          if (locked) return;
           event.preventDefault();
           dragCounter.current -= 1;
           if (dragCounter.current <= 0) {
@@ -153,7 +193,7 @@ export function UploadZone({
           }
         }}
         onDrop={(event) => {
-          if (disabled) return;
+          if (locked) return;
           event.preventDefault();
           dragCounter.current = 0;
           setDragOver(false);
@@ -167,6 +207,7 @@ export function UploadZone({
             : dragOver
               ? "border-primary bg-primary-soft/70"
               : "border-border bg-surface-muted/40 hover:border-border-strong hover:bg-surface-muted/70",
+          busy && "opacity-70",
         )}
       >
         {disabledBadge ? (
@@ -209,13 +250,18 @@ export function UploadZone({
               accept={accept || undefined}
               aria-describedby={descriptionId}
               aria-label={label}
+              disabled={busy}
               onChange={(event) => {
                 if (event.target.files) addFiles(event.target.files);
                 // Allow selecting the same file again after removing it.
                 event.target.value = "";
               }}
             />
-            <Button onClick={() => inputRef.current?.click()} variant="primary">
+            <Button
+              onClick={() => inputRef.current?.click()}
+              variant="primary"
+              disabled={busy}
+            >
               Browse files
             </Button>
           </>
@@ -250,18 +296,37 @@ export function UploadZone({
             <p className="text-sm font-medium text-foreground">
               {files.length} {files.length === 1 ? "file" : "files"} selected
             </p>
-            <Button variant="ghost" size="sm" onClick={clearAll}>
+            <Button variant="ghost" size="sm" onClick={clearAll} disabled={locked}>
               Remove all
             </Button>
           </div>
+
+          {orderable && files.length > 1 ? (
+            <p className="text-xs text-subtle">
+              Documents are processed in this order. Use the arrows to rearrange them.
+            </p>
+          ) : null}
+
           <ul className="flex flex-col gap-2">
-            {files.map((file) => (
+            {files.map((file, index) => (
               <li key={file.id}>
                 <FileCard
                   name={file.name}
                   size={file.size}
                   type={file.type}
+                  disabled={locked}
                   onRemove={() => removeFile(file.id)}
+                  {...(orderable
+                    ? {
+                        position: index + 1,
+                        total: files.length,
+                        onMoveUp: index > 0 ? () => moveFile(index, -1) : undefined,
+                        onMoveDown:
+                          index < files.length - 1
+                            ? () => moveFile(index, 1)
+                            : undefined,
+                      }
+                    : {})}
                 />
               </li>
             ))}
