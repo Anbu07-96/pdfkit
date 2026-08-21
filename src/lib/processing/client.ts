@@ -213,6 +213,59 @@ export async function runDeletePdfPages(
   );
 }
 
+export interface RunReorderPdfPagesOptions {
+  file: File;
+  /** The complete new order, e.g. `[5, 3, 1, 2, 4]`. */
+  order: number[];
+  signal?: AbortSignal;
+}
+
+/** Reorder the pages of one PDF. The order is sent explicitly, in full. */
+export async function runReorderPdfPages({
+  file,
+  order,
+  signal,
+}: RunReorderPdfPagesOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("order", order.join(","));
+
+  const response = await postForm("/api/tools/reorder-pdf-pages", form, signal);
+  return toProcessedDocument(response, "reordered.pdf");
+}
+
+export interface PageThumbnailData {
+  pageNumber: number;
+  width: number;
+  height: number;
+  /** `data:image/png;base64,...` — usable directly as an `<img src>`. */
+  dataUrl: string;
+}
+
+export interface PageThumbnailsResult {
+  pageCount: number;
+  thumbnails: PageThumbnailData[];
+}
+
+/**
+ * Render page previews on the server.
+ *
+ * `pages` is optional; omitting it asks for the first N pages, where N is the
+ * server's configured limit.
+ */
+export async function fetchPageThumbnails(
+  file: File,
+  pages?: number[],
+  signal?: AbortSignal,
+): Promise<PageThumbnailsResult> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  if (pages?.length) form.append("pages", pages.join(","));
+
+  const response = await postForm("/api/documents/thumbnails", form, signal);
+  return (await response.json()) as PageThumbnailsResult;
+}
+
 /** Ask the server for a document's real page count. */
 export async function inspectPdfFile(
   file: File,

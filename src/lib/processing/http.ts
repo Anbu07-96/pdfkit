@@ -37,6 +37,9 @@ const BINARY_HEADERS = {
   "x-content-type-options": "nosniff",
 } as const;
 
+/** Shared JSON response headers for every processing-related route. */
+export const JSON_RESPONSE_HEADERS = JSON_HEADERS;
+
 export function jsonError(
   code: ProcessingErrorCode,
   message: string,
@@ -272,21 +275,58 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
  * to validate ranges before submitting, but the processors re-check everything
  * anyway.
  */
-export async function handleInspectRequest(request: Request): Promise<Response> {
-  const limits = getProcessingLimits();
+export interface SingleUploadedPdf {
+  file: ProcessingInputFile;
+  /** The parsed body, for routes that also read option fields. */
+  form: FormData;
+  /** Drops the in-memory bytes. Call in a `finally`. */
+  release: () => void;
+}
 
+/**
+ * Read exactly one uploaded PDF, applying every shared upload check.
+ *
+ * Used by the page-count and thumbnail endpoints so neither re-implements
+ * multipart parsing, size accounting or file-count rules.
+ */
+export async function readSingleUploadedPdf(
+  request: Request,
+): Promise<SingleUploadedPdf | { response: Response }> {
+  const limits = getProcessingLimits();
   const upload = await readUploadedFiles(request, limits);
-  if ("response" in upload) return upload.response;
+  if ("response" in upload) return upload;
 
   if (upload.files.length > 1) {
-    return jsonError(
-      "TOO_MANY_FILES",
-      `Send one PDF to inspect. You sent ${upload.files.length}.`,
-    );
+    return {
+      response: jsonError(
+        "TOO_MANY_FILES",
+        `Send one PDF. You sent ${upload.files.length}.`,
+      ),
+    };
   }
 
+  return {
+    file: upload.files[0],
+    form: upload.form,
+    release: () => {
+      upload.files.length = 0;
+    },
+  };
+}
+
+/**
+ * Report a document's real page count.
+ *
+ * Shared by every page-level tool; the browser uses it to show "24 pages" and
+ * to validate selections before submitting, but the processors re-check
+ * everything anyway.
+ */
+export async function handleInspectRequest(request: Request): Promise<Response> {
+  const upload = await readSingleUploadedPdf(request);
+  if ("response" in upload) return upload.response;
+
   try {
-    const inspection = await inspectPdf(upload.files[0], limits);
+    const inspection = await inspectPdf(upload.file);
     return Response.json(inspection, { status: 200, headers: JSON_HEADERS });
   } catch (error) {
     if (!(error instanceof ProcessingError)) {
@@ -295,7 +335,7 @@ export async function handleInspectRequest(request: Request): Promise<Response> 
     return errorResponse(error);
   } finally {
     // Release the buffer as soon as the page count has been read.
-    upload.files.length = 0;
+    upload.release();
   }
 }
 
