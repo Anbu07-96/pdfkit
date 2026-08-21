@@ -25,7 +25,7 @@ const POINTS = [
     icon: ServerCog,
     title: "Honest about the current state",
     description:
-      "Only Merge PDF processes documents so far. Every other tool says plainly that it is not built yet, instead of implying capabilities we do not have.",
+      "Only the tools marked Available process documents — Merge PDF and Split PDF today. Every other tool says plainly that it is not built yet, instead of implying capabilities we do not have.",
   },
 ];
 

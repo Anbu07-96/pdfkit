@@ -22,7 +22,9 @@ export function Hero() {
           <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">
             PDFKit is building the everyday PDF and document tools — organise, convert,
             edit, secure — into one fast, privacy-conscious web app.{" "}
-            <strong className="font-medium text-foreground">Merge PDF works today.</strong>{" "}
+            <strong className="font-medium text-foreground">
+              Merge PDF and Split PDF work today.
+            </strong>{" "}
             The rest of the {TOOLS.length} tools in the catalog go live only once they
             genuinely work.
           </p>

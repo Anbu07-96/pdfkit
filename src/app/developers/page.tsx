@@ -43,8 +43,10 @@ export default function DevelopersPage() {
             genuinely work.
           </li>
           <li>
-            The first internal endpoint (<code>POST /api/tools/merge-pdf</code>) already
-            uses the shared validation, limits and structured error model a public API
+            The internal endpoints (<code>POST /api/tools/merge-pdf</code>,{" "}
+            <code>POST /api/tools/split-pdf</code> and{" "}
+            <code>POST /api/documents/inspect</code>) already share the same validation,
+            limits, multi-artifact delivery and structured error model a public API
             would need.
           </li>
           <li>

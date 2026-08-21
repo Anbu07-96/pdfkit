@@ -36,12 +36,23 @@ const PHASES = [
     ],
   },
   {
-    title: "Phase 3 — More organise tools",
+    title: "Phase 3 — Page-level processing (Split PDF)",
+    status: "Completed" as const,
+    items: [
+      "Reusable page selection model, range parser and validation (1-based)",
+      "Server-authoritative page count via POST /api/documents/inspect",
+      "Multi-artifact processing: one input, many output documents",
+      "Split PDF processor: split every page, or split by page ranges",
+      "ZIP delivery with sanitised entry names, plus a configurable output limit",
+      "Split workspace with real page counts, live range validation and downloads",
+    ],
+  },
+  {
+    title: "Phase 4 — Remaining organise tools",
     status: "Planned" as const,
     items: [
-      "Split, extract, delete and reorder pages on the same processing foundation",
-      "Page previews and per-page selection",
-      "Shared processing UI states across tools",
+      "Extract, delete and reorder pages on the same page-selection foundation",
+      "Page thumbnails and visual page pickers",
     ],
   },
   {

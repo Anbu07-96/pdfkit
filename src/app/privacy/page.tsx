@@ -18,9 +18,10 @@ export default function PrivacyPage() {
         <h2>What the current version does</h2>
         <ul>
           <li>
-            <strong>Merge PDF</strong> is the only tool that sends data anywhere. When
-            you press Merge, the selected files are uploaded to the PDFKit server,
-            merged in memory and returned in the response.
+            <strong>Merge PDF</strong> and <strong>Split PDF</strong> are the only tools
+            that send data anywhere. When you start the operation, the selected files
+            are uploaded to the PDFKit server, processed in memory and returned in the
+            response. Split PDF also reads the page count the same way.
           </li>
           <li>
             Those files are never written to disk, never stored and never logged. The
@@ -28,9 +29,10 @@ export default function PrivacyPage() {
             byte count and duration. File names and document contents are not logged.
           </li>
           <li>
-            The merged document is streamed straight back to your browser. Nothing is
-            retained server-side once the response has been sent, and there is no
-            download link that anyone else could visit.
+            The result is streamed straight back to your browser — a PDF, or a ZIP when
+            an operation produces several documents. Nothing is retained server-side
+            once the response has been sent, and there is no download link that anyone
+            else could visit.
           </li>
           <li>
             For every other tool, file selection is disabled and nothing leaves your

@@ -11,7 +11,7 @@ import type { Tool } from "./types";
  * implemented. A tool is only `AVAILABLE` when it has a registered processor in
  * `src/lib/processing/registry.ts`; a test enforces that both sides agree.
  *
- * Implemented today: Merge PDF. Everything else is `COMING_SOON`.
+ * Implemented today: Merge PDF, Split PDF. Everything else is `COMING_SOON`.
  */
 
 const PDF_EXT = [".pdf"];
@@ -56,12 +56,14 @@ export const TOOLS: readonly Tool[] = [
     description: "Divide one PDF into separate documents by page ranges.",
     category: "organize",
     icon: "split",
+    // Implemented in Phase 3: server-side splitting with pdf-lib.
+    status: "AVAILABLE",
     plannedTier: "free",
-    keywords: ["divide", "separate", "cut", "ranges"],
+    keywords: ["divide", "separate", "cut", "ranges", "pages", "extract"],
     howItWorks: [
       "Upload the PDF you want to split.",
-      "Choose the page ranges for each output document.",
-      "Download the resulting files.",
+      "Split every page, or enter page ranges such as 1-3, 4-6.",
+      "Download the resulting PDFs.",
     ],
   }),
   pdfTool({
