@@ -6,15 +6,16 @@ PDFKit is a fast, privacy-conscious web application for everyday PDF and
 document work — organising pages, converting formats, editing, securing, and
 later OCR and AI document intelligence.
 
-> ## Current status: Phase 4 — page tools
+> ## Current status: Phase 5 — visual page organiser
 >
-> **Four tools genuinely work:**
+> **Five tools genuinely work:**
 >
 > - **Merge PDF** — combine several PDFs in the order you choose.
 > - **Split PDF** — split every page into its own file, or split by page ranges;
 >   several outputs are delivered as a ZIP.
 > - **Extract PDF Pages** — keep only the pages you list, in the order you list them.
 > - **Delete PDF Pages** — remove the pages you list and keep the rest.
+> - **Reorder PDF Pages** — real page previews, drag or keyboard reordering.
 >
 > **Every other tool is still unimplemented** and honestly marked
 > **Coming soon**, with its upload area disabled. There is no simulated
@@ -32,6 +33,8 @@ later OCR and AI document intelligence.
 - [Merge PDF](#merge-pdf)
 - [Split PDF](#split-pdf)
 - [Extract and Delete PDF Pages](#extract-and-delete-pdf-pages)
+- [Reorder PDF Pages](#reorder-pdf-pages)
+- [Page previews](#page-previews)
 - [Page ranges](#page-ranges)
 - [Processing limits](#processing-limits)
 - [What is deliberately not implemented](#what-is-deliberately-not-implemented)
@@ -54,8 +57,8 @@ A single web app for common document tasks, built around three product rules:
    desktop screens, keyboard-accessible throughout.
 
 The catalog describes **42 tools** in six categories — Organize, Convert, Edit,
-Security, OCR and AI — of which **4 are implemented** today: Merge PDF, Split
-PDF, Extract PDF Pages and Delete PDF Pages.
+Security, OCR and AI — of which **5 are implemented** today: Merge PDF, Split
+PDF, Extract PDF Pages, Delete PDF Pages and Reorder PDF Pages.
 
 ---
 
@@ -72,7 +75,8 @@ PDF, Extract PDF Pages and Delete PDF Pages.
 | Class utilities    | **clsx** + **tailwind-merge**                 | Tiny helpers for conditional and conflict-free class names. |
 | Fonts              | **geist** (self-hosted via `next/font/local`) | No requests to third-party font CDNs, which fits the privacy goal and avoids a render-blocking external dependency. |
 | PDF engine         | **pdf-lib**                                   | Pure TypeScript, no native binaries or system dependencies, runs in the Node runtime and handles page copying (`copyPages`) reliably for both merging and splitting. |
-| ZIP bundling       | **fflate**                                    | ~8 kB, zero dependencies, synchronous API; needed to deliver the several PDFs a split produces as one download. |
+| ZIP bundling       | **fflate**                                    | ~8 kB, zero dependencies, synchronous API; needed to deliver the several PDFs a split produces as one download. It also provides the zlib stream for the PNG encoder. |
+| Page rasteriser    | **@hyzyla/pdfium** (WebAssembly)              | MIT wrapper around Google's pdfium (BSD-3-Clause). Renders real page previews with no native binaries and no browser automation. mupdf was rejected (AGPL-3.0); pdfjs-dist + a native canvas was heavier and platform-specific. |
 | Server guard       | **server-only**                               | Makes `next build` fail if a client component ever imports the processing layer. |
 | Tests              | **Vitest** + **Testing Library** + jsdom      | Fast, Vite-native, and tests behaviour through accessible roles rather than implementation details. |
 | Linting            | **ESLint** with `eslint-config-next`          | Catches React, hooks and Next.js issues, including accessibility rules. |
@@ -126,6 +130,21 @@ npm start
 ---
 
 ## What is implemented today
+
+**Reorder PDF Pages (real, end to end)**
+
+- Real server-rendered previews of every page (not placeholders)
+- Drag a page to a new position, or use the arrow buttons — both work with a
+  keyboard, and moves are announced to screen readers
+- The complete page order is submitted explicitly; the server re-validates that
+  it is a full permutation before touching the document
+
+**Page previews (reusable)**
+
+- `POST /api/documents/thumbnails` renders pages with pdfium (WebAssembly)
+- Returned as `data:` URLs inside the JSON response: nothing is written to disk,
+  nothing is cached, and no URL exists that anyone else could fetch
+- Configurable page count, width and per-image byte cap
 
 **Extract and Delete PDF Pages (real, end to end)**
 
@@ -324,6 +343,60 @@ Responses are `application/pdf` with `X-PDFKit-Pages` (input) and
 > The two tools were previously catalogued as `extract-pages` and
 > `delete-pages`; those URLs now redirect to the new ones.
 
+## Reorder PDF Pages
+
+Upload one PDF, see a preview of every page, rearrange them, download the result.
+
+```bash
+# Reverse a 5-page document
+curl -X POST http://localhost:3000/api/tools/reorder-pdf-pages \
+  -F "files=@document.pdf;type=application/pdf" \
+  -F "order=5,4,3,2,1" \
+  -o document-reordered.pdf
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `files` | yes | Exactly one PDF |
+| `order` | yes | The **complete** new order, e.g. `5,3,1,2,4` |
+
+`order` must be a full permutation: every page from 1 to the page count, exactly
+once. Missing pages, duplicates, extras, out-of-range values and non-numeric
+input are all rejected with `INVALID_PAGE_ORDER` (400) or `PAGE_OUT_OF_RANGE`
+(400) — nothing is silently repaired, and no output is produced. The identity
+order (`1,2,3,…`) is accepted and simply returns a copy.
+
+Responses are `application/pdf` named `<source>-reordered.pdf`, with
+`X-PDFKit-Pages`, `X-PDFKit-Output-Pages`, `no-store` and `nosniff`.
+
+## Page previews
+
+```bash
+curl -X POST http://localhost:3000/api/documents/thumbnails \
+  -F "files=@document.pdf;type=application/pdf" \
+  -F "pages=1,3,5"
+```
+
+```json
+{
+  "pageCount": 12,
+  "thumbnails": [
+    { "pageNumber": 1, "width": 220, "height": 311, "dataUrl": "data:image/png;base64,..." }
+  ]
+}
+```
+
+`pages` is optional — omitting it renders the first N pages, where N is
+`PDFKIT_THUMBNAIL_MAX_PAGES`. Pages are rendered by **pdfium compiled to
+WebAssembly**, encoded to PNG by a small local encoder built on fflate, and
+returned as data URLs. No temporary files, no storage, no cache.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PDFKIT_THUMBNAIL_MAX_PAGES` | `60` | Pages rendered per request (ceiling 200) |
+| `PDFKIT_THUMBNAIL_WIDTH` | `220` | Rendered width in pixels (ceiling 600) |
+| `PDFKIT_THUMBNAIL_MAX_BYTES` | `500000` | Maximum size of one PNG |
+
 ## Page ranges
 
 Ranges are **1-based and inclusive**: `1-3` means pages 1, 2 and 3. Separate
@@ -359,12 +432,12 @@ them if you want the hints to match exactly.
 
 ## What is deliberately not implemented
 
-Compress, rotate and reorder pages, JPG↔PDF, PDF↔Office, editing, security
-tools, page thumbnails, OCR, AI, authentication, cloud storage, databases,
-payments, API keys, a public developer API, background workers and job queues
-are **not** implemented. There is no simulated processing anywhere: no fake
-progress bars, no fake results, no fake downloads. Only Merge PDF, Split PDF,
-Extract PDF Pages and Delete PDF Pages are real.
+Compress and rotate PDFs, JPG↔PDF, PDF↔Office, editing, security tools, OCR, AI,
+authentication, cloud storage, databases, payments, API keys, a public developer
+API, background workers and job queues are **not** implemented. There is no simulated processing anywhere: no fake
+progress bars, no fake results, no fake downloads, no placeholder page images.
+Only Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages and Reorder PDF
+Pages are real.
 
 ---
 
@@ -378,6 +451,8 @@ src/
 │  ├─ api/tools/split-pdf/   # Split PDF endpoint (thin route handler)
 │  ├─ api/tools/extract-pdf-pages/  # Extract endpoint (thin route handler)
 │  ├─ api/tools/delete-pdf-pages/   # Delete endpoint (thin route handler)
+│  ├─ api/tools/reorder-pdf-pages/  # Reorder endpoint (thin route handler)
+│  ├─ api/documents/thumbnails/     # Reusable page previews
 │  ├─ api/documents/inspect/ # Page count for page-level tools
 │  ├─ tools/                 # Catalog + dynamic tool pages
 │  ├─ categories/            # Category pages
@@ -398,6 +473,7 @@ src/
    ├─ upload/                # Pure client-side file validation rules
    ├─ processing/            # Contract, registry, service, HTTP adapter, limits,
    │                         # errors, validation and processors (server only)
+   ├─ thumbnails/            # Page rasteriser, PNG encoder, limits (server only)
    ├─ config/                # Site and navigation config
    ├─ utils/                 # Formatting and class helpers
    └─ theme.ts               # Theme store and pre-paint script
@@ -433,7 +509,19 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (26 files, 314 tests):
+Covered today (31 files, 427 tests):
+
+- **Page order model** — permutation validation (missing, duplicate, extra,
+  out-of-range, non-numeric, wrong length) and the pure move helper
+- **Reorder processor** — real permutations verified by page identity, plus a
+  test that no output document is created when the order is invalid
+- **PNG encoder** — output decoded by an independent decoder and compared pixel
+  for pixel
+- **Rasteriser** — page identity proven by rendering pages of known colours,
+  aspect ratio, limits, malformed/encrypted input, concurrency
+- **Thumbnail and reorder APIs** — headers, page identity, every failure mode
+- **Reorder workspace** — previews, moves, keyboard, announcements, explicit
+  order submission, preview failure and retry
 
 - **Page complement** — the pages that survive a deletion, in document order
 - **Extract processor** — single page, ranges, multiple ranges, selection order,
@@ -473,10 +561,10 @@ Covered today (26 files, 314 tests):
 
 ## Future phases
 
-Phase 4 stops here on purpose. The planned order (see also `/roadmap`):
+Phase 5 stops here on purpose. The planned order (see also `/roadmap`):
 
-1. **Phase 5 — reorder pages and page previews:** Reorder Pages on the same
-   foundation, plus page thumbnails and a visual page picker.
+1. **Phase 6 — Rotate PDF:** per-page rotation reusing the page organiser and
+   the previews built in Phase 5.
 2. Convert tools (images ↔ PDF, Office ↔ PDF).
 3. Editing and security tools.
 4. OCR.

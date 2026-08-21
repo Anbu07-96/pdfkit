@@ -3,9 +3,10 @@
 This document describes how PDFKit is actually built today (Phase 1: foundation
 and product shell; Phase 2: the processing layer and Merge PDF; Phase 3:
 page-level infrastructure, multi-artifact processing and Split PDF; Phase 4:
-Extract and Delete PDF Pages on that same foundation) and the boundaries that
-keep future phases — more tools, OCR, AI, accounts, storage and billing —
-additive rather than a rewrite.
+Extract and Delete PDF Pages on that same foundation; Phase 5: real page
+rasterisation and Reorder PDF Pages) and the boundaries that keep future phases
+— more tools, OCR, AI, accounts, storage and billing — additive rather than a
+rewrite.
 
 ---
 
@@ -73,6 +74,17 @@ cannot download a set of files from one response. fflate is ~8 kB with zero
 dependencies and a synchronous API, so bundling stays a small delivery detail
 rather than a new subsystem. Archives are *stored*, not deflated: the entries
 are PDFs pdf-lib already compressed.
+
+**pdfium (WebAssembly) for rasterising pages.** pdf-lib can rearrange pages but
+cannot *draw* them, and Phase 5 needed genuine previews. The candidates were
+weighed on licence, runtime and size: **mupdf** renders beautifully but is
+AGPL-3.0, which is not acceptable for this product; **pdfjs-dist + a native
+canvas** is ~35 MB and needs a platform-specific binary; **@hyzyla/pdfium** is
+an MIT wrapper around Google's pdfium (BSD-3-Clause) shipped as WebAssembly —
+no native binaries, no browser automation, runs anywhere Node runs. It was
+verified in this environment before being adopted. It returns raw RGBA pixels,
+which a ~120-line local PNG encoder turns into images using the zlib stream
+fflate already provides, so no imaging dependency (sharp/canvas/jimp) was added.
 
 **pdf-lib for PDF work.** Nothing already in the project could parse or write
 PDFs. pdf-lib is pure TypeScript with no native binaries or system packages
@@ -380,6 +392,61 @@ process, download — with each tool supplying wording, an optional extra
 validation rule (Delete's "keep at least one page") and its own request
 function. Neither imports pdf-lib.
 
+## 5c. Page rasterisation (Phase 5)
+
+`src/lib/thumbnails/` is a self-contained, reusable layer with the same shape as
+the processing layer — and the same rule: the rest of the app must not know what
+the rasterizer is.
+
+```text
+UI (PdfPageThumbnail)
+   ↓  data URL
+POST /api/documents/thumbnails      (thin route)
+   ↓
+thumbnails/service.ts               shared validation + limits
+   ↓
+thumbnails/renderer.ts              the ONLY pdfium-aware module
+   ↓
+pdfium (WASM) → RGBA pixels → thumbnails/png.ts → PNG
+```
+
+- **`types.ts`** — `PageThumbnail`, `PageThumbnailPayload`; no rasterizer detail.
+- **`limits.ts`** — `PDFKIT_THUMBNAIL_MAX_PAGES` (60), `PDFKIT_THUMBNAIL_WIDTH`
+  (220), `PDFKIT_THUMBNAIL_MAX_BYTES` (500 kB), each with a hard ceiling so a
+  misconfigured environment cannot exhaust memory.
+- **`png.ts`** — IHDR/IDAT/IEND, CRC32 and a zlib stream from fflate. Tested
+  against an independent decoder, pixel for pixel.
+- **`renderer.ts`** — one WASM instance per process, jobs serialised through a
+  small queue, documents destroyed in a `finally`. pdfium's `width` option
+  stretches pages, so the scale is computed from the real page size; a
+  4× aspect-ratio cap stops a pathological page allocating a huge bitmap.
+
+**Delivery:** thumbnails come back as `data:` URLs inside the JSON response.
+That keeps them ephemeral — no temporary files, no object storage, no URL anyone
+else could fetch, and nothing for the browser to revoke (unlike object URLs,
+data URLs are collected with the React state that holds them). The cost is ~33%
+base64 overhead, which is acceptable for 220px-wide previews.
+
+**Reuse:** Split, Extract, Delete and any future page organiser can call the
+same endpoint and render the same `PdfPageThumbnail` component; nothing about it
+is Reorder-specific.
+
+## 5d. Reorder PDF Pages (Phase 5)
+
+Reorder asks a different question from the other page tools: not *which* pages,
+but *in what order*. It therefore uses a **page order** rather than a page
+selection — `PageOrder = number[]`, validated as a complete permutation of
+`1..pageCount`: no missing pages, no duplicates, no extras, no out-of-range
+values, and never silently repaired.
+
+`movePageInOrder(order, from, to)` is a pure function in `pages.ts`, so the move
+buttons, the drag gestures and the tests all exercise the same logic. The UI
+holds the order in state and submits it **in full**; the server re-parses and
+re-validates it against the real document before copying a single page.
+
+Page identity is kept separate from position throughout: a card knows it is
+page 5, and separately that it currently sits at position 2.
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:
@@ -476,6 +543,11 @@ Every uploaded file is treated as untrusted input:
   de-duplicated.
 - **No empty documents.** Delete PDF Pages refuses to produce a zero-page PDF;
   the check runs before any page is copied.
+- **Rasterisation is bounded.** Page count, render width and per-image bytes are
+  all capped, with hard ceilings above the configurable values; a 4× aspect
+  ratio cap bounds the bitmap for unusual page shapes. Rendering happens in
+  memory only — no temporary files, so there is no cleanup path to get wrong and
+  nothing under `public/`.
 - **Safe errors.** Clients receive a code and a short message; stack traces,
   library internals and causes never leave the server.
 - **Privacy-safe logging.** Counts, byte totals, durations and error codes only.
@@ -505,7 +577,11 @@ limiting, no authentication, no virus scanning and no per-IP quota yet.
   count and page identity are checked — an HTTP 200 is never treated as proof.
 - **Page identity, not just page counts.** Fixtures encode the page number in
   the page width, so tests prove that page 3 really is page 3 after extracting,
-  deleting or splitting. A document with the right number of wrong pages fails.
+  deleting, splitting or reordering. A document with the right number of wrong
+  pages fails.
+- **Thumbnail identity by pixels.** A fixture gives every page a distinct solid
+  colour; thumbnail tests decode the returned PNG and check the centre pixel, so
+  "three images were returned" can never pass for "the right three pages".
 - **Honesty guard:** a test fails if a tool is marked available without a
   registered processor, or a processor exists without an available catalog entry
   — the rule is enforced, not just documented.
