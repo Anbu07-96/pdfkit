@@ -1,60 +1,97 @@
 /**
- * Processing boundary (contract only — no implementation exists yet).
+ * Processing boundary — the contract every PDFKit tool implementation honours.
  *
- * PDFKit's layering is:
+ * PDFKit's layering:
  *
  *   Presentation (app/, components/)
  *        ↓
  *   Application logic (lib/tools, lib/upload)
  *        ↓
- *   API (future: app/api/... route handlers)
+ *   API (app/api/tools/<tool>/route.ts)
  *        ↓
- *   Processing (future: server-side PDF/OCR/AI services)
+ *   Processing service (lib/processing/service.ts)
  *        ↓
- *   Storage (future: temporary object storage)
+ *   Tool processor (lib/processing/processors/*)
+ *        ↓
+ *   PDF library (pdf-lib)
  *
- * This file exists so the boundary is explicit from day one: when real
- * processing lands, it implements `ToolProcessor` behind an API route and the
- * UI keeps talking to the same shapes. Nothing in `components/` may import a
- * processing implementation directly.
- *
- * Phase 1 intentionally ships ZERO implementations of these types. There is no
- * mock, no stub and no simulated result, because a fake result would mislead
- * users into thinking a tool works.
+ * Rules:
+ * - Processors are **server only**. Nothing under `components/` may import a
+ *   processor; the browser talks to the API route instead.
+ * - Processors receive already-validated input and return bytes. They never
+ *   touch HTTP, `FormData`, React or the filesystem.
+ * - Expected failures are raised as `ProcessingError` (see `errors.ts`) so the
+ *   service can turn them into a structured, safe response.
  */
 
+import "server-only";
+
+/** A single validated input document handed to a processor. */
 export interface ProcessingInputFile {
-  /** Stable id assigned by the client for this selection. */
+  /** Stable id for this file within the request (used for ordering/reporting). */
   id: string;
+  /** Original file name as supplied by the client (never trusted for typing). */
   name: string;
+  /** Size in bytes of {@link bytes}. */
   size: number;
+  /** MIME type reported by the client. Advisory only — content is verified. */
   mimeType: string;
+  /** The file content, held in memory for the duration of the request. */
+  bytes: Uint8Array;
 }
 
 export interface ProcessingRequest<TOptions = Record<string, unknown>> {
   toolId: string;
+  /** Input files **in the exact order the user arranged them**. */
   files: ProcessingInputFile[];
   options?: TOptions;
 }
 
+/** A produced document. Bytes are streamed straight back in the response. */
 export interface ProcessingArtifact {
   name: string;
   mimeType: string;
   size: number;
-  /** Short-lived download URL issued by the future storage layer. */
-  url: string;
-  expiresAt: string;
+  bytes: Uint8Array;
 }
 
-export type ProcessingResult =
-  | { status: "succeeded"; artifacts: ProcessingArtifact[] }
-  | { status: "failed"; error: { code: string; message: string } };
+export interface ProcessingSuccess {
+  status: "succeeded";
+  artifacts: ProcessingArtifact[];
+  /** Safe, non-identifying diagnostics (counts, durations, page totals). */
+  meta?: Record<string, number | string>;
+}
 
-/**
- * The single interface every future tool implementation will provide.
- * Implementations must run on the server, never in a React component.
- */
+export interface ProcessingFailure {
+  status: "failed";
+  error: {
+    code: string;
+    message: string;
+    details?: string[];
+  };
+}
+
+export type ProcessingResult = ProcessingSuccess | ProcessingFailure;
+
+/** Per-processor input rules, enforced before any parsing happens. */
+export interface ProcessorInputRules {
+  /** Minimum number of files the tool needs to do its job. */
+  minFiles: number;
+  /** Accepted lower-case file extensions, e.g. `[".pdf"]`. */
+  extensions: readonly string[];
+  /** Accepted MIME types (advisory: content is verified separately). */
+  mimeTypes: readonly string[];
+}
+
+/** The single interface every tool implementation provides. */
 export interface ToolProcessor<TOptions = Record<string, unknown>> {
+  /** Must match a tool id in the catalog (`src/lib/tools`). */
   readonly toolId: string;
-  process(request: ProcessingRequest<TOptions>): Promise<ProcessingResult>;
+  readonly input: ProcessorInputRules;
+  /**
+   * Runs the tool. Implementations throw `ProcessingError` for expected
+   * failures (invalid PDF, unsupported input); the service converts those into
+   * a `ProcessingFailure`.
+   */
+  process(request: ProcessingRequest<TOptions>): Promise<ProcessingSuccess>;
 }
