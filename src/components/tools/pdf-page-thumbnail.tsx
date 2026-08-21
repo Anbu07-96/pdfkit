@@ -28,6 +28,10 @@ export interface PdfPageThumbnailProps {
   showDragHandle?: boolean;
   /** Controls rendered under the page (move buttons, remove, …). */
   actions?: React.ReactNode;
+  /** Small label under the page number, e.g. the current rotation. */
+  badge?: React.ReactNode;
+  /** A newer render is on its way; keep showing the current one meanwhile. */
+  refreshing?: boolean;
   className?: string;
 }
 
@@ -42,6 +46,8 @@ export function PdfPageThumbnail({
   dragging = false,
   showDragHandle = false,
   actions,
+  badge,
+  refreshing = false,
   className,
 }: PdfPageThumbnailProps) {
   const aspectRatio = width && height ? `${width} / ${height}` : "3 / 4";
@@ -85,6 +91,15 @@ export function PdfPageThumbnail({
           </span>
         )}
 
+        {refreshing && state === "ready" ? (
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 flex items-center justify-center bg-surface/60"
+          >
+            <Loader2 className="size-5 animate-spin text-primary" />
+          </span>
+        ) : null}
+
         {showDragHandle ? (
           <span
             aria-hidden="true"
@@ -102,6 +117,7 @@ export function PdfPageThumbnail({
         {positionLabel ? (
           <span className="text-xs text-subtle tabular-nums">{positionLabel}</span>
         ) : null}
+        {badge ? <span className="text-xs text-subtle">{badge}</span> : null}
       </div>
 
       {actions ? <div className="flex items-center justify-center gap-1">{actions}</div> : null}
