@@ -1,8 +1,16 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
 import { createElement, type AnchorHTMLAttributes } from "react";
 import { afterEach, vi } from "vitest";
 import { resetThemeCache } from "@/lib/theme";
+
+/**
+ * Shared test setup.
+ *
+ * Component tests run in jsdom; processing, validation and API-route tests opt
+ * into Node with `// @vitest-environment node`. Everything DOM-specific below
+ * is therefore guarded.
+ */
+const isDom = typeof window !== "undefined";
 
 /* -------------------------------------------------------------------------- */
 /* Next.js mocks                                                              */
@@ -42,7 +50,7 @@ vi.mock("next/navigation", () => ({
 /* -------------------------------------------------------------------------- */
 /* Browser APIs missing from jsdom                                            */
 /* -------------------------------------------------------------------------- */
-if (!window.matchMedia) {
+if (isDom && !window.matchMedia) {
   Object.defineProperty(window, "matchMedia", {
     writable: true,
     value: (query: string) => ({
@@ -58,7 +66,7 @@ if (!window.matchMedia) {
   });
 }
 
-if (!HTMLDialogElement.prototype.showModal) {
+if (isDom && !HTMLDialogElement.prototype.showModal) {
   HTMLDialogElement.prototype.showModal = function showModal() {
     this.open = true;
   };
@@ -68,12 +76,22 @@ if (!HTMLDialogElement.prototype.showModal) {
   };
 }
 
-afterEach(() => {
-  cleanup();
-  window.localStorage.clear();
+// jsdom does not implement object URLs, which the download flow relies on.
+if (isDom && !URL.createObjectURL) {
+  let counter = 0;
+  URL.createObjectURL = vi.fn(() => `blob:pdfkit/${++counter}`);
+  URL.revokeObjectURL = vi.fn();
+}
+
+afterEach(async () => {
+  if (isDom) {
+    const { cleanup } = await import("@testing-library/react");
+    cleanup();
+    window.localStorage.clear();
+    document.documentElement.className = "";
+    delete document.documentElement.dataset.theme;
+  }
   resetThemeCache();
-  document.documentElement.className = "";
-  delete document.documentElement.dataset.theme;
   routerMock.push.mockClear();
   routerMock.replace.mockClear();
   pathnameMock.current = "/";
