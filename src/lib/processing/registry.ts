@@ -5,6 +5,7 @@ import { ProcessingError } from "@/lib/processing/errors";
 import { deletePdfPagesProcessor } from "@/lib/processing/processors/delete-pdf-pages";
 import { extractPdfPagesProcessor } from "@/lib/processing/processors/extract-pdf-pages";
 import { mergePdfProcessor } from "@/lib/processing/processors/merge-pdf";
+import { reorderPdfPagesProcessor } from "@/lib/processing/processors/reorder-pdf-pages";
 import { splitPdfProcessor } from "@/lib/processing/processors/split-pdf";
 
 /**
@@ -22,6 +23,10 @@ const PROCESSORS = new Map<string, ToolProcessor<never>>([
     extractPdfPagesProcessor as ToolProcessor<never>,
   ],
   [deletePdfPagesProcessor.toolId, deletePdfPagesProcessor as ToolProcessor<never>],
+  [
+    reorderPdfPagesProcessor.toolId,
+    reorderPdfPagesProcessor as ToolProcessor<never>,
+  ],
 ]);
 
 /** Tool ids with a working implementation. */
