@@ -1,4 +1,5 @@
 import { MergePdfWorkspace } from "@/components/tools/workspaces/merge-pdf-workspace";
+import { SplitPdfWorkspace } from "@/components/tools/workspaces/split-pdf-workspace";
 import { getProcessingLimits } from "@/lib/processing/limits";
 import { getInputRules } from "@/lib/processing/rules";
 
@@ -29,11 +30,24 @@ export function getToolWorkspace(toolId: string): React.ReactNode | null {
         />
       );
     }
+    case "split-pdf": {
+      const limits = getProcessingLimits();
+      return (
+        <SplitPdfWorkspace
+          limits={{
+            maxFileSize: limits.maxFileSize,
+            maxOutputs: limits.maxOutputs,
+          }}
+        />
+      );
+    }
     default:
       return null;
   }
 }
 
+const TOOLS_WITH_WORKSPACE = new Set(["merge-pdf", "split-pdf"]);
+
 export function hasToolWorkspace(toolId: string): boolean {
-  return toolId === "merge-pdf";
+  return TOOLS_WITH_WORKSPACE.has(toolId);
 }

@@ -1,4 +1,5 @@
 import type { ProcessingErrorCode } from "@/lib/processing/errors";
+import type { PageSelectionMode } from "@/lib/processing/pages";
 
 /**
  * Browser-side client for the processing API.
@@ -15,6 +16,10 @@ export interface ProcessedDocument {
   size: number;
   /** Page count reported by the server, when available. */
   pages?: number;
+  /** How many documents the job produced (>1 means the download is a ZIP). */
+  artifacts: number;
+  /** True when several documents were bundled into a ZIP. */
+  isArchive: boolean;
   blob: Blob;
 }
 
@@ -40,29 +45,15 @@ function fileNameFromDisposition(header: string | null, fallback: string): strin
   return match?.[1]?.trim() || fallback;
 }
 
-export interface RunMergePdfOptions {
-  files: File[];
-  signal?: AbortSignal;
-}
-
-/**
- * Upload PDFs to the merge endpoint and return the produced document.
- * The order of `files` is the order sent to the server.
- */
-export async function runMergePdf({
-  files,
-  signal,
-}: RunMergePdfOptions): Promise<ProcessedDocument> {
-  const form = new FormData();
-  for (const file of files) form.append("files", file, file.name);
-
+/** POST a multipart body and turn any failure into a `ProcessingRequestError`. */
+async function postForm(
+  url: string,
+  form: FormData,
+  signal?: AbortSignal,
+): Promise<Response> {
   let response: Response;
   try {
-    response = await fetch("/api/tools/merge-pdf", {
-      method: "POST",
-      body: form,
-      signal,
-    });
+    response = await fetch(url, { method: "POST", body: form, signal });
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") throw error;
     throw new ProcessingRequestError(
@@ -73,7 +64,7 @@ export async function runMergePdf({
 
   if (!response.ok) {
     let code: ProcessingErrorCode | "NETWORK_ERROR" = "INTERNAL_ERROR";
-    let message = "Something went wrong while merging your files.";
+    let message = "Something went wrong while processing your files.";
     let details: string[] | undefined;
 
     try {
@@ -90,18 +81,96 @@ export async function runMergePdf({
     throw new ProcessingRequestError(code, message, details);
   }
 
+  return response;
+}
+
+/** Turn a successful binary response into a downloadable document. */
+async function toProcessedDocument(
+  response: Response,
+  fallbackName: string,
+): Promise<ProcessedDocument> {
   const blob = await response.blob();
   const pagesHeader = response.headers.get("x-pdfkit-pages");
   const pages = pagesHeader ? Number.parseInt(pagesHeader, 10) : undefined;
+  const artifactsHeader = response.headers.get("x-pdfkit-artifacts");
+  const artifacts = artifactsHeader ? Number.parseInt(artifactsHeader, 10) : 1;
+  const contentType = response.headers.get("content-type") ?? "";
 
   return {
     blob,
     url: URL.createObjectURL(blob),
     fileName: fileNameFromDisposition(
       response.headers.get("content-disposition"),
-      "merged.pdf",
+      fallbackName,
     ),
     size: blob.size,
     pages: Number.isFinite(pages) ? pages : undefined,
+    artifacts: Number.isFinite(artifacts) && artifacts > 0 ? artifacts : 1,
+    isArchive: contentType.includes("zip"),
   };
+}
+
+export interface PdfInspectionResult {
+  fileName: string;
+  size: number;
+  pageCount: number;
+}
+
+export interface RunMergePdfOptions {
+  files: File[];
+  signal?: AbortSignal;
+}
+
+/**
+ * Upload PDFs to the merge endpoint and return the produced document.
+ * The order of `files` is the order sent to the server.
+ */
+export async function runMergePdf({
+  files,
+  signal,
+}: RunMergePdfOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  for (const file of files) form.append("files", file, file.name);
+
+  const response = await postForm("/api/tools/merge-pdf", form, signal);
+  return toProcessedDocument(response, "merged.pdf");
+}
+
+export interface RunSplitPdfOptions {
+  file: File;
+  mode: PageSelectionMode;
+  /** Raw range input, e.g. "1-3, 5, 7-9". Required for `ranges` mode. */
+  ranges?: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Split a PDF on the server. Returns a single PDF when the split produces one
+ * document, or a ZIP containing one PDF per output.
+ */
+export async function runSplitPdf({
+  file,
+  mode,
+  ranges,
+  signal,
+}: RunSplitPdfOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("mode", mode);
+  if (ranges !== undefined) form.append("ranges", ranges);
+
+  const response = await postForm("/api/tools/split-pdf", form, signal);
+  return toProcessedDocument(response, "split.zip");
+}
+
+/** Ask the server for a document's real page count. */
+export async function inspectPdfFile(
+  file: File,
+  signal?: AbortSignal,
+): Promise<PdfInspectionResult> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+
+  const response = await postForm("/api/documents/inspect", form, signal);
+  return (await response.json()) as PdfInspectionResult;
 }
