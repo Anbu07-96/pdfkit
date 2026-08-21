@@ -17,7 +17,10 @@ const SRC = join(process.cwd(), "src");
 const SERVER_ONLY_IMPORTS = [
   "pdf-lib",
   "@hyzyla/pdfium",
+  "jpeg-js",
+  "fflate",
   "@/lib/processing/processors/",
+  "@/lib/processing/optimize/",
   "@/lib/processing/service",
   "@/lib/processing/http",
   "@/lib/processing/registry",
@@ -76,6 +79,7 @@ describe("server-only boundary", () => {
       (path) =>
         (path.includes("/lib/processing/") || path.includes("/lib/thumbnails/")) &&
         !path.endsWith("pages.ts") &&
+        !path.endsWith("compression.ts") &&
         !path.endsWith("errors.ts") &&
         !path.endsWith("rules.ts") &&
         !path.endsWith("client.ts") &&
