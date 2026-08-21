@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 /** Test fixtures that build genuinely valid PDFs with pdf-lib. */
 
@@ -40,6 +40,38 @@ export function pageWidths(document: PDFDocument): number[] {
 export function expectedWidths(pages: number[]): number[] {
   return pages.map((page) => 100 + page);
 }
+
+/**
+ * A valid PDF where each page is filled with a distinct solid colour, so a
+ * rendered thumbnail can be traced back to the exact source page.
+ */
+export async function makeColouredPdf(
+  colours: [number, number, number][],
+): Promise<Uint8Array> {
+  const document = await PDFDocument.create();
+
+  for (const [r, g, b] of colours) {
+    const page = document.addPage([200, 200]);
+    page.drawRectangle({
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 200,
+      color: rgb(r / 255, g / 255, b / 255),
+    });
+  }
+
+  return document.save();
+}
+
+/** Distinct, easily compared page colours: page 1 red, 2 green, 3 blue, … */
+export const PAGE_COLOURS: [number, number, number][] = [
+  [255, 0, 0],
+  [0, 255, 0],
+  [0, 0, 255],
+  [255, 255, 0],
+  [0, 255, 255],
+];
 
 /** Bytes that start with the PDF header but are not parseable. */
 export function makeBrokenPdf(): Uint8Array {

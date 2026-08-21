@@ -14,6 +14,7 @@
     "lint:fix": "eslint --fix"
   },
   "dependencies": {
+    "@hyzyla/pdfium": "^2.1.13",
     "clsx": "^2.1.1",
     "fflate": "^0.8.3",
     "geist": "^1.7.2",
