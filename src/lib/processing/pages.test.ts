@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  complementPageRanges,
+  complementPages,
   countPagesInRanges,
   everyPageRanges,
   expandPageRange,
@@ -7,6 +9,7 @@ import {
   formatPageRange,
   formatPageRanges,
   isPageSelectionMode,
+  pagesToRanges,
   parseAndValidatePageRanges,
   parsePageRanges,
   resolvePageSelection,
@@ -224,5 +227,89 @@ describe("page selection helpers", () => {
     expect(isPageSelectionMode("ranges")).toBe(true);
     expect(isPageSelectionMode("everything")).toBe(false);
     expect(isPageSelectionMode(undefined)).toBe(false);
+  });
+});
+
+describe("pagesToRanges", () => {
+  it("collapses consecutive pages into ranges", () => {
+    expect(pagesToRanges([1, 2, 3, 5])).toEqual([
+      { start: 1, end: 3 },
+      { start: 5, end: 5 },
+    ]);
+  });
+
+  it("keeps isolated pages separate", () => {
+    expect(pagesToRanges([1, 3, 5])).toEqual([
+      { start: 1, end: 1 },
+      { start: 3, end: 3 },
+      { start: 5, end: 5 },
+    ]);
+  });
+
+  it("handles an empty list", () => {
+    expect(pagesToRanges([])).toEqual([]);
+  });
+});
+
+describe("complementPages", () => {
+  it("returns the pages that are not selected", () => {
+    expect(complementPages(parsed("2"), 5)).toEqual([1, 3, 4, 5]);
+    expect(complementPages(parsed("2, 4"), 5)).toEqual([1, 3, 5]);
+    expect(complementPages(parsed("1, 5"), 5)).toEqual([2, 3, 4]);
+  });
+
+  it("handles ranges", () => {
+    expect(complementPages(parsed("3-7"), 10)).toEqual([1, 2, 8, 9, 10]);
+    expect(complementPages(parsed("1-2, 8-10"), 10)).toEqual([3, 4, 5, 6, 7]);
+  });
+
+  it("always returns ascending document order, whatever order was selected", () => {
+    // The pages that remain keep their original order — unlike a selection.
+    expect(complementPages(parsed("8-10, 1-2"), 10)).toEqual([3, 4, 5, 6, 7]);
+    expect(complementPages(parsed("5, 2"), 6)).toEqual([1, 3, 4, 6]);
+  });
+
+  it("removes the first and last pages correctly", () => {
+    expect(complementPages(parsed("1"), 5)).toEqual([2, 3, 4, 5]);
+    expect(complementPages(parsed("5"), 5)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("returns nothing when every page is selected", () => {
+    expect(complementPages(parsed("1-5"), 5)).toEqual([]);
+    expect(complementPages(parsed("1, 2, 3"), 3)).toEqual([]);
+  });
+
+  it("returns every page when nothing is selected", () => {
+    expect(complementPages([], 3)).toEqual([1, 2, 3]);
+  });
+
+  it("ignores selected pages outside the document", () => {
+    expect(complementPages(parsed("9-12"), 3)).toEqual([1, 2, 3]);
+  });
+
+  it("guards against a nonsensical page count", () => {
+    expect(complementPages(parsed("1"), 0)).toEqual([]);
+    expect(complementPages(parsed("1"), -4)).toEqual([]);
+  });
+});
+
+describe("complementPageRanges", () => {
+  it("expresses the complement as ascending ranges", () => {
+    expect(complementPageRanges(parsed("3-7"), 10)).toEqual([
+      { start: 1, end: 2 },
+      { start: 8, end: 10 },
+    ]);
+    expect(complementPageRanges(parsed("2, 4"), 5)).toEqual([
+      { start: 1, end: 1 },
+      { start: 3, end: 3 },
+      { start: 5, end: 5 },
+    ]);
+  });
+
+  it("round-trips through the 0-based conversion", () => {
+    // Deleting page 2 of 5 keeps pages 1,3,4,5 → indices 0,2,3,4.
+    expect(toZeroBasedIndices(complementPageRanges(parsed("2"), 5))).toEqual([
+      0, 2, 3, 4,
+    ]);
   });
 });

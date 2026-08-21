@@ -70,7 +70,7 @@ export type PageRangeParseResult =
   | { ok: false; issue: PageRangeIssue };
 
 export const PAGE_RANGE_SYNTAX_HINT =
-  "Use page numbers such as 1-3, 5, 7-9. Each range becomes a separate PDF.";
+  "Use page numbers such as 1-3, 5, 7-9.";
 
 const SEPARATORS = /[,;\n\r]+/;
 const SINGLE_PAGE = /^\d+$/;
@@ -273,6 +273,60 @@ export function toZeroBasedIndices(
 /** How many pages the ranges cover in total. */
 export function countPagesInRanges(ranges: readonly PageRange[]): number {
   return ranges.reduce((total, range) => total + (range.end - range.start + 1), 0);
+}
+
+/**
+ * Collapse ascending page numbers into ranges: `[1, 2, 3, 5]` → `1-3, 5`.
+ * Input must already be sorted and free of duplicates.
+ */
+export function pagesToRanges(pages: readonly number[]): PageRange[] {
+  const ranges: PageRange[] = [];
+
+  for (const page of pages) {
+    const last = ranges[ranges.length - 1];
+    if (last && page === last.end + 1) {
+      last.end = page;
+    } else {
+      ranges.push({ start: page, end: page });
+    }
+  }
+
+  return ranges;
+}
+
+/**
+ * Every page of the document that the selection does **not** cover.
+ *
+ * This is what "delete these pages" means: the complement is the set of pages
+ * that survive. The result is always in ascending document order, because the
+ * pages that remain keep their original order — unlike a selection, where the
+ * order the user typed is meaningful.
+ *
+ * @example complementPages([{ start: 2, end: 2 }, { start: 4, end: 4 }], 5) // [1, 3, 5]
+ */
+export function complementPages(
+  ranges: readonly PageRange[],
+  pageCount: number,
+): number[] {
+  if (!Number.isInteger(pageCount) || pageCount < 1) return [];
+
+  const removed = new Set(
+    expandPageRanges(ranges).filter((page) => page >= 1 && page <= pageCount),
+  );
+
+  const kept: number[] = [];
+  for (let page = 1; page <= pageCount; page += 1) {
+    if (!removed.has(page)) kept.push(page);
+  }
+  return kept;
+}
+
+/** The complement expressed as ranges, in ascending document order. */
+export function complementPageRanges(
+  ranges: readonly PageRange[],
+  pageCount: number,
+): PageRange[] {
+  return pagesToRanges(complementPages(ranges, pageCount));
 }
 
 /** `{ start: 5, end: 5 }` → `"5"`, `{ start: 1, end: 3 }` → `"1-3"`. */

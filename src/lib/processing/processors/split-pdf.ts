@@ -9,13 +9,12 @@ import type {
   ToolProcessor,
 } from "@/lib/processing/contract";
 import { ProcessingError } from "@/lib/processing/errors";
+import { baseDocumentName } from "@/lib/processing/file-names";
 import {
   everyPageRanges,
   formatPageRanges,
   isPageSelectionMode,
-  parsePageRanges,
   toZeroBasedIndices,
-  validatePageRanges,
   type PageRange,
   type PageSelectionMode,
 } from "@/lib/processing/pages";
@@ -26,6 +25,7 @@ import {
   savePdfDocument,
   stampPdfKitMetadata,
 } from "@/lib/processing/pdf-document";
+import { resolveRequestedRanges } from "@/lib/processing/processors/page-selection-input";
 import { SPLIT_PDF_INPUT_RULES } from "@/lib/processing/rules";
 
 /**
@@ -38,20 +38,6 @@ import { SPLIT_PDF_INPUT_RULES } from "@/lib/processing/rules";
 export interface SplitPdfOptions {
   mode: PageSelectionMode;
   ranges?: string;
-}
-
-/** `Q3 report.pdf` → `Q3 report`; used to name the outputs. */
-function baseNameOf(fileName: string): string {
-  const withoutPath = fileName.split(/[/\\]/).pop() ?? fileName;
-  const withoutExtension = withoutPath.replace(/\.pdf$/i, "");
-  const cleaned = withoutExtension
-    // Strip C0 control characters.
-    .replace(/[\u0000-\u001f\u007f]/g, "")
-    .replace(/[^A-Za-z0-9._()\- \u00c0-\u024f]/g, "_")
-    .trim()
-    .slice(0, 80)
-    .trim();
-  return cleaned.length > 0 ? cleaned : "document";
 }
 
 /**
@@ -102,7 +88,7 @@ export class SplitPdfProcessor implements ToolProcessor<SplitPdfOptions> {
       );
     }
 
-    const baseName = baseNameOf(file.name);
+    const baseName = baseDocumentName(file.name);
     const suffix = mode === "every-page" ? "" : "part-";
     const artifacts: ProcessingArtifact[] = [];
 
@@ -142,30 +128,8 @@ export class SplitPdfProcessor implements ToolProcessor<SplitPdfOptions> {
     if (mode === "every-page") {
       return everyPageRanges(pageCount);
     }
-
-    const parsed = parsePageRanges(rawRanges ?? "");
-    if (!parsed.ok) {
-      throw new ProcessingError(
-        parsed.issue.code === "OUT_OF_RANGE"
-          ? "PAGE_OUT_OF_RANGE"
-          : "INVALID_PAGE_RANGE",
-        parsed.issue.message,
-      );
-    }
-
-    const problem = validatePageRanges(parsed.ranges, pageCount);
-    if (problem) {
-      throw new ProcessingError(
-        problem.code === "OUT_OF_RANGE"
-          ? "PAGE_OUT_OF_RANGE"
-          : problem.code === "OVERLAP"
-            ? "OVERLAPPING_RANGES"
-            : "INVALID_PAGE_RANGE",
-        problem.message,
-      );
-    }
-
-    return parsed.ranges;
+    // Shared with Extract and Delete: one parse/validate/error mapping.
+    return resolveRequestedRanges(rawRanges, pageCount);
   }
 }
 
