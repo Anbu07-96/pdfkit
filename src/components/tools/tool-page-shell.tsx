@@ -1,4 +1,5 @@
-import { ShieldCheck } from "lucide-react";
+import { ArrowRight, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { Container } from "@/components/layout/container";
@@ -10,6 +11,7 @@ import { UploadZone } from "@/components/upload/upload-zone";
 import {
   getCategory,
   getToolsByCategory,
+  getToolsByStatus,
   isToolUsable,
   type Tool,
 } from "@/lib/tools";
@@ -67,6 +69,10 @@ export function ToolPageShell({ tool, workspace }: ToolPageShellProps) {
   const related = getToolsByCategory(tool.category)
     .filter((item) => item.id !== tool.id)
     .slice(0, 4);
+  // Signpost the tools that do work, so a "coming soon" page is never a dead end.
+  const workingTools = getToolsByStatus("AVAILABLE").filter(
+    (item) => item.id !== tool.id,
+  );
 
   return (
     <Container className="py-8 sm:py-12">
@@ -117,6 +123,25 @@ export function ToolPageShell({ tool, workspace }: ToolPageShellProps) {
                 }
               />
             )}
+
+            {!hasWorkspace && workingTools.length > 0 ? (
+              <p className="mt-4 text-sm text-muted">
+                Working today:{" "}
+                {workingTools.map((item, index) => (
+                  <span key={item.id}>
+                    {index > 0 ? ", " : null}
+                    <Link
+                      href={item.route}
+                      className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    >
+                      {item.name}
+                      <ArrowRight aria-hidden="true" className="size-3.5" />
+                    </Link>
+                  </span>
+                ))}
+                .
+              </p>
+            ) : null}
           </div>
 
           <section aria-labelledby="how-it-works" className="mt-12">
