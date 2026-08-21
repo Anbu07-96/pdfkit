@@ -6,13 +6,15 @@ PDFKit is a fast, privacy-conscious web application for everyday PDF and
 document work — organising pages, converting formats, editing, securing, and
 later OCR and AI document intelligence.
 
-> ## Current status: Phase 3 — page-level processing
+> ## Current status: Phase 4 — page tools
 >
-> **Two tools genuinely work:**
+> **Four tools genuinely work:**
 >
 > - **Merge PDF** — combine several PDFs in the order you choose.
 > - **Split PDF** — split every page into its own file, or split by page ranges;
 >   several outputs are delivered as a ZIP.
+> - **Extract PDF Pages** — keep only the pages you list, in the order you list them.
+> - **Delete PDF Pages** — remove the pages you list and keep the rest.
 >
 > **Every other tool is still unimplemented** and honestly marked
 > **Coming soon**, with its upload area disabled. There is no simulated
@@ -29,6 +31,7 @@ later OCR and AI document intelligence.
 - [What is implemented today](#what-is-implemented-today)
 - [Merge PDF](#merge-pdf)
 - [Split PDF](#split-pdf)
+- [Extract and Delete PDF Pages](#extract-and-delete-pdf-pages)
 - [Page ranges](#page-ranges)
 - [Processing limits](#processing-limits)
 - [What is deliberately not implemented](#what-is-deliberately-not-implemented)
@@ -51,8 +54,8 @@ A single web app for common document tasks, built around three product rules:
    desktop screens, keyboard-accessible throughout.
 
 The catalog describes **42 tools** in six categories — Organize, Convert, Edit,
-Security, OCR and AI — of which **2 (Merge PDF, Split PDF) are implemented**
-today.
+Security, OCR and AI — of which **4 are implemented** today: Merge PDF, Split
+PDF, Extract PDF Pages and Delete PDF Pages.
 
 ---
 
@@ -123,6 +126,14 @@ npm start
 ---
 
 ## What is implemented today
+
+**Extract and Delete PDF Pages (real, end to end)**
+
+- Server-authoritative page count, then live validation of the page selection
+- Extract keeps the selected pages **in the order selected** (`8-10, 1-2` works)
+- Delete removes the selected pages and keeps the rest in document order
+- Deleting every page is blocked in the browser and rejected by the server
+- One real PDF per request, downloaded directly
 
 **Split PDF (real, end to end)**
 
@@ -282,10 +293,43 @@ Additional error codes: `INVALID_SPLIT_CONFIGURATION` (400),
 `INVALID_PAGE_RANGE` (400), `PAGE_OUT_OF_RANGE` (400), `OVERLAPPING_RANGES`
 (400), `TOO_MANY_OUTPUTS` (413).
 
+## Extract and Delete PDF Pages
+
+Both take one PDF and a page selection; both return one real PDF.
+
+```bash
+# Keep pages 1-3, 5 and 8-10, in that order
+curl -X POST http://localhost:3000/api/tools/extract-pdf-pages \
+  -F "files=@document.pdf;type=application/pdf" \
+  -F "ranges=1-3, 5, 8-10" \
+  -o document-extracted.pdf
+
+# Remove pages 2, 4 and 7; everything else survives in its original order
+curl -X POST http://localhost:3000/api/tools/delete-pdf-pages \
+  -F "files=@document.pdf;type=application/pdf" \
+  -F "ranges=2, 4, 7" \
+  -o document-pages-removed.pdf
+```
+
+| | Extract PDF Pages | Delete PDF Pages |
+| --- | --- | --- |
+| `ranges` means | pages to **keep** | pages to **remove** |
+| Output order | the order you typed | original document order |
+| Output name | `document-extracted.pdf` | `document-pages-removed.pdf` |
+| Extra rule | — | at least one page must remain (`NO_PAGES_REMAIN`, 400) |
+
+Responses are `application/pdf` with `X-PDFKit-Pages` (input) and
+`X-PDFKit-Output-Pages` (result), `no-store` and `nosniff`.
+
+> The two tools were previously catalogued as `extract-pages` and
+> `delete-pages`; those URLs now redirect to the new ones.
+
 ## Page ranges
 
 Ranges are **1-based and inclusive**: `1-3` means pages 1, 2 and 3. Separate
-them with commas, semicolons or line breaks; a bare number is a single page.
+them with commas, semicolons or line breaks; a bare number is a single page. The
+same module runs in the browser and on the server for Split, Extract and Delete,
+so their rules and messages are identical.
 
 ```text
 1            → page 1
@@ -315,11 +359,12 @@ them if you want the hints to match exactly.
 
 ## What is deliberately not implemented
 
-Compress, rotate, delete/reorder/extract pages, JPG↔PDF, PDF↔Office, editing,
-security tools, OCR, AI, authentication, cloud storage, databases, payments, API
-keys, a public developer API, background workers and job queues are **not**
-implemented. There is no simulated processing anywhere: no fake progress bars,
-no fake results, no fake downloads. Only Merge PDF and Split PDF are real.
+Compress, rotate and reorder pages, JPG↔PDF, PDF↔Office, editing, security
+tools, page thumbnails, OCR, AI, authentication, cloud storage, databases,
+payments, API keys, a public developer API, background workers and job queues
+are **not** implemented. There is no simulated processing anywhere: no fake
+progress bars, no fake results, no fake downloads. Only Merge PDF, Split PDF,
+Extract PDF Pages and Delete PDF Pages are real.
 
 ---
 
@@ -331,6 +376,8 @@ src/
 │  ├─ page.tsx               # Homepage
 │  ├─ api/tools/merge-pdf/   # Merge PDF endpoint (thin route handler)
 │  ├─ api/tools/split-pdf/   # Split PDF endpoint (thin route handler)
+│  ├─ api/tools/extract-pdf-pages/  # Extract endpoint (thin route handler)
+│  ├─ api/tools/delete-pdf-pages/   # Delete endpoint (thin route handler)
 │  ├─ api/documents/inspect/ # Page count for page-level tools
 │  ├─ tools/                 # Catalog + dynamic tool pages
 │  ├─ categories/            # Category pages
@@ -386,7 +433,14 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (22 files, 219 tests):
+Covered today (26 files, 314 tests):
+
+- **Page complement** — the pages that survive a deletion, in document order
+- **Extract processor** — single page, ranges, multiple ranges, selection order,
+  all pages, invalid/out-of-range/overlapping input, malformed and encrypted PDFs
+- **Delete processor** — first/last/middle/non-contiguous removals, all-but-one,
+  the zero-page guard, and proof that Delete is the complement of Extract
+- **Extract and Delete APIs** — real PDFs parsed back and page identity checked
 
 - **Page selection** — range parser, validation, overlap and boundary rules, and
   the 1-based → 0-based conversion
@@ -419,10 +473,10 @@ Covered today (22 files, 219 tests):
 
 ## Future phases
 
-Phase 3 stops here on purpose. The planned order (see also `/roadmap`):
+Phase 4 stops here on purpose. The planned order (see also `/roadmap`):
 
-1. **Phase 4 — remaining organise tools:** extract, delete and reorder pages on
-   the same page-selection foundation, with page thumbnails.
+1. **Phase 5 — reorder pages and page previews:** Reorder Pages on the same
+   foundation, plus page thumbnails and a visual page picker.
 2. Convert tools (images ↔ PDF, Office ↔ PDF).
 3. Editing and security tools.
 4. OCR.

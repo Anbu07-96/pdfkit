@@ -2,9 +2,10 @@
 
 This document describes how PDFKit is actually built today (Phase 1: foundation
 and product shell; Phase 2: the processing layer and Merge PDF; Phase 3:
-page-level infrastructure, multi-artifact processing and Split PDF) and the
-boundaries that keep future phases — more tools, OCR, AI, accounts, storage and
-billing — additive rather than a rewrite.
+page-level infrastructure, multi-artifact processing and Split PDF; Phase 4:
+Extract and Delete PDF Pages on that same foundation) and the boundaries that
+keep future phases — more tools, OCR, AI, accounts, storage and billing —
+additive rather than a rewrite.
 
 ---
 
@@ -260,6 +261,13 @@ so the browser validates with exactly the code the server enforces.
 - **Overlaps are rejected by default** (`allowOverlap` exists for future tools).
   For splitting, `1-5, 4-8` is far more likely to be a typo than a request to
   duplicate pages, and silently duplicating them would be a surprising result.
+  Extract and Delete inherit the same rule, so the three page tools behave
+  identically.
+- **Complement (Phase 4):** `complementPages(ranges, pageCount)` returns the
+  pages a selection does *not* cover — what Delete keeps. Unlike a selection,
+  the complement is always in ascending document order, because surviving pages
+  keep their original order. `complementPageRanges()` expresses the same result
+  as ranges, and `pagesToRanges()` collapses consecutive pages.
 
 Two other pieces of shared infrastructure landed with it:
 
@@ -268,7 +276,12 @@ Two other pieces of shared infrastructure landed with it:
   and Split both use it, so encrypted and lazily-failing documents are handled
   identically and only once.
 - `inspect.ts` + `POST /api/documents/inspect` — the server-authoritative page
-  count. The browser never derives a page count itself.
+  count. The browser never derives a page count itself. Split, Extract and
+  Delete all use this one endpoint.
+- `file-names.ts` — one sanitiser (`baseDocumentName`, `derivedDocumentName`)
+  shared by every processor, so no tool can leak a path into a file name.
+- `processors/page-selection-input.ts` — the single parse → validate → map-to-
+  error-code step for tools whose options are a raw `ranges` string.
 
 ### Multi-artifact processing
 
@@ -346,6 +359,27 @@ error code. File names, metadata and document contents are never logged.
    order, each saved and named from the sanitised source name.
 6. **Deliver.** One output → PDF; several → ZIP with sanitised entry names.
 
+### Phase 4: Extract and Delete PDF Pages
+
+Both are single-PDF, page-selection tools, and each was built with the four-step
+recipe below — no new infrastructure, no new dependency, no new API shape.
+
+| | Extract PDF Pages | Delete PDF Pages |
+| --- | --- | --- |
+| Selection means | pages to **keep** | pages to **remove** |
+| Output order | exactly as typed (`8-10, 1-2` → 8,9,10,1,2) | ascending document order |
+| Built from | the selection itself | `complementPages(selection, pageCount)` |
+| Extra guard | — | `NO_PAGES_REMAIN` when nothing would survive |
+
+They are deliberately *not* the same operation with a flag: Extract copies the
+selection, Delete copies its complement, and a test asserts the two produce
+opposite page sets from the same input.
+
+The UI shares `page-selection-workspace.tsx` — upload, inspect, validate,
+process, download — with each tool supplying wording, an optional extra
+validation rule (Delete's "keep at least one page") and its own request
+function. Neither imports pdf-lib.
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:
@@ -372,8 +406,9 @@ tool is now a fixed, four-step recipe:
 4. add a workspace component, map it in `components/tools/workspaces`, and flip
    the catalog status to `AVAILABLE`.
 
-Split PDF was built exactly this way, and multi-artifact delivery, ZIP bundling,
-page counting and range validation are now shared by whatever comes next.
+Split PDF was built exactly this way, and Extract and Delete PDF Pages then
+reused the result without touching the contract, the HTTP adapter or the service
+— only a processor, a rules entry, a route and a workspace each.
 
 Validation, limits, error shaping, logging and response headers are shared, so
 no component, hook or page needs restructuring.
@@ -435,9 +470,12 @@ Every uploaded file is treated as untrusted input:
 - **Output limits.** A job may not produce more than `PDFKIT_MAX_SPLIT_OUTPUTS`
   documents, checked before generation so a long PDF cannot be used to force
   large amounts of work.
-- **Safe file names.** Output names come from the sanitised source name, and ZIP
-  entry names are stripped of directories, traversal (`../`), drive letters and
-  control characters, then de-duplicated.
+- **Safe file names.** Output names come from one shared sanitiser
+  (`file-names.ts`), and ZIP entry names are additionally stripped of
+  directories, traversal (`../`), drive letters and control characters, then
+  de-duplicated.
+- **No empty documents.** Delete PDF Pages refuses to produce a zero-page PDF;
+  the check runs before any page is copied.
 - **Safe errors.** Clients receive a code and a short message; stack traces,
   library internals and causes never leave the server.
 - **Privacy-safe logging.** Counts, byte totals, durations and error codes only.
@@ -465,6 +503,9 @@ limiting, no authentication, no virus scanning and no per-IP quota yet.
   the page number, so page identity and ordering can be asserted after copying.
 - **ZIP responses are opened in tests**, every PDF inside is parsed, and its page
   count and page identity are checked — an HTTP 200 is never treated as proof.
+- **Page identity, not just page counts.** Fixtures encode the page number in
+  the page width, so tests prove that page 3 really is page 3 after extracting,
+  deleting or splitting. A document with the right number of wrong pages fails.
 - **Honesty guard:** a test fails if a tool is marked available without a
   registered processor, or a processor exists without an available catalog entry
   — the rule is enforced, not just documented.
