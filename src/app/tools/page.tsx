@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Container } from "@/components/layout/container";
 import { ToolExplorer } from "@/components/tools/tool-explorer";
-import { TOOLS } from "@/lib/tools";
+import { getToolsByStatus, TOOLS } from "@/lib/tools";
 
 export const metadata: Metadata = {
   title: "All PDF tools",
@@ -13,6 +13,7 @@ export default async function ToolsPage({ searchParams }: PageProps<"/tools">) {
   const params = await searchParams;
   const rawQuery = params?.q;
   const initialQuery = Array.isArray(rawQuery) ? (rawQuery[0] ?? "") : (rawQuery ?? "");
+  const available = getToolsByStatus("AVAILABLE");
 
   return (
     <Container className="py-10 sm:py-14">
@@ -21,9 +22,10 @@ export default async function ToolsPage({ searchParams }: PageProps<"/tools">) {
           All tools
         </h1>
         <p className="mt-3 text-base leading-relaxed text-muted">
-          {TOOLS.length} tools are planned across six categories. Search by name,
-          description or category. Nothing here processes documents yet — each card
-          shows its real availability.
+          {TOOLS.length} tools across six categories. Search by name, description or
+          category. Each card shows its real availability: {available.length} tool
+          {available.length === 1 ? " is" : "s are"} implemented today, the rest are
+          still being built.
         </p>
       </header>
 

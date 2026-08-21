@@ -21,7 +21,7 @@ export default function DevelopersPage() {
       <EmptyState
         icon={<Code2 />}
         title="No public API"
-        description="An API only makes sense once the processing layer behind it is real. That work has not started."
+        description="The internal merge endpoint exists for the PDFKit interface, but it is not a documented, versioned or supported public API yet."
         action={
           <ButtonLink href="/roadmap" variant="secondary">
             See the roadmap
@@ -37,9 +37,15 @@ export default function DevelopersPage() {
             expose exactly the same tool definitions the interface uses.
           </li>
           <li>
-            The processing boundary is defined as a contract in the codebase
-            (<code>src/lib/processing/contract.ts</code>) with no implementation, so the
-            future API and the UI can be built against the same shapes.
+            The processing boundary is a real contract in the codebase
+            (<code>src/lib/processing/contract.ts</code>) with a registry of
+            implemented processors, so a public API can expose exactly the tools that
+            genuinely work.
+          </li>
+          <li>
+            The first internal endpoint (<code>POST /api/tools/merge-pdf</code>) already
+            uses the shared validation, limits and structured error model a public API
+            would need.
           </li>
           <li>
             Nothing in the interface talks to a processing service directly, which keeps

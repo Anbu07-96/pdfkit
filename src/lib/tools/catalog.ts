@@ -8,8 +8,10 @@ import type { Tool } from "./types";
  * duplicated anywhere else.
  *
  * IMPORTANT: no tool may be marked `AVAILABLE` until its processing is really
- * implemented. Phase 1 ships the product shell only, so every entry below is
- * `COMING_SOON`.
+ * implemented. A tool is only `AVAILABLE` when it has a registered processor in
+ * `src/lib/processing/registry.ts`; a test enforces that both sides agree.
+ *
+ * Implemented today: Merge PDF. Everything else is `COMING_SOON`.
  */
 
 const PDF_EXT = [".pdf"];
@@ -38,12 +40,14 @@ export const TOOLS: readonly Tool[] = [
     description: "Combine multiple PDF files into one ordered document.",
     category: "organize",
     icon: "merge",
+    // Implemented in Phase 2: server-side merging with pdf-lib.
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["combine", "join", "concatenate", "append"],
     howItWorks: [
       "Add the PDF files you want to combine.",
       "Arrange them in the order the final document should follow.",
-      "Download a single merged PDF.",
+      "Merge them and download a single PDF.",
     ],
   }),
   pdfTool({

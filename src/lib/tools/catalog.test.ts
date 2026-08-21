@@ -44,11 +44,19 @@ describe("tool catalog", () => {
     }
   });
 
-  it("never marks an unimplemented tool as usable (no fake availability)", () => {
-    // Phase 1 ships no processing, so nothing may claim to be available.
+  it("only marks genuinely implemented tools as usable", () => {
+    // Merge PDF is implemented (Phase 2). Everything else must still say so.
+    // `registry.test.ts` additionally asserts catalog/registry parity.
+    const implemented = ["merge-pdf"];
+
     for (const tool of TOOLS) {
-      expect(tool.status).toBe("COMING_SOON");
-      expect(isToolUsable(tool)).toBe(false);
+      if (implemented.includes(tool.id)) {
+        expect(tool.status).toBe("AVAILABLE");
+        expect(isToolUsable(tool)).toBe(true);
+      } else {
+        expect(tool.status).toBe("COMING_SOON");
+        expect(isToolUsable(tool)).toBe(false);
+      }
     }
   });
 

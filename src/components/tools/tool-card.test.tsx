@@ -5,6 +5,7 @@ import { ToolStatusBadge } from "@/components/tools/tool-status-badge";
 import { getTool } from "@/lib/tools";
 
 const mergeTool = getTool("merge-pdf")!;
+const plannedTool = getTool("split-pdf")!;
 const aiTool = getTool("summarize-pdf")!;
 
 describe("ToolCard", () => {
@@ -20,10 +21,19 @@ describe("ToolCard", () => {
     expect(screen.getByText(mergeTool.description)).toBeInTheDocument();
   });
 
-  it("communicates that the tool is not available yet", () => {
+  it("shows implemented tools as available", () => {
     render(
       <ul>
         <ToolCard tool={mergeTool} />
+      </ul>,
+    );
+    expect(screen.getByText("Available")).toBeInTheDocument();
+  });
+
+  it("communicates that an unimplemented tool is not available yet", () => {
+    render(
+      <ul>
+        <ToolCard tool={plannedTool} />
       </ul>,
     );
     expect(screen.getByText(/coming soon/i)).toBeInTheDocument();

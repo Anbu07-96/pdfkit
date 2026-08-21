@@ -15,8 +15,8 @@
  * - `PRO`         – implemented, but reserved for a future paid plan.
  * - `DISABLED`    – temporarily turned off (e.g. incident, deprecation).
  *
- * Only tools that really work may ever be marked `AVAILABLE` or `PRO`.
- * During Phase 1 no processing exists, so every tool is `COMING_SOON`.
+ * Only tools that really work may ever be marked `AVAILABLE` or `PRO`: the
+ * status must be backed by a registered processor (`lib/processing/registry`).
  */
 export type ToolStatus = "AVAILABLE" | "COMING_SOON" | "PRO" | "DISABLED";
 

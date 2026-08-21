@@ -4,7 +4,7 @@ import { ContentPage, Prose } from "@/components/layout/content-page";
 export const metadata: Metadata = {
   title: "Privacy",
   description:
-    "How PDFKit handles data today: no accounts, no analytics, no document uploads — because no processing has been implemented yet.",
+    "How PDFKit handles data today: no accounts, no analytics, and documents processed in memory and discarded immediately.",
 };
 
 export default function PrivacyPage() {
@@ -18,13 +18,23 @@ export default function PrivacyPage() {
         <h2>What the current version does</h2>
         <ul>
           <li>
-            PDFKit is currently a web interface only. No document processing exists, so
-            no document is uploaded to any server from this application.
+            <strong>Merge PDF</strong> is the only tool that sends data anywhere. When
+            you press Merge, the selected files are uploaded to the PDFKit server,
+            merged in memory and returned in the response.
           </li>
           <li>
-            Files chosen in an upload area (where selection is enabled) stay in your
-            browser. They are listed so you can see the interface working — nothing is
-            transmitted, stored or read beyond the file name, size and type.
+            Those files are never written to disk, never stored and never logged. The
+            server keeps only operational counters — tool id, number of files, total
+            byte count and duration. File names and document contents are not logged.
+          </li>
+          <li>
+            The merged document is streamed straight back to your browser. Nothing is
+            retained server-side once the response has been sent, and there is no
+            download link that anyone else could visit.
+          </li>
+          <li>
+            For every other tool, file selection is disabled and nothing leaves your
+            device.
           </li>
           <li>There are no accounts, so no personal data is collected.</li>
           <li>
@@ -37,15 +47,15 @@ export default function PrivacyPage() {
           </li>
         </ul>
 
-        <h2>What will change when processing is implemented</h2>
+        <h2>What will change as more tools ship</h2>
         <ul>
           <li>
-            Files will be sent to a PDFKit server only when you explicitly start an
-            operation.
+            Files will continue to be sent only when you explicitly start an operation.
           </li>
           <li>
-            Files will be kept only for as long as the operation requires and deleted
-            automatically afterwards.
+            Larger documents may eventually need temporary server storage. If that
+            becomes necessary, it will be described here before it ships, with
+            automatic deletion.
           </li>
           <li>
             Documents will not be used to train models, will not be indexed and will not

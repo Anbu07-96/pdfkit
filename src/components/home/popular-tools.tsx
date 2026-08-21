@@ -13,7 +13,7 @@ export function PopularTools() {
         <SectionHeader
           id="popular-tools-title"
           title="Popular tools"
-          description="The document tasks people reach for most often. These are the first tools on the PDFKit roadmap — none of them process files yet."
+          description="The document tasks people reach for most often. Merge PDF is ready to use; the others show their real availability and are still being built."
           action={
             <ButtonLink href="/tools" variant="secondary">
               Browse all tools

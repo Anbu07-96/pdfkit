@@ -18,6 +18,10 @@ export default function HelpPage() {
       <Prose>
         <h2>What works today</h2>
         <ul>
+          <li>
+            <strong>Merge PDF</strong> — upload two or more PDFs, arrange them in the
+            order you want, merge them on the server and download the real result.
+          </li>
           <li>Browsing the tool catalog by category.</li>
           <li>Searching tools by name, description or category.</li>
           <li>Opening any tool page to see what the tool will do and what it accepts.</li>
@@ -27,7 +31,7 @@ export default function HelpPage() {
         <h2>What does not work yet</h2>
         <ul>
           <li>
-            No tool processes documents. Upload areas on tool pages are intentionally
+            Every tool other than Merge PDF. Their upload areas are intentionally
             disabled and labelled <strong>Coming soon</strong>.
           </li>
           <li>There are no accounts, no cloud storage, no API keys and no billing.</li>
@@ -46,6 +50,10 @@ export default function HelpPage() {
           <li>
             <strong>Enter</strong> in the homepage search — open the full catalog
             filtered by your query.
+          </li>
+          <li>
+            <strong>Arrow buttons</strong> on Merge PDF — move a document up or down
+            before merging, without needing drag and drop.
           </li>
         </ul>
 

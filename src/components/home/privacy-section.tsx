@@ -13,7 +13,7 @@ const POINTS = [
     icon: Clock,
     title: "Temporary file handling",
     description:
-      "When processing is implemented, files will be handled only for as long as the requested operation takes, then removed automatically.",
+      "Files sent to a working tool are processed in memory for the length of that request only. Nothing is written to disk and nothing is kept afterwards.",
   },
   {
     icon: EyeOff,
@@ -25,7 +25,7 @@ const POINTS = [
     icon: ServerCog,
     title: "Honest about the current state",
     description:
-      "Right now nothing is uploaded, because no processing exists. We would rather say that plainly than imply capabilities we have not built.",
+      "Only Merge PDF processes documents so far. Every other tool says plainly that it is not built yet, instead of implying capabilities we do not have.",
   },
 ];
 
