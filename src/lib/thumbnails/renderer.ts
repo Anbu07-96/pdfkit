@@ -3,6 +3,7 @@ import "server-only";
 import { PDFiumLibrary } from "@hyzyla/pdfium";
 import { ProcessingError } from "@/lib/processing/errors";
 import { encodePng } from "@/lib/thumbnails/png";
+import { rotateRgba } from "@/lib/thumbnails/rotate-pixels";
 import type { PageThumbnail, RenderThumbnailsOptions } from "@/lib/thumbnails/types";
 
 /**
@@ -69,7 +70,7 @@ function isEncrypted(error: unknown): boolean {
  */
 export async function renderPdfPageThumbnails(
   bytes: Uint8Array,
-  { pages, width, maxImageBytes }: RenderThumbnailsOptions,
+  { pages, width, maxImageBytes, rotations = {} }: RenderThumbnailsOptions,
 ): Promise<{ pageCount: number; thumbnails: PageThumbnail[] }> {
   return enqueue(async () => {
     const library = await getLibrary();
@@ -148,11 +149,21 @@ export async function renderPdfPageThumbnails(
           );
         }
 
-        const png = encodePng({
-          width: rendered.width,
-          height: rendered.height,
+        // pdfium renders the page as the document declares it; any extra
+        // rotation the caller asked for is applied to the bitmap afterwards.
+        const rotation = rotations[pageNumber] ?? 0;
+        const image = rotateRgba(
           // pdfium hands back RGBA pixels; `png.test.ts` locks that assumption.
-          pixels: rendered.data,
+          rendered.data,
+          rendered.width,
+          rendered.height,
+          rotation,
+        );
+
+        const png = encodePng({
+          width: image.width,
+          height: image.height,
+          pixels: image.pixels,
         });
 
         if (png.length > maxImageBytes) {
@@ -164,8 +175,9 @@ export async function renderPdfPageThumbnails(
 
         thumbnails.push({
           pageNumber,
-          width: rendered.width,
-          height: rendered.height,
+          rotation,
+          width: image.width,
+          height: image.height,
           mimeType: "image/png",
           bytes: png,
         });

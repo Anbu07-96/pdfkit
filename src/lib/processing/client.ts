@@ -1,5 +1,10 @@
 import type { ProcessingErrorCode } from "@/lib/processing/errors";
-import type { PageSelectionMode } from "@/lib/processing/pages";
+import {
+  formatPageRotations,
+  type PageRotation,
+  type PageRotationMap,
+  type PageSelectionMode,
+} from "@/lib/processing/pages";
 
 /**
  * Browser-side client for the processing API.
@@ -234,8 +239,31 @@ export async function runReorderPdfPages({
   return toProcessedDocument(response, "reordered.pdf");
 }
 
+export interface RunRotatePdfOptions {
+  file: File;
+  /** Clockwise rotation per page; omitted pages keep their orientation. */
+  rotations: PageRotationMap;
+  signal?: AbortSignal;
+}
+
+/** Rotate pages of one PDF. Rotations are additive on the server. */
+export async function runRotatePdf({
+  file,
+  rotations,
+  signal,
+}: RunRotatePdfOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("rotations", formatPageRotations(rotations));
+
+  const response = await postForm("/api/tools/rotate-pdf", form, signal);
+  return toProcessedDocument(response, "rotated.pdf");
+}
+
 export interface PageThumbnailData {
   pageNumber: number;
+  /** Extra clockwise rotation baked into this preview. */
+  rotation: PageRotation;
   width: number;
   height: number;
   /** `data:image/png;base64,...` — usable directly as an `<img src>`. */
@@ -257,10 +285,14 @@ export async function fetchPageThumbnails(
   file: File,
   pages?: number[],
   signal?: AbortSignal,
+  rotations?: PageRotationMap,
 ): Promise<PageThumbnailsResult> {
   const form = new FormData();
   form.append("files", file, file.name);
   if (pages?.length) form.append("pages", pages.join(","));
+  if (rotations && Object.keys(rotations).length > 0) {
+    form.append("rotations", formatPageRotations(rotations));
+  }
 
   const response = await postForm("/api/documents/thumbnails", form, signal);
   return (await response.json()) as PageThumbnailsResult;

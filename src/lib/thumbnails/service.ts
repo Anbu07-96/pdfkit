@@ -5,6 +5,11 @@ import { ProcessingError } from "@/lib/processing/errors";
 import { getProcessingLimits, type ProcessingLimits } from "@/lib/processing/limits";
 import { SINGLE_PDF_INPUT_RULES } from "@/lib/processing/rules";
 import { validateProcessingInput } from "@/lib/processing/validation/pdf-input";
+import {
+  parsePageRotations,
+  validatePageRotations,
+  type PageRotationMap,
+} from "@/lib/processing/pages";
 import { getThumbnailLimits, type ThumbnailLimits } from "@/lib/thumbnails/limits";
 import { renderPdfPageThumbnails } from "@/lib/thumbnails/renderer";
 import type {
@@ -23,6 +28,8 @@ import type {
 export interface CreateThumbnailsOptions {
   /** 1-based pages to render. Empty or omitted renders from page 1 up to the limit. */
   pages?: number[];
+  /** Extra clockwise rotation per page, on top of the document's own. */
+  rotations?: PageRotationMap;
   processingLimits?: ProcessingLimits;
   thumbnailLimits?: ThumbnailLimits;
 }
@@ -51,10 +58,22 @@ export function parseRequestedPages(value: string | null | undefined): number[] 
   return pages;
 }
 
+/** Parse the optional `rotations` form field, e.g. `{"1":90}`. */
+export function parseRequestedRotations(
+  value: string | null | undefined,
+): PageRotationMap {
+  const parsed = parsePageRotations(value ?? "");
+  if (!parsed.ok) {
+    throw new ProcessingError("INVALID_PAGE_ROTATION", parsed.issue.message);
+  }
+  return parsed.rotations;
+}
+
 export async function createPageThumbnails(
   file: ProcessingInputFile,
   {
     pages = [],
+    rotations = {},
     processingLimits = getProcessingLimits(),
     thumbnailLimits = getThumbnailLimits(),
   }: CreateThumbnailsOptions = {},
@@ -73,6 +92,11 @@ export async function createPageThumbnails(
     );
   }
 
+  const rotationProblem = validatePageRotations(rotations, Number.MAX_SAFE_INTEGER);
+  if (rotationProblem) {
+    throw new ProcessingError("INVALID_PAGE_ROTATION", rotationProblem.message);
+  }
+
   // An empty request means "the first N pages", where N is the limit.
   const { pageCount, thumbnails } = await renderPdfPageThumbnails(file.bytes, {
     // A resolver keeps this to a single document load: when the caller did not
@@ -86,6 +110,7 @@ export async function createPageThumbnails(
               { length: Math.min(count, thumbnailLimits.maxPages) },
               (_, index) => index + 1,
             ),
+    rotations,
     width: thumbnailLimits.width,
     maxImageBytes: thumbnailLimits.maxImageBytes,
   });
@@ -98,12 +123,14 @@ export async function createPageThumbnails(
 
 function toPayload(thumbnail: {
   pageNumber: number;
+  rotation: PageThumbnailPayload["rotation"];
   width: number;
   height: number;
   bytes: Uint8Array;
 }): PageThumbnailPayload {
   return {
     pageNumber: thumbnail.pageNumber,
+    rotation: thumbnail.rotation,
     width: thumbnail.width,
     height: thumbnail.height,
     // Data URLs keep the response self-contained: no temporary files, no

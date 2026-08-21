@@ -4,7 +4,11 @@ import {
   readSingleUploadedPdf,
   JSON_RESPONSE_HEADERS,
 } from "@/lib/processing/http";
-import { createPageThumbnails, parseRequestedPages } from "@/lib/thumbnails/service";
+import {
+  createPageThumbnails,
+  parseRequestedPages,
+  parseRequestedRotations,
+} from "@/lib/thumbnails/service";
 
 /**
  * Page thumbnail API.
@@ -13,6 +17,8 @@ import { createPageThumbnails, parseRequestedPages } from "@/lib/thumbnails/serv
  * - `files` — exactly one PDF
  * - `pages` — optional 1-based page numbers, e.g. `1,3,5`. Omitted renders the
  *   first N pages, where N is the configured limit.
+ * - `rotations` — optional JSON object of extra clockwise rotation per page,
+ *   e.g. `{"1":90}`, so a preview can match what the user is about to apply.
  *
  * Responds with JSON:
  *
@@ -39,7 +45,10 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const pages = parseRequestedPages(upload.form.get("pages") as string | null);
-    const body = await createPageThumbnails(upload.file, { pages });
+    const rotations = parseRequestedRotations(
+      upload.form.get("rotations") as string | null,
+    );
+    const body = await createPageThumbnails(upload.file, { pages, rotations });
 
     return Response.json(body, { status: 200, headers: JSON_RESPONSE_HEADERS });
   } catch (error) {

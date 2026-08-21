@@ -250,3 +250,181 @@ describe("createPageThumbnails", () => {
     );
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* Rotated previews (Phase 6)                                                 */
+/* -------------------------------------------------------------------------- */
+
+describe("renderPdfPageThumbnails — rotation", () => {
+  /** Page 1 is 100x200 (portrait), so orientation changes are obvious. */
+  async function portraitPdf() {
+    const { PDFDocument, rgb } = await import("pdf-lib");
+    const document = await PDFDocument.create();
+    const page = document.addPage([100, 200]);
+    // Mark the top-left corner so orientation can be checked by pixel.
+    page.drawRectangle({ x: 0, y: 150, width: 50, height: 50, color: rgb(1, 0, 0) });
+    return document.save();
+  }
+
+  it("renders an unrotated page as the baseline", async () => {
+    const { thumbnails } = await render(await portraitPdf(), [1], { width: 100 });
+    const image = decodePng(thumbnails[0].bytes);
+
+    expect(thumbnails[0].rotation).toBe(0);
+    expect(image.width).toBe(100);
+    expect(image.height).toBe(200);
+  });
+
+  it("swaps width and height for 90° and 270°", async () => {
+    for (const rotation of [90, 270] as const) {
+      const { thumbnails } = await render(await portraitPdf(), [1], {
+        width: 100,
+        rotations: { 1: rotation },
+      });
+
+      const image = decodePng(thumbnails[0].bytes);
+      expect(thumbnails[0].rotation).toBe(rotation);
+      expect(thumbnails[0].width).toBe(image.width);
+      expect(thumbnails[0].height).toBe(image.height);
+      // Portrait becomes landscape.
+      expect(image.width).toBe(200);
+      expect(image.height).toBe(100);
+    }
+  });
+
+  it("keeps the dimensions for 180°", async () => {
+    const { thumbnails } = await render(await portraitPdf(), [1], {
+      width: 100,
+      rotations: { 1: 180 },
+    });
+
+    const image = decodePng(thumbnails[0].bytes);
+    expect(image.width).toBe(100);
+    expect(image.height).toBe(200);
+  });
+
+  it("never stretches: the rotated area equals the original area", async () => {
+    const base = decodePng((await render(await portraitPdf(), [1], { width: 100 })).thumbnails[0].bytes);
+
+    for (const rotation of [90, 180, 270] as const) {
+      const { thumbnails } = await render(await portraitPdf(), [1], {
+        width: 100,
+        rotations: { 1: rotation },
+      });
+      const image = decodePng(thumbnails[0].bytes);
+      expect(image.width * image.height).toBe(base.width * base.height);
+    }
+  });
+
+  // Pixel proof: the red corner marker moves exactly as a clockwise turn implies.
+  it("actually turns the image", async () => {
+    const pdf = await portraitPdf();
+
+    function cornerColours(image: ReturnType<typeof decodePng>) {
+      const at = (x: number, y: number) => {
+        const index = (y * image.width + x) * 4;
+        return [image.pixels[index], image.pixels[index + 1], image.pixels[index + 2]];
+      };
+      return {
+        topLeft: at(2, 2),
+        topRight: at(image.width - 3, 2),
+        bottomRight: at(image.width - 3, image.height - 3),
+        bottomLeft: at(2, image.height - 3),
+      };
+    }
+
+    const RED = [255, 0, 0];
+
+    const upright = cornerColours(
+      decodePng((await render(pdf, [1], { width: 100 })).thumbnails[0].bytes),
+    );
+    expect(upright.topLeft).toEqual(RED);
+
+    const turned90 = cornerColours(
+      decodePng(
+        (await render(pdf, [1], { width: 100, rotations: { 1: 90 } })).thumbnails[0]
+          .bytes,
+      ),
+    );
+    expect(turned90.topRight).toEqual(RED);
+    expect(turned90.topLeft).not.toEqual(RED);
+
+    const turned180 = cornerColours(
+      decodePng(
+        (await render(pdf, [1], { width: 100, rotations: { 1: 180 } })).thumbnails[0]
+          .bytes,
+      ),
+    );
+    expect(turned180.bottomRight).toEqual(RED);
+
+    const turned270 = cornerColours(
+      decodePng(
+        (await render(pdf, [1], { width: 100, rotations: { 1: 270 } })).thumbnails[0]
+          .bytes,
+      ),
+    );
+    expect(turned270.bottomLeft).toEqual(RED);
+  });
+
+  it("rotates only the pages that were asked for", async () => {
+    const pdf = await makeColouredPdf(PAGE_COLOURS);
+    const { thumbnails } = await render(pdf, [1, 2], { rotations: { 2: 90 } });
+
+    expect(thumbnails[0].rotation).toBe(0);
+    expect(thumbnails[1].rotation).toBe(90);
+    // Page identity survives rotation.
+    expect(centerPixel(decodePng(thumbnails[1].bytes)).slice(0, 3)).toEqual(
+      PAGE_COLOURS[1],
+    );
+  });
+
+  it("still enforces the image byte limit for rotated previews", async () => {
+    await expectFailure(
+      render(await makeNumberedPdf(2), [1], {
+        maxImageBytes: 10,
+        rotations: { 1: 90 },
+      }),
+      "PROCESSING_ERROR",
+    );
+  });
+});
+
+describe("createPageThumbnails — rotation", () => {
+  it("passes rotations through and reports them", async () => {
+    const body = await createPageThumbnails(inputFile(await makeNumberedPdf(3)), {
+      pages: [1, 2],
+      rotations: { 1: 270 },
+    });
+
+    expect(body.thumbnails.map((t) => [t.pageNumber, t.rotation])).toEqual([
+      [1, 270],
+      [2, 0],
+    ]);
+  });
+
+  it("rejects an unsupported rotation before rendering", async () => {
+    await expectFailure(
+      createPageThumbnails(inputFile(await makeNumberedPdf(3)), {
+        pages: [1],
+        rotations: { 1: 45 as never },
+      }),
+      "INVALID_PAGE_ROTATION",
+    );
+  });
+});
+
+describe("parseRequestedRotations", () => {
+  it("parses the wire format", async () => {
+    const { parseRequestedRotations } = await import("@/lib/thumbnails/service");
+    expect(parseRequestedRotations('{"1":90,"4":180}')).toEqual({ 1: 90, 4: 180 });
+    expect(parseRequestedRotations(null)).toEqual({});
+    expect(parseRequestedRotations("")).toEqual({});
+  });
+
+  it("rejects invalid input", async () => {
+    const { parseRequestedRotations } = await import("@/lib/thumbnails/service");
+    expect(() => parseRequestedRotations('{"1":45}')).toThrowError(ProcessingError);
+    expect(() => parseRequestedRotations("[1]")).toThrowError(ProcessingError);
+    expect(() => parseRequestedRotations("{")).toThrowError(ProcessingError);
+  });
+});
