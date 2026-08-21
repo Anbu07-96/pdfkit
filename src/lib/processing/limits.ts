@@ -16,6 +16,7 @@ import "server-only";
  * | PDFKIT_MAX_UPLOAD_SIZE            | 25 MB   | size of a single file      |
  * | PDFKIT_MAX_TOTAL_UPLOAD_SIZE      | 100 MB  | total size of one request  |
  * | PDFKIT_MAX_SPLIT_OUTPUTS          | 50      | documents one job may emit |
+ * | PDFKIT_COMPRESS_MAX_RASTER_PAGES  | 60      | pages rasterised per compress job |
  *
  * The MVP processes documents entirely in memory, so these limits also bound
  * the memory a single request can use.
@@ -35,6 +36,12 @@ export interface ProcessingLimits {
    * splitting every page). Checked before any output is generated.
    */
   maxOutputs: number;
+  /**
+   * Maximum number of pages the aggressive (rasterising) compression pass may
+   * render in one job. Above it, `high` compression stays lossless. Bounds the
+   * CPU and memory one compress request can spend.
+   */
+  maxCompressRasterPages: number;
 }
 
 export const DEFAULT_PROCESSING_LIMITS: ProcessingLimits = {
@@ -42,7 +49,11 @@ export const DEFAULT_PROCESSING_LIMITS: ProcessingLimits = {
   maxFileSize: 25 * MB,
   maxTotalSize: 100 * MB,
   maxOutputs: 50,
+  maxCompressRasterPages: 60,
 };
+
+/** Hard ceiling, so a misconfigured environment cannot exhaust the server. */
+const MAX_COMPRESS_RASTER_PAGES_CEILING = 300;
 
 function readPositiveInt(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
@@ -71,10 +82,19 @@ export function getProcessingLimits(): ProcessingLimits {
     DEFAULT_PROCESSING_LIMITS.maxOutputs,
   );
 
+  const maxCompressRasterPages = Math.min(
+    readPositiveInt(
+      process.env.PDFKIT_COMPRESS_MAX_RASTER_PAGES,
+      DEFAULT_PROCESSING_LIMITS.maxCompressRasterPages,
+    ),
+    MAX_COMPRESS_RASTER_PAGES_CEILING,
+  );
+
   return {
     maxFiles,
     maxFileSize,
     maxOutputs,
+    maxCompressRasterPages,
     // A total smaller than a single file would be contradictory.
     maxTotalSize: Math.max(maxTotalSize, maxFileSize),
   };

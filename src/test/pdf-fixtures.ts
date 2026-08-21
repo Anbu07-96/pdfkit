@@ -83,6 +83,144 @@ export function makeNonPdf(): Uint8Array {
   return new TextEncoder().encode("GIF89a definitely not a pdf");
 }
 
+/**
+ * A valid PDF whose streams carry no `/Filter` at all — page N is
+ * `(100 + N) x 200`, so page identity works like `makeNumberedPdf`.
+ *
+ * Built byte-by-byte (classic cross-reference table, no compression) to mimic
+ * the bloated producers real compression requests come from.
+ */
+export function makeUncompressedPdf(pageCount: number): Uint8Array {
+  const encoder = new TextEncoder();
+  const chunks: Uint8Array[] = [encoder.encode("%PDF-1.4\n")];
+  let length = chunks[0].length;
+  const offsets: number[] = [];
+
+  const writeObject = (index: number, dict: string, stream?: Uint8Array) => {
+    offsets[index] = length;
+    const parts: Uint8Array[] = [encoder.encode(`${index} 0 obj\n${dict}\n`)];
+    if (stream) {
+      parts.push(encoder.encode("stream\n"), stream, encoder.encode("\nendstream\n"));
+    }
+    parts.push(encoder.encode("endobj\n"));
+    for (const part of parts) {
+      chunks.push(part);
+      length += part.length;
+    }
+  };
+
+  const kids: string[] = [];
+  // Object layout: 1 catalog, 2 pages, 3 font, then page/content pairs.
+  for (let page = 1; page <= pageCount; page += 1) {
+    kids.push(`${3 + page * 2 - 1} 0 R`);
+  }
+
+  writeObject(1, "<< /Type /Catalog /Pages 2 0 R >>");
+  writeObject(
+    2,
+    `<< /Type /Pages /Count ${pageCount} /Kids [${kids.join(" ")}] >>`,
+  );
+  writeObject(3, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+
+  for (let page = 1; page <= pageCount; page += 1) {
+    const pageRef = 3 + page * 2 - 1;
+    const contentRef = 3 + page * 2;
+    // Repetitive drawing operations make the stream big enough that flate
+    // compression is a clear win.
+    const operations: string[] = [
+      `BT /F1 12 Tf 20 ${150} Td (page ${page}) Tj ET`,
+      `0 0.${(page % 5) + 1} 0.5 rg`,
+    ];
+    for (let step = 0; step < 120; step += 1) {
+      operations.push(
+        `${(step % 40) * 2 + 5} ${(step % 60) * 3 + 10} ${
+          ((step + page) % 30) * 4 + 5
+        } ${(step % 50) * 2 + 8} re f`,
+      );
+    }
+    const content = encoder.encode(`${operations.join("\n")}\n`);
+
+    writeObject(
+      pageRef,
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${100 + page} 200] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentRef} 0 R >>`,
+    );
+    writeObject(contentRef, `<< /Length ${content.length} >>`, content);
+  }
+
+  const objectCount = 3 + pageCount * 2 + 1;
+  const xrefOffset = length;
+  let xref = `xref\n0 ${objectCount}\n0000000000 65535 f \n`;
+  for (let index = 1; index < objectCount; index += 1) {
+    xref += `${String(offsets[index] ?? 0).padStart(10, "0")} 00000 n \n`;
+  }
+  chunks.push(
+    encoder.encode(xref),
+    encoder.encode(
+      `trailer\n<< /Size ${objectCount} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`,
+    ),
+  );
+
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const bytes = new Uint8Array(total);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.length;
+  }
+  return bytes;
+}
+
+/**
+ * A scanned-document-like PDF: every page is one large photographic JPEG
+ * (deterministic smooth noise, ~150 DPI, quality 75) drawn full-bleed.
+ * This is the class of document where aggressive compression matters most.
+ */
+export async function makeScannedPdf(
+  pageCount: number,
+  width = 600,
+  height = 800,
+): Promise<Uint8Array> {
+  const jpeg = (await import("jpeg-js")).default;
+  const document = await PDFDocument.create();
+
+  for (let page = 1; page <= pageCount; page += 1) {
+    const pixels = new Uint8Array(width * height * 4);
+    let state = (0x9e3779b9 ^ (page * 2654435761)) >>> 0;
+    const next = () => {
+      state ^= state << 13;
+      state >>>= 0;
+      state ^= state >>> 17;
+      state ^= state << 5;
+      state >>>= 0;
+      return state / 0x100000000;
+    };
+    let level = 128;
+    for (let index = 0; index < width * height; index += 1) {
+      level = Math.max(0, Math.min(255, level + (next() - 0.5) * 90));
+      const value = level | 0;
+      pixels[index * 4] = value;
+      pixels[index * 4 + 1] = (value * 0.8 + next() * 30) | 0;
+      pixels[index * 4 + 2] = (value * 0.6 + next() * 50) | 0;
+      pixels[index * 4 + 3] = 255;
+    }
+
+    const encoded = jpeg.encode(
+      { data: pixels, width, height },
+      75,
+    );
+    // Copy into an offset-0 array: jpeg-js returns pooled Node Buffers, which
+    // pdf-lib's JPEG scanner (it reads `.buffer` from offset 0) misreads.
+    const jpg = new Uint8Array(encoded.data.length);
+    jpg.set(encoded.data);
+    const image = await document.embedJpg(jpg);
+    const page0 = document.addPage([300, 400]);
+    page0.drawImage(image, { x: 0, y: 0, width: 300, height: 400 });
+  }
+
+  return document.save();
+}
+
+
 /** A `File` suitable for `FormData`, backed by real PDF bytes. */
 export async function makePdfFile(
   name: string,

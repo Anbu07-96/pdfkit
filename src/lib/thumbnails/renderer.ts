@@ -61,6 +61,52 @@ function isEncrypted(error: unknown): boolean {
   return message.includes("password") || message.includes("encrypt");
 }
 
+/** Open a pdfium document, mapping open failures onto the PDFKit error model. */
+async function loadDocumentSafe(
+  library: Awaited<ReturnType<typeof getLibrary>>,
+  bytes: Uint8Array,
+) {
+  try {
+    return await library.loadDocument(bytes);
+  } catch (cause) {
+    if (isEncrypted(cause)) {
+      throw new ProcessingError(
+        "ENCRYPTED_PDF",
+        "Password-protected PDFs cannot be previewed yet.",
+        { cause },
+      );
+    }
+    throw new ProcessingError(
+      "INVALID_PDF",
+      "This PDF could not be opened for previewing.",
+      { cause },
+    );
+  }
+}
+
+/**
+ * Run a job with a pdfium document, through the shared serialised queue.
+ *
+ * The same single-instance WASM discipline the thumbnail renderer follows:
+ * one job at a time, the document is always destroyed, and open failures map
+ * onto the standard processing errors. Other server-side consumers (such as
+ * PDF compression) reuse this instead of touching pdfium directly.
+ */
+export async function runWithPdfiumDocument<T>(
+  bytes: Uint8Array,
+  job: (document: Awaited<ReturnType<PDFiumLibrary["loadDocument"]>>) => Promise<T>,
+): Promise<T> {
+  return enqueue(async () => {
+    const library = await getLibrary();
+    const document = await loadDocumentSafe(library, bytes);
+    try {
+      return await job(document);
+    } finally {
+      document.destroy();
+    }
+  });
+}
+
 /**
  * Render the requested pages of a PDF as PNG thumbnails.
  *
@@ -75,23 +121,8 @@ export async function renderPdfPageThumbnails(
   return enqueue(async () => {
     const library = await getLibrary();
 
-    let document;
-    try {
-      document = await library.loadDocument(bytes);
-    } catch (cause) {
-      if (isEncrypted(cause)) {
-        throw new ProcessingError(
-          "ENCRYPTED_PDF",
-          "Password-protected PDFs cannot be previewed yet.",
-          { cause },
-        );
-      }
-      throw new ProcessingError(
-        "INVALID_PDF",
-        "This PDF could not be opened for previewing.",
-        { cause },
-      );
-    }
+    // `loadDocumentSafe` maps any failure onto a `ProcessingError`.
+    const document = await loadDocumentSafe(library, bytes);
 
     try {
       const pageCount = document.getPageCount();
