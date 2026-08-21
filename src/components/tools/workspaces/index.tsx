@@ -1,3 +1,4 @@
+import { CompressPdfWorkspace } from "@/components/tools/workspaces/compress-pdf-workspace";
 import { DeletePdfPagesWorkspace } from "@/components/tools/workspaces/delete-pdf-pages-workspace";
 import { ExtractPdfPagesWorkspace } from "@/components/tools/workspaces/extract-pdf-pages-workspace";
 import { MergePdfWorkspace } from "@/components/tools/workspaces/merge-pdf-workspace";
@@ -21,6 +22,17 @@ import { getInputRules } from "@/lib/processing/rules";
  */
 export function getToolWorkspace(toolId: string): React.ReactNode | null {
   switch (toolId) {
+    case "compress-pdf": {
+      const limits = getProcessingLimits();
+      return (
+        <CompressPdfWorkspace
+          limits={{
+            maxFileSize: limits.maxFileSize,
+            maxRasterPages: limits.maxCompressRasterPages,
+          }}
+        />
+      );
+    }
     case "merge-pdf": {
       const limits = getProcessingLimits();
       const rules = getInputRules("merge-pdf");
@@ -102,6 +114,7 @@ export function getToolWorkspace(toolId: string): React.ReactNode | null {
 }
 
 const TOOLS_WITH_WORKSPACE = new Set([
+  "compress-pdf",
   "merge-pdf",
   "split-pdf",
   "extract-pdf-pages",

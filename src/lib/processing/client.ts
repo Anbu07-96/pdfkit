@@ -1,3 +1,8 @@
+import type {
+  CompressionLevel,
+  CompressionStrategy,
+  RasterSkipReason,
+} from "@/lib/processing/compression";
 import type { ProcessingErrorCode } from "@/lib/processing/errors";
 import {
   formatPageRotations,
@@ -28,6 +33,70 @@ export interface ProcessedDocument {
   /** True when several documents were bundled into a ZIP. */
   isArchive: boolean;
   blob: Blob;
+  /**
+   * Compression statistics measured by the server (Compress PDF only). Always
+   * taken from the response headers — the browser never guesses sizes.
+   */
+  compression?: CompressionSummary;
+}
+
+/** Server-measured result of a compression job, for honest reporting. */
+export interface CompressionSummary {
+  originalBytes: number;
+  outputBytes: number;
+  bytesSaved: number;
+  reductionPercent: number;
+  wasReduced: boolean;
+  compressionLevel: CompressionLevel;
+  strategy: CompressionStrategy;
+  rasterSkipped?: RasterSkipReason;
+}
+
+function compressionFromHeaders(
+  response: Response,
+): CompressionSummary | undefined {
+  const originalBytes = Number.parseInt(
+    response.headers.get("x-pdfkit-original-bytes") ?? "",
+    10,
+  );
+  const outputBytes = Number.parseInt(
+    response.headers.get("x-pdfkit-output-bytes") ?? "",
+    10,
+  );
+  if (!Number.isFinite(originalBytes) || !Number.isFinite(outputBytes)) {
+    return undefined;
+  }
+
+  const bytesSaved = Number.parseInt(
+    response.headers.get("x-pdfkit-bytes-saved") ?? "",
+    10,
+  );
+  const reductionPercent = Number.parseFloat(
+    response.headers.get("x-pdfkit-reduction-percent") ?? "",
+  );
+  const level = response.headers.get("x-pdfkit-compression-level");
+  const strategy = response.headers.get("x-pdfkit-compression-strategy");
+
+  return {
+    originalBytes,
+    outputBytes,
+    bytesSaved: Number.isFinite(bytesSaved) ? bytesSaved : 0,
+    reductionPercent: Number.isFinite(reductionPercent) ? reductionPercent : 0,
+    wasReduced: response.headers.get("x-pdfkit-reduced") === "yes",
+    compressionLevel:
+      level === "low" || level === "high"
+        ? level
+        : "medium",
+    strategy:
+      strategy === "lossless" || strategy === "rasterized" ? strategy : "original",
+    ...(response.headers.get("x-pdfkit-raster-skipped")
+      ? {
+          rasterSkipped: response.headers.get(
+            "x-pdfkit-raster-skipped",
+          ) as RasterSkipReason,
+        }
+      : {}),
+  };
 }
 
 export class ProcessingRequestError extends Error {
@@ -106,10 +175,12 @@ async function toProcessedDocument(
   const artifactsHeader = response.headers.get("x-pdfkit-artifacts");
   const artifacts = artifactsHeader ? Number.parseInt(artifactsHeader, 10) : 1;
   const contentType = response.headers.get("content-type") ?? "";
+  const compression = compressionFromHeaders(response);
 
   return {
     blob,
     url: URL.createObjectURL(blob),
+    ...(compression ? { compression } : {}),
     fileName: fileNameFromDisposition(
       response.headers.get("content-disposition"),
       fallbackName,
@@ -258,6 +329,30 @@ export async function runRotatePdf({
 
   const response = await postForm("/api/tools/rotate-pdf", form, signal);
   return toProcessedDocument(response, "rotated.pdf");
+}
+
+export interface RunCompressPdfOptions {
+  file: File;
+  /** `low`, `medium` (default) or `high` — the server validates it again. */
+  level: CompressionLevel;
+  signal?: AbortSignal;
+}
+
+/**
+ * Compress a PDF on the server. The returned document carries the measured
+ * statistics in `compression`, straight from the response headers.
+ */
+export async function runCompressPdf({
+  file,
+  level,
+  signal,
+}: RunCompressPdfOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("level", level);
+
+  const response = await postForm("/api/tools/compress-pdf", form, signal);
+  return toProcessedDocument(response, "compressed.pdf");
 }
 
 export interface PageThumbnailData {

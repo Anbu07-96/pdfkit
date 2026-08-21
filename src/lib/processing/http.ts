@@ -227,6 +227,37 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
       : {}),
   };
 
+  // Compression statistics (Compress PDF): the interface must show the sizes
+  // and savings the server actually measured, never client-side guesses.
+  if (result.meta?.originalBytes !== undefined) {
+    metaHeaders["x-pdfkit-original-bytes"] = String(result.meta.originalBytes);
+  }
+  if (result.meta?.outputBytes !== undefined) {
+    metaHeaders["x-pdfkit-output-bytes"] = String(result.meta.outputBytes);
+  }
+  if (result.meta?.bytesSaved !== undefined) {
+    metaHeaders["x-pdfkit-bytes-saved"] = String(result.meta.bytesSaved);
+  }
+  if (result.meta?.reductionPercent !== undefined) {
+    metaHeaders["x-pdfkit-reduction-percent"] = String(
+      result.meta.reductionPercent,
+    );
+  }
+  if (result.meta?.reduced !== undefined) {
+    metaHeaders["x-pdfkit-reduced"] = String(result.meta.reduced);
+  }
+  if (result.meta?.compressionLevel !== undefined) {
+    metaHeaders["x-pdfkit-compression-level"] = String(
+      result.meta.compressionLevel,
+    );
+  }
+  if (result.meta?.strategy !== undefined) {
+    metaHeaders["x-pdfkit-compression-strategy"] = String(result.meta.strategy);
+  }
+  if (result.meta?.rasterSkipped !== undefined) {
+    metaHeaders["x-pdfkit-raster-skipped"] = String(result.meta.rasterSkipped);
+  }
+
   // A single document is streamed as-is; several are bundled into a ZIP.
   if (result.artifacts.length === 1) {
     const artifact = result.artifacts[0];

@@ -12,7 +12,7 @@ import type { Tool } from "./types";
  * `src/lib/processing/registry.ts`; a test enforces that both sides agree.
  *
  * Implemented today: Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages,
- * Reorder PDF Pages, Rotate PDF. Everything else is `COMING_SOON`.
+ * Reorder PDF Pages, Rotate PDF, Compress PDF. Everything else is `COMING_SOON`.
  */
 
 const PDF_EXT = [".pdf"];
@@ -73,6 +73,9 @@ export const TOOLS: readonly Tool[] = [
     description: "Reduce PDF file size while keeping the document readable.",
     category: "organize",
     icon: "compress",
+    // Implemented in Phase 7: lossless structural/stream optimisation with
+    // pdf-lib + fflate, plus an optional aggressive pdfium + JPEG pass.
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["optimize", "shrink", "reduce size", "smaller"],
     howItWorks: [

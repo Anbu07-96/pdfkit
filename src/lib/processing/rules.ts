@@ -46,6 +46,14 @@ export const REORDER_PDF_PAGES_INPUT_RULES: ProcessorInputRules = {
   mimeTypes: ["application/pdf"],
 };
 
+/** Compress reduces the size of one document. */
+export const COMPRESS_PDF_INPUT_RULES: ProcessorInputRules = {
+  minFiles: 1,
+  maxFiles: 1,
+  extensions: [".pdf"],
+  mimeTypes: ["application/pdf"],
+};
+
 /** Rotate changes the orientation of pages in one document. */
 export const ROTATE_PDF_INPUT_RULES: ProcessorInputRules = {
   minFiles: 1,
@@ -69,6 +77,7 @@ export const INPUT_RULES_BY_TOOL: Record<string, ProcessorInputRules> = {
   "delete-pdf-pages": DELETE_PDF_PAGES_INPUT_RULES,
   "reorder-pdf-pages": REORDER_PDF_PAGES_INPUT_RULES,
   "rotate-pdf": ROTATE_PDF_INPUT_RULES,
+  "compress-pdf": COMPRESS_PDF_INPUT_RULES,
 };
 
 export function getInputRules(toolId: string): ProcessorInputRules | undefined {

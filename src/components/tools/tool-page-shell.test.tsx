@@ -4,7 +4,7 @@ import { ToolPageShell } from "@/components/tools/tool-page-shell";
 import { getTool } from "@/lib/tools";
 
 const mergeTool = getTool("merge-pdf")!;
-const plannedTool = getTool("compress-pdf")!;
+const plannedTool = getTool("pdf-to-word")!;
 
 describe("ToolPageShell", () => {
   it("renders the workspace for an implemented tool", () => {
@@ -24,7 +24,7 @@ describe("ToolPageShell", () => {
     render(<ToolPageShell tool={plannedTool} />);
 
     expect(screen.getByTestId("upload-zone")).toHaveAttribute("data-state", "disabled");
-    expect(screen.getByText(/compress pdf is not available yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/pdf to word is not available yet/i)).toBeInTheDocument();
   });
 
   it("ignores a workspace passed for a tool that is not usable", () => {

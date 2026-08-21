@@ -2,6 +2,7 @@ import "server-only";
 
 import type { ToolProcessor } from "@/lib/processing/contract";
 import { ProcessingError } from "@/lib/processing/errors";
+import { compressPdfProcessor } from "@/lib/processing/processors/compress-pdf";
 import { deletePdfPagesProcessor } from "@/lib/processing/processors/delete-pdf-pages";
 import { extractPdfPagesProcessor } from "@/lib/processing/processors/extract-pdf-pages";
 import { mergePdfProcessor } from "@/lib/processing/processors/merge-pdf";
@@ -29,6 +30,7 @@ const PROCESSORS = new Map<string, ToolProcessor<never>>([
     reorderPdfPagesProcessor as ToolProcessor<never>,
   ],
   [rotatePdfProcessor.toolId, rotatePdfProcessor as ToolProcessor<never>],
+  [compressPdfProcessor.toolId, compressPdfProcessor as ToolProcessor<never>],
 ]);
 
 /** Tool ids with a working implementation. */

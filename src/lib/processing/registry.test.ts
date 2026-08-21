@@ -17,6 +17,7 @@ import { makePdf } from "@/test/pdf-fixtures";
 describe("processor registry", () => {
   it("exposes the implemented tools", () => {
     expect(getImplementedToolIds()).toEqual([
+      "compress-pdf",
       "delete-pdf-pages",
       "extract-pdf-pages",
       "merge-pdf",
@@ -30,12 +31,12 @@ describe("processor registry", () => {
     expect(hasProcessor("split-pdf")).toBe(true);
     expect(hasProcessor("extract-pdf-pages")).toBe(true);
     expect(hasProcessor("delete-pdf-pages")).toBe(true);
-    expect(hasProcessor("compress-pdf")).toBe(false);
+    expect(hasProcessor("compress-pdf")).toBe(true);
   });
 
   it("throws a safe error for tools that are not implemented", () => {
     try {
-      getProcessor("compress-pdf");
+      getProcessor("pdf-to-word");
       throw new Error("expected getProcessor to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(ProcessingError);
@@ -45,8 +46,9 @@ describe("processor registry", () => {
   });
 
   it("keeps the catalog and the registry in sync", () => {
-    // Phase 5 adds reorder; nothing else may claim to work.
+    // Phase 7 adds compress; nothing else may claim to work.
     expect(getImplementedToolIds()).toEqual([
+      "compress-pdf",
       "delete-pdf-pages",
       "extract-pdf-pages",
       "merge-pdf",
@@ -83,12 +85,14 @@ describe("getProcessingLimits", () => {
     vi.stubEnv("PDFKIT_MAX_TOTAL_UPLOAD_SIZE", "4096");
 
     vi.stubEnv("PDFKIT_MAX_SPLIT_OUTPUTS", "7");
+    vi.stubEnv("PDFKIT_COMPRESS_MAX_RASTER_PAGES", "25");
 
     expect(getProcessingLimits()).toEqual({
       maxFiles: 3,
       maxFileSize: 1024,
       maxTotalSize: 4096,
       maxOutputs: 7,
+      maxCompressRasterPages: 25,
     });
   });
 
@@ -131,7 +135,7 @@ describe("runProcessingJob", () => {
   });
 
   it("fails for a tool without an implementation", async () => {
-    const result = await runProcessingJob({ toolId: "compress-pdf", files: [] });
+    const result = await runProcessingJob({ toolId: "pdf-to-word", files: [] });
     expect(result).toMatchObject({
       status: "failed",
       error: { code: "TOOL_NOT_AVAILABLE" },
