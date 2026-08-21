@@ -43,6 +43,11 @@ export default function HelpPage() {
             <strong>Rotate PDF</strong> — turn individual pages, or every page at
             once, and watch the previews update before you save.
           </li>
+          <li>
+            <strong>Compress PDF</strong> — make files smaller with real
+            before/after numbers. Low and medium are lossless; high also
+            rasterises image-heavy pages and says so when it does.
+          </li>
           <li>Browsing the tool catalog by category.</li>
           <li>Searching tools by name, description or category.</li>
           <li>Opening any tool page to see what the tool will do and what it accepts.</li>
@@ -52,8 +57,8 @@ export default function HelpPage() {
         <h2>What does not work yet</h2>
         <ul>
           <li>
-            Every tool other than the six above. Their upload areas are intentionally
-            disabled and labelled <strong>Coming soon</strong>.
+            Every tool other than the seven above. Their upload areas are
+            intentionally disabled and labelled <strong>Coming soon</strong>.
           </li>
           <li>There are no accounts, no cloud storage, no API keys and no billing.</li>
         </ul>

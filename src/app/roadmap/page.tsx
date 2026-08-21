@@ -82,10 +82,12 @@ const PHASES = [
   },
   {
     title: "Phase 7 — Compress PDF",
-    status: "Planned" as const,
+    status: "Completed" as const,
     items: [
-      "Server-side size reduction with honest before/after reporting",
-      "Quality options that describe what they actually do",
+      "Lossless structural and stream optimisation (pdf-lib + fflate)",
+      "Aggressive mode that rasterises image-heavy pages (pdfium + JPEG)",
+      "Honest before/after byte reporting — no saving is claimed without proof",
+      "Neutral \u201calready well optimised\u201d result when nothing helps",
     ],
   },
   {

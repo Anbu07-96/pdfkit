@@ -49,6 +49,7 @@ export default function DevelopersPage() {
             <code>POST /api/tools/delete-pdf-pages</code>,{" "}
             <code>POST /api/tools/reorder-pdf-pages</code>,{" "}
             <code>POST /api/tools/rotate-pdf</code>,{" "}
+            <code>POST /api/tools/compress-pdf</code>,{" "}
             <code>POST /api/documents/inspect</code> and{" "}
             <code>POST /api/documents/thumbnails</code>) already share the same validation,
             limits, multi-artifact delivery and structured error model a public API

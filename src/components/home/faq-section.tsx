@@ -29,9 +29,9 @@ export const HOME_FAQ: FaqItem[] = [
     question: "What tools does PDFKit support?",
     answer: (
       <>
-        The catalog lists {TOOLS.length} tools across six categories. Six are
+        The catalog lists {TOOLS.length} tools across six categories. Seven are
         implemented and free to use — merge, split, extract, delete, reorder and
-        rotate PDF pages; every other tool page states its availability clearly
+        rotate and compress PDF pages; every other tool page states its availability clearly
         instead of pretending to work. You can{" "}
         <Link href="/tools" className="text-primary underline underline-offset-4">
           browse the full catalog

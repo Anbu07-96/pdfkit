@@ -8,7 +8,7 @@ later OCR and AI document intelligence.
 
 > ## Current status: Phase 6 — rotation and visual page selection
 >
-> **Six tools genuinely work:**
+> **Seven tools genuinely work:**
 >
 > - **Merge PDF** — combine several PDFs in the order you choose.
 > - **Split PDF** — split every page into its own file, or split by page ranges;
@@ -18,6 +18,8 @@ later OCR and AI document intelligence.
 > - **Reorder PDF Pages** — real page previews, drag or keyboard reordering.
 > - **Rotate PDF** — turn individual pages or the whole document, with previews
 >   that update to match.
+> - **Compress PDF** — real size reduction with honest before/after numbers;
+>   lossless optimisation, plus an aggressive image-heavy mode.
 >
 > **Every other tool is still unimplemented** and honestly marked
 > **Coming soon**, with its upload area disabled. There is no simulated
@@ -37,6 +39,7 @@ later OCR and AI document intelligence.
 - [Extract and Delete PDF Pages](#extract-and-delete-pdf-pages)
 - [Reorder PDF Pages](#reorder-pdf-pages)
 - [Rotate PDF](#rotate-pdf)
+- [Compress PDF](#compress-pdf)
 - [Page previews](#page-previews)
 - [Page ranges](#page-ranges)
 - [Processing limits](#processing-limits)
@@ -61,7 +64,8 @@ A single web app for common document tasks, built around three product rules:
 
 The catalog describes **42 tools** in six categories — Organize, Convert, Edit,
 Security, OCR and AI — of which **6 are implemented** today: Merge PDF, Split
-PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF Pages and Rotate PDF.
+PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF Pages, Rotate PDF and
+Compress PDF.
 
 ---
 
@@ -80,6 +84,7 @@ PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF Pages and Rotate PDF.
 | PDF engine         | **pdf-lib**                                   | Pure TypeScript, no native binaries or system dependencies, runs in the Node runtime and handles page copying (`copyPages`) reliably for both merging and splitting. |
 | ZIP bundling       | **fflate**                                    | ~8 kB, zero dependencies, synchronous API; needed to deliver the several PDFs a split produces as one download. It also provides the zlib stream for the PNG encoder. |
 | Page rasteriser    | **@hyzyla/pdfium** (WebAssembly)              | MIT wrapper around Google's pdfium (BSD-3-Clause). Renders real page previews with no native binaries and no browser automation. mupdf was rejected (AGPL-3.0); pdfjs-dist + a native canvas was heavier and platform-specific. |
+| JPEG encoder       | **jpeg-js**                                   | BSD-3-Clause, ~76 kB, zero dependencies, pure JavaScript. Encodes the page bitmaps of the aggressive compression pass; verified in this environment before adoption. |
 | Server guard       | **server-only**                               | Makes `next build` fail if a client component ever imports the processing layer. |
 | Tests              | **Vitest** + **Testing Library** + jsdom      | Fast, Vite-native, and tests behaviour through accessible roles rather than implementation details. |
 | Linting            | **ESLint** with `eslint-config-next`          | Catches React, hooks and Next.js issues, including accessibility rules. |
@@ -133,6 +138,15 @@ npm start
 ---
 
 ## What is implemented today
+
+**Compress PDF (real, end to end)**
+
+- Three real levels: `low` and `medium` are **lossless** (structure and stream
+  optimisation); `high` additionally rasterises pages when that genuinely helps
+- The server reports the real before/after byte sizes, savings and percentage —
+  never an estimate
+- If nothing can shrink the file, the original PDF is returned and the interface
+  says so instead of claiming a saving
 
 **Rotate PDF (real, end to end)**
 
@@ -414,6 +428,46 @@ at 90° plus a requested 90° is saved at 180°. Only the rotation entry changes
 page content is never rasterised, so the output remains a real vector/text PDF
 with the same pages in the same order.
 
+## Compress PDF
+
+```bash
+# Shrink a PDF with the balanced (default) level
+curl -X POST http://localhost:3000/api/tools/compress-pdf \
+  -F "files=@document.pdf;type=application/pdf" \
+  -F "level=medium" \
+  -o document-compressed.pdf
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `files` | yes | Exactly one PDF |
+| `level` | no | `low`, `medium` (default) or `high` |
+
+The response carries the measured outcome in headers:
+`X-PDFKit-Original-Bytes`, `X-PDFKit-Output-Bytes`, `X-PDFKit-Bytes-Saved`,
+`X-PDFKit-Reduction-Percent`, `X-PDFKit-Reduced` (`yes`/`no`),
+`X-PDFKit-Compression-Strategy` (`lossless` / `rasterized` / `original`) and
+`X-PDFKit-Compression-Level`.
+
+What each level really does:
+
+| Level | What happens | Lossy? |
+| --- | --- | --- |
+| `low` | Rebuilt with PDF object streams; XMP/Info metadata removed | No |
+| `medium` | `low` plus every safe stream re-compressed with maximum deflate effort | No |
+| `high` | `medium` plus an aggressive pass that renders each page (~110 DPI, JPEG quality 60) and rebuilds the document — kept only when smaller | Yes (when used) |
+
+**Honesty rules:** a saving is only reported when the output is strictly
+smaller. If nothing helps, the untouched original bytes are returned,
+`X-PDFKit-Reduced` is `no` and the interface says the PDF is already well
+optimised. At `high`, the rasterising pass only runs when the document actually
+contains images and is within `PDFKIT_COMPRESS_MAX_RASTER_PAGES`; when it runs,
+text becomes pixels — no longer selectable — and image quality drops.
+
+**Known limits:** image data in JPEG/JPX/CCITT form is not re-encoded at `low`
+or `medium` — those files only shrink at `high` (or through structural gains).
+Streams with predictor parameters are left untouched for safety.
+
 ## Page previews
 
 ```bash
@@ -472,6 +526,7 @@ Configurable through the environment, with safe defaults:
 | `PDFKIT_MAX_UPLOAD_SIZE` | `26214400` (25 MB) | Maximum size of one file |
 | `PDFKIT_MAX_TOTAL_UPLOAD_SIZE` | `104857600` (100 MB) | Maximum combined size |
 | `PDFKIT_MAX_SPLIT_OUTPUTS` | `50` | Documents one job may produce |
+| `PDFKIT_COMPRESS_MAX_RASTER_PAGES` | `60` | Pages the aggressive compress pass may rasterise (ceiling 300) |
 
 Limits are enforced by the server on every request. The numbers shown in the
 interface come from the build-time configuration, so rebuild after changing
@@ -479,12 +534,12 @@ them if you want the hints to match exactly.
 
 ## What is deliberately not implemented
 
-Compress PDF, JPG↔PDF, PDF↔Office, editing, security tools, OCR, AI,
-authentication, cloud storage, databases, payments, API keys, a public developer
-API, background workers and job queues are **not** implemented. There is no simulated processing anywhere: no fake
+JPG↔PDF, PDF↔Office, editing, security tools, OCR, AI, authentication, cloud
+storage, databases, payments, API keys, a public developer API, background
+workers and job queues are **not** implemented. There is no simulated processing anywhere: no fake
 progress bars, no fake results, no fake downloads, no placeholder page images.
 Only Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF
-Pages and Rotate PDF are real.
+Pages, Rotate PDF and Compress PDF are real.
 
 ---
 
@@ -499,6 +554,7 @@ src/
 │  ├─ api/tools/extract-pdf-pages/  # Extract endpoint (thin route handler)
 │  ├─ api/tools/delete-pdf-pages/   # Delete endpoint (thin route handler)
 │  ├─ api/tools/reorder-pdf-pages/  # Reorder endpoint (thin route handler)
+│  ├─ api/tools/compress-pdf/ # Compress endpoint (thin route handler)
 │  ├─ api/tools/rotate-pdf/         # Rotate endpoint (thin route handler)
 │  ├─ api/documents/thumbnails/     # Reusable page previews
 │  ├─ api/documents/inspect/ # Page count for page-level tools
@@ -543,6 +599,8 @@ Copy `.env.example` to `.env.local`. Every value is optional in Phase 1.
 | `PDFKIT_MAX_UPLOAD_SIZE`        | Bytes per file (default 25 MB)             |
 | `PDFKIT_MAX_TOTAL_UPLOAD_SIZE`  | Bytes per request (default 100 MB)         |
 | `PDFKIT_MAX_SPLIT_OUTPUTS`      | Documents one job may produce (default 50) |
+| `PDFKIT_COMPRESS_MAX_RASTER_PAGES` | Pages the aggressive compress pass may rasterise (default 60, ceiling 300) |
+| `PDFKIT_THUMBNAIL_MAX_PAGES`    | Pages rendered per preview request (default 60) |
 
 `.env` files are git-ignored (`.env.example` is the only tracked one). Secrets
 for future phases must be server-only — never prefixed with `NEXT_PUBLIC_`.
@@ -557,7 +615,26 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (36 files, 539 tests):
+Covered today (43 files, 621 tests):
+
+- **Compression model** — level validation, exact statistics math
+  (1000→750 reports 250 saved, 25.0 %), honest no-reduction behaviour, and the
+  meta-record round trip
+- **Lossless optimiser** — proven lossless by decoding every stream before and
+  after, `/Length` correctness, image and predictor streams untouched, metadata
+  removal, structural vs stream gains
+- **Rasteriser** — valid JPEG rebuilds, page identity and order, rotation baked
+  into pixels, scanned-style input genuinely shrinking, broken input rejected
+- **Compress processor** — all three levels against real PDFs, default level,
+  invalid level (400), page/dimension/order preservation, best-of selection,
+  honest second pass, encrypted/disguised/malformed/oversized/multi-file
+  rejection, raster skip reasons, graceful raster-failure fallback
+- **Compress API** — headers and byte math verified against the actual response,
+  honest no-reduction case, filename sanitisation, no internals leaked
+- **Compress workspace** — level radio group with medium default, server-measured
+  statistics, neutral no-reduction state, network vs server errors, cancel via
+  AbortController, reset, second compression, live announcements, no fake
+  progress
 
 - **Rotation model** — the four legal angles, clockwise/counter-clockwise
   cycles, composition, and rejection of 45°, `-90`, `"90"`, `NaN` and friends
@@ -619,15 +696,13 @@ Covered today (36 files, 539 tests):
 
 ## Future phases
 
-Phase 6 stops here on purpose. The planned order (see also `/roadmap`):
+Phase 7 stops here on purpose. The planned order (see also `/roadmap`):
 
-1. **Phase 7 — Compress PDF:** genuine size reduction with honest before/after
-   reporting.
-2. Convert tools (images ↔ PDF, Office ↔ PDF).
-3. Editing and security tools.
-4. OCR.
-5. AI document intelligence.
-6. Accounts, cloud storage, billing and a public developer API.
+1. Convert tools (images ↔ PDF, Office ↔ PDF).
+2. Editing and security tools.
+3. OCR.
+4. AI document intelligence.
+5. Accounts, cloud storage, billing and a public developer API.
 
 A tool's status changes to `AVAILABLE` only when its processing genuinely works.
 

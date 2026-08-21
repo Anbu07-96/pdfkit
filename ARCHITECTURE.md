@@ -487,6 +487,63 @@ phase deliberately avoided. Above the preview limit, or when rendering fails,
 all three fall back to the text field with an explanation rather than fake
 images.
 
+## 5f. Compress PDF (Phase 7)
+
+**Two real passes, one honesty rule.** Compression is the first tool whose
+result is a *measurement*, not just a document. The processor may produce up to
+two candidates and returns the smallest of them and the original — a saving is
+only ever reported when the returned bytes are strictly smaller. When nothing
+helps, the untouched original bytes are returned and the interface says the PDF
+is already well optimised (a neutral state, never "Saved 0 %").
+
+**Lossless pass** (`lib/processing/optimize/lossless.ts`, every level): the
+document is re-saved with PDF object streams and a compressed cross-reference
+stream, XMP metadata and optional Info entries are removed, and at
+`medium`/`high` every safe stream is re-deflated at maximum effort —
+uncompressed streams become `/FlateDecode`, already-deflated streams are
+re-deflated when strictly smaller. This is provably lossless: the deflated
+representation is swapped for another deflated representation of the *same*
+decompressed bytes, and a test decodes every stream before and after and
+compares them. Streams are deliberately skipped when they use image codecs
+(`/DCTDecode`, `/JPXDecode`, `/CCITTFaxDecode`, `/JBIG2Decode`), carry predictor
+parameters, are cross-reference/object streams, or cannot be decoded — they
+survive byte-for-byte rather than being risked.
+
+**Aggressive pass** (`lib/processing/optimize/rasterize.ts`, `high` only): each
+page is rendered by pdfium exactly as a reader displays it (page rotation
+included, opaque white background) at ~110 DPI with bitmap guards (5000 px per
+side, 12 MP per page), encoded with `jpeg-js` at quality 60 and rebuilt into a
+fresh PDF of full-page JPEGs. This is lossy — image detail drops and text
+becomes pixels — and the interface says so before the user chooses it. The pass
+is only attempted when the document actually contains image XObjects (a text
+page rasterises *larger*, so why try) and the page count is within
+`PDFKIT_COMPRESS_MAX_RASTER_PAGES` (default 60, ceiling 300); both the skip and
+a genuine failure are recorded (`rasterSkipped`, logged server-side without
+document data) and the valid lossless result is returned instead.
+
+**Dependency decision.** `jpeg-js@0.4.4` (BSD-3-Clause, zero dependencies,
+~76 kB, pure JavaScript, no native binaries) was the only addition. Alternatives
+were rejected: writing a JPEG encoder is out of scope, `sharp`/`jimp` pull large
+native or multi-package dependencies, and WASM mozjpeg encoders are browser-first
+with heavier APIs. One interop trap was found by the tests: jpeg-js returns Node
+`Buffer`s that view a *pooled* ArrayBuffer, while pdf-lib's JPEG scanner reads
+`.buffer` from offset 0 — so encoded bytes are copied into a fresh offset-0
+array before embedding.
+
+**Shared rasterising infrastructure.** The renderer exposes
+`runWithPdfiumDocument(bytes, job)`, so compression queues through the same
+single-instance WASM discipline as thumbnails instead of building a second
+pdfium entry point.
+
+**Level model and statistics** (`lib/processing/compression.ts`, browser-safe
+like `pages.ts`): `low` = structural only, `medium` = structural + stream
+re-compression (both lossless), `high` = medium + the aggressive pass. The
+processor computes typed statistics (`originalBytes`, `outputBytes`,
+`bytesSaved`, `reductionPercent`, `wasReduced`, `strategy`, `level`) with a pure
+function, ships them in `meta`, the HTTP adapter forwards them as `X-PDFKit-*`
+headers, and the browser reads the headers — the interface never measures or
+guesses anything itself.
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:
