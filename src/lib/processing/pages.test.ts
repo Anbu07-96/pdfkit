@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  addRotations,
+  compactRotations,
   complementPageRanges,
+  formatPageRotations,
+  formatRotation,
+  hasRotations,
+  isPageRotation,
+  parseAndValidatePageRotations,
+  parsePageRotations,
+  rotateClockwise,
+  rotateCounterClockwise,
+  validatePageRotations,
   formatPageOrder,
   identityPageOrder,
   isIdentityPageOrder,
@@ -486,5 +497,197 @@ describe("movePageInOrder", () => {
 describe("formatPageOrder", () => {
   it("serialises for the API", () => {
     expect(formatPageOrder([5, 3, 1])).toBe("5,3,1");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Page rotation (Phase 6)                                                    */
+/* -------------------------------------------------------------------------- */
+
+describe("isPageRotation", () => {
+  it("accepts only the four legal angles as numbers", () => {
+    for (const angle of [0, 90, 180, 270]) {
+      expect(isPageRotation(angle)).toBe(true);
+    }
+  });
+
+  it("rejects everything else", () => {
+    for (const value of [
+      -1, -90, 45, 89, 91, 359, 360, 1.5, 90.5, Number.NaN, Infinity,
+      -Infinity, "90", "abc", null, undefined, {}, [], true,
+    ]) {
+      expect(isPageRotation(value), String(value)).toBe(false);
+    }
+  });
+});
+
+describe("rotateClockwise / rotateCounterClockwise", () => {
+  it("cycles clockwise", () => {
+    expect(rotateClockwise(0)).toBe(90);
+    expect(rotateClockwise(90)).toBe(180);
+    expect(rotateClockwise(180)).toBe(270);
+    expect(rotateClockwise(270)).toBe(0);
+  });
+
+  it("cycles counter-clockwise", () => {
+    expect(rotateCounterClockwise(0)).toBe(270);
+    expect(rotateCounterClockwise(270)).toBe(180);
+    expect(rotateCounterClockwise(180)).toBe(90);
+    expect(rotateCounterClockwise(90)).toBe(0);
+  });
+
+  it("returns to the start after four turns", () => {
+    let rotation: 0 | 90 | 180 | 270 = 0;
+    for (let i = 0; i < 4; i += 1) rotation = rotateClockwise(rotation);
+    expect(rotation).toBe(0);
+  });
+
+  it("is reversible", () => {
+    for (const angle of [0, 90, 180, 270] as const) {
+      expect(rotateCounterClockwise(rotateClockwise(angle))).toBe(angle);
+    }
+  });
+});
+
+describe("addRotations", () => {
+  it("composes an existing rotation with a requested one", () => {
+    expect(addRotations(90, 90)).toBe(180);
+    expect(addRotations(270, 90)).toBe(0);
+    expect(addRotations(180, 180)).toBe(0);
+    expect(addRotations(0, 270)).toBe(270);
+  });
+
+  it("normalises values beyond a full turn", () => {
+    expect(addRotations(360, 90)).toBe(90);
+    expect(addRotations(-90, 0)).toBe(270);
+  });
+
+  it("falls back to 0 for angles PDF cannot express", () => {
+    expect(addRotations(45, 0)).toBe(0);
+  });
+});
+
+describe("formatRotation / hasRotations / compactRotations", () => {
+  it("describes a rotation for the interface", () => {
+    expect(formatRotation(0)).toBe("Original");
+    expect(formatRotation(90)).toBe("90° clockwise");
+    expect(formatRotation(270)).toBe("270° clockwise");
+  });
+
+  it("detects whether anything is rotated", () => {
+    expect(hasRotations({})).toBe(false);
+    expect(hasRotations({ 1: 0, 2: 0 })).toBe(false);
+    expect(hasRotations({ 1: 0, 2: 90 })).toBe(true);
+  });
+
+  it("drops the pages left at 0°", () => {
+    expect(compactRotations({ 1: 90, 2: 0, 3: 180 })).toEqual({ 1: 90, 3: 180 });
+    expect(compactRotations({})).toEqual({});
+  });
+
+  it("serialises only what changed", () => {
+    expect(formatPageRotations({ 1: 90, 2: 0 })).toBe('{"1":90}');
+    expect(formatPageRotations({})).toBe("{}");
+  });
+});
+
+describe("parsePageRotations", () => {
+  it("parses a page-to-angle object", () => {
+    const result = parsePageRotations('{"1":90,"3":180}');
+    expect(result).toEqual({ ok: true, rotations: { 1: 90, 3: 180 } });
+  });
+
+  it("treats empty input as no rotations", () => {
+    expect(parsePageRotations("")).toEqual({ ok: true, rotations: {} });
+    expect(parsePageRotations("   ")).toEqual({ ok: true, rotations: {} });
+    expect(parsePageRotations("{}")).toEqual({ ok: true, rotations: {} });
+  });
+
+  it("rejects malformed JSON", () => {
+    expect(parsePageRotations("{")).toMatchObject({
+      ok: false,
+      issue: { code: "SYNTAX" },
+    });
+    expect(parsePageRotations("not json")).toMatchObject({ ok: false });
+  });
+
+  it("rejects arrays and primitives", () => {
+    expect(parsePageRotations("[90]")).toMatchObject({
+      ok: false,
+      issue: { code: "SYNTAX" },
+    });
+    expect(parsePageRotations("42")).toMatchObject({ ok: false });
+    expect(parsePageRotations('"90"')).toMatchObject({ ok: false });
+    expect(parsePageRotations("null")).toMatchObject({ ok: false });
+  });
+
+  it("rejects non-numeric page keys", () => {
+    expect(parsePageRotations('{"a":90}')).toMatchObject({
+      ok: false,
+      issue: { code: "SYNTAX" },
+    });
+    expect(parsePageRotations('{"1.5":90}')).toMatchObject({ ok: false });
+    expect(parsePageRotations('{"-1":90}')).toMatchObject({ ok: false });
+  });
+
+  it("rejects page 0", () => {
+    expect(parsePageRotations('{"0":90}')).toMatchObject({
+      ok: false,
+      issue: { code: "OUT_OF_RANGE" },
+    });
+  });
+
+  it("rejects unsupported angles without normalising them", () => {
+    for (const bad of ["45", "-90", "91", "360", "1.5"]) {
+      const result = parsePageRotations(`{"1":${bad}}`);
+      expect(result.ok, bad).toBe(false);
+      if (!result.ok) expect(result.issue.code).toBe("INVALID_ANGLE");
+    }
+  });
+
+  it("rejects angles given as strings", () => {
+    expect(parsePageRotations('{"1":"90"}')).toMatchObject({
+      ok: false,
+      issue: { code: "INVALID_ANGLE" },
+    });
+  });
+
+  it("accepts an explicit 0", () => {
+    expect(parsePageRotations('{"2":0}')).toEqual({ ok: true, rotations: { 2: 0 } });
+  });
+});
+
+describe("validatePageRotations", () => {
+  it("accepts rotations inside the document", () => {
+    expect(validatePageRotations({ 1: 90, 5: 270 }, 10)).toBeNull();
+    expect(validatePageRotations({}, 10)).toBeNull();
+  });
+
+  it("rejects pages beyond the document", () => {
+    const issue = validatePageRotations({ 11: 90 }, 10);
+    expect(issue?.code).toBe("OUT_OF_RANGE");
+    expect(issue?.message).toContain("10 pages");
+  });
+
+  it("rejects an unsupported angle", () => {
+    expect(validatePageRotations({ 1: 45 as never }, 5)?.code).toBe("INVALID_ANGLE");
+  });
+
+  it("rejects a document with no pages", () => {
+    expect(validatePageRotations({ 1: 90 }, 0)?.code).toBe("OUT_OF_RANGE");
+  });
+});
+
+describe("parseAndValidatePageRotations", () => {
+  it("accepts valid rotations for the document", () => {
+    const result = parseAndValidatePageRotations('{"2":180}', 3);
+    expect(result).toEqual({ ok: true, rotations: { 2: 180 } });
+  });
+
+  it("reports out-of-range pages", () => {
+    expect(parseAndValidatePageRotations('{"9":90}', 3)).toMatchObject({
+      ok: false,
+      issue: { code: "OUT_OF_RANGE" },
+    });
   });
 });

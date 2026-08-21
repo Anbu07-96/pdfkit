@@ -330,6 +330,201 @@ export function complementPageRanges(
 }
 
 /* -------------------------------------------------------------------------- */
+/* Page rotation                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Clockwise rotation applied to a page, in degrees. PDF only supports these
+ * four values, so the type does too — 45° is not "nearly 90°", it is invalid.
+ */
+export const PAGE_ROTATIONS = [0, 90, 180, 270] as const;
+
+export type PageRotation = (typeof PAGE_ROTATIONS)[number];
+
+/** 1-based page number → clockwise rotation. Omitted pages mean 0°. */
+export type PageRotationMap = Record<number, PageRotation>;
+
+export function isPageRotation(value: unknown): value is PageRotation {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    (PAGE_ROTATIONS as readonly number[]).includes(value)
+  );
+}
+
+/** 0 → 90 → 180 → 270 → 0. */
+export function rotateClockwise(rotation: PageRotation): PageRotation {
+  return (((rotation + 90) % 360) as PageRotation);
+}
+
+/** 0 → 270 → 180 → 90 → 0. */
+export function rotateCounterClockwise(rotation: PageRotation): PageRotation {
+  return (((rotation + 270) % 360) as PageRotation);
+}
+
+/** Compose two rotations, e.g. an existing page rotation plus the user's. */
+export function addRotations(a: number, b: number): PageRotation {
+  const total = (((a + b) % 360) + 360) % 360;
+  return (isPageRotation(total) ? total : 0) as PageRotation;
+}
+
+/** `90` → `"90° clockwise"`, `0` → `"Original"`. */
+export function formatRotation(rotation: PageRotation): string {
+  return rotation === 0 ? "Original" : `${rotation}° clockwise`;
+}
+
+/** True when at least one page carries a non-zero rotation. */
+export function hasRotations(rotations: PageRotationMap): boolean {
+  return Object.values(rotations).some((rotation) => rotation !== 0);
+}
+
+/** Drop 0° entries — they are the default and need not be sent. */
+export function compactRotations(rotations: PageRotationMap): PageRotationMap {
+  const compact: PageRotationMap = {};
+  for (const [page, rotation] of Object.entries(rotations)) {
+    if (rotation !== 0) compact[Number(page)] = rotation;
+  }
+  return compact;
+}
+
+export type PageRotationIssueCode = "SYNTAX" | "INVALID_ANGLE" | "OUT_OF_RANGE";
+
+export interface PageRotationIssue {
+  code: PageRotationIssueCode;
+  /** Short, user-facing explanation. Safe to render directly. */
+  message: string;
+}
+
+export type PageRotationParseResult =
+  | { ok: true; rotations: PageRotationMap }
+  | { ok: false; issue: PageRotationIssue };
+
+/**
+ * Parse the wire format: a JSON object mapping page numbers to rotations, e.g.
+ * `{"1":90,"3":180}`. Pages that are absent keep their current orientation.
+ *
+ * Strict on purpose: `JSON.parse` only (never `eval`), plain objects only,
+ * integer page keys only, and only the four legal angles as *numbers*. Nothing
+ * is coerced or normalised — `"90"`, `45` and `-90` are all rejected.
+ */
+export function parsePageRotations(input: string): PageRotationParseResult {
+  const trimmed = (input ?? "").trim();
+  if (trimmed.length === 0) return { ok: true, rotations: {} };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return {
+      ok: false,
+      issue: {
+        code: "SYNTAX",
+        message: "The rotation settings could not be read.",
+      },
+    };
+  }
+
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    Array.isArray(parsed)
+  ) {
+    return {
+      ok: false,
+      issue: {
+        code: "SYNTAX",
+        message: "Rotations must be given as page number to angle pairs.",
+      },
+    };
+  }
+
+  const rotations: PageRotationMap = {};
+
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (!/^\d+$/.test(key)) {
+      return {
+        ok: false,
+        issue: {
+          code: "SYNTAX",
+          message: `“${key}” is not a page number.`,
+        },
+      };
+    }
+
+    const page = Number.parseInt(key, 10);
+    if (page < 1) {
+      return {
+        ok: false,
+        issue: { code: "OUT_OF_RANGE", message: "Page numbers start at 1." },
+      };
+    }
+
+    if (!isPageRotation(value)) {
+      return {
+        ok: false,
+        issue: {
+          code: "INVALID_ANGLE",
+          message: `Page ${page} has an unsupported rotation. Use 0, 90, 180 or 270 degrees.`,
+        },
+      };
+    }
+
+    rotations[page] = value;
+  }
+
+  return { ok: true, rotations };
+}
+
+/** Check rotations against a real document. Returns `null` when valid. */
+export function validatePageRotations(
+  rotations: PageRotationMap,
+  pageCount: number,
+): PageRotationIssue | null {
+  if (!Number.isInteger(pageCount) || pageCount < 1) {
+    return { code: "OUT_OF_RANGE", message: "This PDF has no pages to rotate." };
+  }
+
+  for (const [key, rotation] of Object.entries(rotations)) {
+    const page = Number(key);
+
+    if (!Number.isInteger(page) || page < 1 || page > pageCount) {
+      return {
+        code: "OUT_OF_RANGE",
+        message: `Page ${key} does not exist. This PDF has ${pageCount} ${
+          pageCount === 1 ? "page" : "pages"
+        }.`,
+      };
+    }
+
+    if (!isPageRotation(rotation)) {
+      return {
+        code: "INVALID_ANGLE",
+        message: `Page ${page} has an unsupported rotation. Use 0, 90, 180 or 270 degrees.`,
+      };
+    }
+  }
+
+  return null;
+}
+
+/** Parse and validate in one step, against a known page count. */
+export function parseAndValidatePageRotations(
+  input: string,
+  pageCount: number,
+): PageRotationParseResult {
+  const parsed = parsePageRotations(input);
+  if (!parsed.ok) return parsed;
+
+  const problem = validatePageRotations(parsed.rotations, pageCount);
+  return problem ? { ok: false, issue: problem } : parsed;
+}
+
+/** Serialise for the API, omitting pages left at 0°. */
+export function formatPageRotations(rotations: PageRotationMap): string {
+  return JSON.stringify(compactRotations(rotations));
+}
+
+/* -------------------------------------------------------------------------- */
 /* Page order (permutations)                                                  */
 /* -------------------------------------------------------------------------- */
 
