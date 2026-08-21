@@ -15,6 +15,7 @@ import "server-only";
  * | PDFKIT_MAX_FILES_PER_JOB          | 20      | files per request          |
  * | PDFKIT_MAX_UPLOAD_SIZE            | 25 MB   | size of a single file      |
  * | PDFKIT_MAX_TOTAL_UPLOAD_SIZE      | 100 MB  | total size of one request  |
+ * | PDFKIT_MAX_SPLIT_OUTPUTS          | 50      | documents one job may emit |
  *
  * The MVP processes documents entirely in memory, so these limits also bound
  * the memory a single request can use.
@@ -29,12 +30,18 @@ export interface ProcessingLimits {
   maxFileSize: number;
   /** Maximum combined size of all files in one request, in bytes. */
   maxTotalSize: number;
+  /**
+   * Maximum number of documents a single job may produce (for example when
+   * splitting every page). Checked before any output is generated.
+   */
+  maxOutputs: number;
 }
 
 export const DEFAULT_PROCESSING_LIMITS: ProcessingLimits = {
   maxFiles: 20,
   maxFileSize: 25 * MB,
   maxTotalSize: 100 * MB,
+  maxOutputs: 50,
 };
 
 function readPositiveInt(value: string | undefined, fallback: number): number {
@@ -59,9 +66,15 @@ export function getProcessingLimits(): ProcessingLimits {
     DEFAULT_PROCESSING_LIMITS.maxTotalSize,
   );
 
+  const maxOutputs = readPositiveInt(
+    process.env.PDFKIT_MAX_SPLIT_OUTPUTS,
+    DEFAULT_PROCESSING_LIMITS.maxOutputs,
+  );
+
   return {
     maxFiles,
     maxFileSize,
+    maxOutputs,
     // A total smaller than a single file would be contradictory.
     maxTotalSize: Math.max(maxTotalSize, maxFileSize),
   };

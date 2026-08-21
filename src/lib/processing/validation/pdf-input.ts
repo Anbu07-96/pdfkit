@@ -65,10 +65,14 @@ export function validateProcessingInput({
     );
   }
 
-  if (files.length > limits.maxFiles) {
+  // A tool may accept fewer files than the global cap (Split PDF takes one).
+  const maxFiles = Math.min(limits.maxFiles, rules.maxFiles ?? Number.POSITIVE_INFINITY);
+  if (files.length > maxFiles) {
     throw new ProcessingError(
       "TOO_MANY_FILES",
-      `You can process up to ${limits.maxFiles} files at once. You sent ${files.length}.`,
+      maxFiles === 1
+        ? `This tool works on one file at a time. You sent ${files.length}.`
+        : `You can process up to ${maxFiles} files at once. You sent ${files.length}.`,
     );
   }
 

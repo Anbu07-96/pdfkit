@@ -61,7 +61,7 @@ export async function runProcessingJob<TOptions>(
       limits,
     });
 
-    const result = await processor.process(request);
+    const result = await processor.process(request, { limits });
 
     logJob({
       toolId: request.toolId,
