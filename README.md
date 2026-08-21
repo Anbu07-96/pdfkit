@@ -6,13 +6,14 @@ PDFKit is a fast, privacy-conscious web application for everyday PDF and
 document work — organising pages, converting formats, editing, securing, and
 later OCR and AI document intelligence.
 
-> ## Current status: Phase 1 — foundation and product shell
+> ## Current status: Phase 2 — first working tool
 >
-> **No document processing is implemented yet.** The catalog, the interface and
-> the tool pages exist, but no tool merges, splits, compresses, converts or reads
-> a document. Every tool is honestly marked **Coming soon**, and upload areas on
-> tool pages are deliberately disabled. Nothing in this application uploads a
-> file anywhere.
+> **[Merge PDF](http://localhost:3000/tools/merge-pdf) genuinely works**: upload
+> two or more PDFs, arrange them, and the server returns a real merged document.
+>
+> **Every other tool is still unimplemented** and honestly marked
+> **Coming soon**, with its upload area disabled. There is no simulated
+> processing anywhere in this codebase.
 
 ---
 
@@ -23,6 +24,8 @@ later OCR and AI document intelligence.
 - [Getting started](#getting-started)
 - [Available scripts](#available-scripts)
 - [What is implemented today](#what-is-implemented-today)
+- [Merge PDF](#merge-pdf)
+- [Processing limits](#processing-limits)
 - [What is deliberately not implemented](#what-is-deliberately-not-implemented)
 - [Project structure](#project-structure)
 - [Environment variables](#environment-variables)
@@ -42,8 +45,8 @@ A single web app for common document tasks, built around three product rules:
 3. **Speed and reach** — a light interface that works from 320px phones to large
    desktop screens, keyboard-accessible throughout.
 
-The catalog currently describes **42 planned tools** in six categories:
-Organize, Convert, Edit, Security, OCR and AI.
+The catalog describes **42 tools** in six categories — Organize, Convert, Edit,
+Security, OCR and AI — of which **1 (Merge PDF) is implemented** today.
 
 ---
 
@@ -59,11 +62,14 @@ Organize, Convert, Edit, Security, OCR and AI.
 | Icons              | **lucide-react**                              | Tree-shakeable SVG icon set; icons are decorative and always paired with text. |
 | Class utilities    | **clsx** + **tailwind-merge**                 | Tiny helpers for conditional and conflict-free class names. |
 | Fonts              | **geist** (self-hosted via `next/font/local`) | No requests to third-party font CDNs, which fits the privacy goal and avoids a render-blocking external dependency. |
+| PDF engine         | **pdf-lib**                                   | Pure TypeScript, no native binaries or system dependencies, runs in the Node runtime and handles document merging (`copyPages`) reliably. Nothing already in the project could parse or write PDFs. |
+| Server guard       | **server-only**                               | Makes `next build` fail if a client component ever imports the processing layer. |
 | Tests              | **Vitest** + **Testing Library** + jsdom      | Fast, Vite-native, and tests behaviour through accessible roles rather than implementation details. |
 | Linting            | **ESLint** with `eslint-config-next`          | Catches React, hooks and Next.js issues, including accessibility rules. |
 
-No database, no backend service, no queue and no cloud infrastructure are used
-in this phase, because nothing in Phase 1 needs them.
+No database, no queue, no object storage and no cloud infrastructure are used:
+merging happens inside the Next.js server process, in memory, for the duration
+of a single request.
 
 ---
 
@@ -111,6 +117,27 @@ npm start
 
 ## What is implemented today
 
+**Merge PDF (real, end to end)**
+
+- Multiple-PDF selection with drag and drop or browse
+- Accessible reordering (move up / move down) — the order sent to the server is
+  the order you see
+- File removal, per-file and total size feedback
+- Server-side merge with `pdf-lib` behind `POST /api/tools/merge-pdf`
+- Real result: the merged PDF is streamed back and downloaded
+- Cancel, error and empty states — no fake progress bars
+
+**Processing foundation** (`src/lib/processing`)
+
+- `contract.ts` — the boundary every tool implements
+- `registry.ts` — the authoritative list of implemented tools
+- `service.ts` — validate → process → structured result, with safe logging
+- `http.ts` — multipart parsing, request-size protection, response headers
+- `errors.ts` — typed error codes mapped to HTTP statuses
+- `limits.ts` — configurable limits with documented defaults
+- `validation/pdf-input.ts` — counts, sizes, extensions and **PDF signature**
+  checks that do not trust the browser
+
 **Foundation**
 
 - Next.js App Router project with strict TypeScript and path aliases (`@/*`)
@@ -155,13 +182,66 @@ first paint to avoid a flash.
 
 ---
 
+## Merge PDF
+
+**In the interface:** open `/tools/merge-pdf`, add at least two PDFs, drag or use
+the arrow buttons to order them, then press **Merge PDFs** and download the
+result.
+
+**Through the API:**
+
+```bash
+curl -X POST http://localhost:3000/api/tools/merge-pdf \
+  -F "files=@cover.pdf;type=application/pdf" \
+  -F "files=@chapter-1.pdf;type=application/pdf" \
+  -o merged.pdf
+```
+
+The `files` fields are merged in the order they are sent. Success returns
+`application/pdf` with `Content-Disposition: attachment; filename="merged.pdf"`.
+Failures return JSON:
+
+```json
+{ "error": { "code": "INVALID_PDF", "message": "Some files are not valid PDF documents.",
+             "details": ["invoice.pdf does not contain a PDF file signature."] } }
+```
+
+| Code | HTTP | When |
+| --- | --- | --- |
+| `VALIDATION_ERROR` | 400 | Missing files, fewer than two files, non-multipart request |
+| `UNSUPPORTED_FILE` | 415 | Extension or MIME type is not a PDF |
+| `FILE_TOO_LARGE` | 413 | A single file exceeds the per-file limit |
+| `TOO_MANY_FILES` | 413 | More files than the configured maximum |
+| `TOTAL_SIZE_EXCEEDED` | 413 | Combined upload exceeds the total limit |
+| `INVALID_PDF` | 422 | Content is not a readable PDF (signature or structure) |
+| `ENCRYPTED_PDF` | 422 | The document is password protected |
+| `PROCESSING_ERROR` / `INTERNAL_ERROR` | 500 | Unexpected failure (no details leak) |
+
+**How files are handled:** documents are read into memory, merged and returned in
+the same request. Nothing is written to disk, nothing is stored, and only
+counts, byte totals and durations are logged — never file names or contents.
+
+## Processing limits
+
+Configurable through the environment, with safe defaults:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PDFKIT_MAX_FILES_PER_JOB` | `20` | Files accepted in one request |
+| `PDFKIT_MAX_UPLOAD_SIZE` | `26214400` (25 MB) | Maximum size of one file |
+| `PDFKIT_MAX_TOTAL_UPLOAD_SIZE` | `104857600` (100 MB) | Maximum combined size |
+
+Limits are enforced by the server on every request. The numbers shown in the
+interface come from the build-time configuration, so rebuild after changing
+them if you want the hints to match exactly.
+
 ## What is deliberately not implemented
 
-Merge, split, compress, rotate, delete/reorder/extract pages, JPG↔PDF,
-PDF↔Office, editing, security tools, OCR, AI, authentication, cloud storage,
-databases, payments, API keys, a developer API, background workers and job
-queues are **not** implemented. There is no simulated processing anywhere: no
-fake progress bars, no fake results, no fake downloads.
+Split, compress, rotate, delete/reorder/extract pages, JPG↔PDF, PDF↔Office,
+editing, security tools, OCR, AI, authentication, cloud storage, databases,
+payments, API keys, a public developer API, background workers and job queues
+are **not** implemented. There is no simulated processing anywhere: no fake
+progress bars, no fake results, no fake downloads. Only Merge PDF is real.
 
 ---
 
@@ -171,6 +251,7 @@ fake progress bars, no fake results, no fake downloads.
 src/
 ├─ app/                      # Routes (App Router)
 │  ├─ page.tsx               # Homepage
+│  ├─ api/tools/merge-pdf/   # Merge PDF endpoint (thin route handler)
 │  ├─ tools/                 # Catalog + dynamic tool pages
 │  ├─ categories/            # Category pages
 │  ├─ styleguide/            # Internal design-system reference
@@ -183,11 +264,13 @@ src/
 │  ├─ home/                  # Homepage sections
 │  ├─ tools/                 # Tool cards, search, tool page shell
 │  ├─ upload/                # UploadZone, FileCard
+│  ├─ tools/workspaces/      # Interactive tool UIs (Merge PDF)
 │  └─ theme/                 # ThemeProvider
 └─ lib/
    ├─ tools/                 # Tool catalog, categories, search (source of truth)
-   ├─ upload/                # Pure file validation rules
-   ├─ processing/            # Future processing CONTRACT only — no implementation
+   ├─ upload/                # Pure client-side file validation rules
+   ├─ processing/            # Contract, registry, service, HTTP adapter, limits,
+   │                         # errors, validation and processors (server only)
    ├─ config/                # Site and navigation config
    ├─ utils/                 # Formatting and class helpers
    └─ theme.ts               # Theme store and pre-paint script
@@ -203,8 +286,11 @@ Copy `.env.example` to `.env.local`. Every value is optional in Phase 1.
 
 | Variable                    | Purpose                                    |
 | --------------------------- | ------------------------------------------ |
-| `NEXT_PUBLIC_SITE_URL`      | Absolute URL used for metadata and sitemap |
-| `NEXT_PUBLIC_CONTACT_EMAIL` | Optional public contact address            |
+| `NEXT_PUBLIC_SITE_URL`          | Absolute URL used for metadata and sitemap |
+| `NEXT_PUBLIC_CONTACT_EMAIL`     | Optional public contact address            |
+| `PDFKIT_MAX_FILES_PER_JOB`      | Files per processing request (default 20)  |
+| `PDFKIT_MAX_UPLOAD_SIZE`        | Bytes per file (default 25 MB)             |
+| `PDFKIT_MAX_TOTAL_UPLOAD_SIZE`  | Bytes per request (default 100 MB)         |
 
 `.env` files are git-ignored (`.env.example` is the only tracked one). Secrets
 for future phases must be server-only — never prefixed with `NEXT_PUBLIC_`.
@@ -219,10 +305,20 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today:
+Covered today (15 files, 123 tests):
 
+- **Merge processor** — real PDFs built with pdf-lib are merged, page counts and
+  order verified, malformed and password-protected documents rejected
+- **API route** — success response and headers, ordering, and every validation
+  failure (too few files, wrong type, disguised non-PDF, oversized, too many,
+  non-multipart, wrong method), plus a check that no internals leak
+- **Server validation** — PDF signature detection and every limit
+- **Processing service and registry** — catalog/registry parity, limit
+  configuration, buffer release after a job
+- **Merge workspace** — ordering, removal, request payload order, success and
+  download, server errors, network failure, reset
 - **Catalog integrity** — unique ids, valid categories, route derivation, and a
-  guard test asserting no tool claims to be available while no processing exists
+  guard test asserting only implemented tools are marked available
 - **Search** — name/description/category/keyword matching, ranking, multi-term
   queries, empty and no-result cases
 - **Navigation** — desktop links, mobile menu open/close, Escape handling
@@ -235,16 +331,15 @@ Covered today:
 
 ## Future phases
 
-Phase 1 stops here on purpose. The planned order (see also `/roadmap`):
+Phase 2 stops here on purpose. The planned order (see also `/roadmap`):
 
-1. **Phase 2 — first real processing:** a server-side processing layer behind an
-   API route, one tool end to end, real progress/result/error handling and a
-   temporary file lifecycle.
-2. More organise and convert tools.
+1. **Phase 3 — more organise tools:** split, extract, delete and reorder pages
+   on the same processing foundation, with page previews.
+2. Convert tools (images ↔ PDF, Office ↔ PDF).
 3. Editing and security tools.
 4. OCR.
 5. AI document intelligence.
-6. Accounts, cloud storage, billing and a developer API.
+6. Accounts, cloud storage, billing and a public developer API.
 
 A tool's status changes to `AVAILABLE` only when its processing genuinely works.
 

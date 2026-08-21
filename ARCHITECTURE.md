@@ -1,9 +1,9 @@
 # PDFKit architecture
 
 This document describes how PDFKit is actually built today (Phase 1: foundation
-and product shell) and the boundaries that keep future phases — real PDF
-processing, OCR, AI, accounts, storage and billing — additive rather than a
-rewrite.
+and product shell; Phase 2: the processing layer and the first working tool,
+Merge PDF) and the boundaries that keep future phases — more tools, OCR, AI,
+accounts, storage and billing — additive rather than a rewrite.
 
 ---
 
@@ -11,27 +11,36 @@ rewrite.
 
 ```text
 Presentation            src/app, src/components
+      ↓  (browser)
+Processing client       src/lib/processing/client.ts      — the only fetch call
+      ↓  HTTP multipart
+API route               src/app/api/tools/merge-pdf/route.ts (thin)
       ↓
-Application logic       src/lib/tools, src/lib/upload, src/lib/config
+HTTP adapter            src/lib/processing/http.ts        — parsing, limits, headers
       ↓
-API                     (future) src/app/api/**  — does not exist yet
+Processing service      src/lib/processing/service.ts     — validate, run, report
       ↓
-PDF processing          (future) server-side services — contract only today
+Tool processor          src/lib/processing/processors/*   — implements the contract
       ↓
-Storage                 (future) temporary object storage — does not exist yet
+PDF library             pdf-lib
+      ↓
+Result                  bytes streamed back in the same response
 ```
 
 Rules that hold in the current codebase:
 
-- **No processing logic lives in a component.** There is no processing logic at
-  all yet, and the place it will live (`src/lib/processing`) contains a contract
-  file with types only — no implementation, no mock, no simulation.
-- **Components never import a processing implementation.** They import the
-  catalog and pure helpers.
-- **The upload component is independent of processing.** `UploadZone` validates
-  and lists a selection; it does not know what will eventually be done with it.
-- **No unnecessary services.** Phase 1 is a single Next.js app: no database, no
-  queue, no worker, no external infrastructure.
+- **No processing logic lives in a component.** `MergePdfWorkspace` owns
+  selection and request state only; it never imports pdf-lib or a processor.
+- **The boundary is enforced, not just documented.** Every processing module
+  starts with `import "server-only"`, so `next build` fails if a client
+  component ever pulls one in.
+- **The route handler is thin.** It supplies a tool id and a fallback file name;
+  all HTTP concerns live in the shared adapter, so the next tool route is ~10
+  lines.
+- **The upload component is independent of processing.** `UploadZone` validates,
+  lists and orders a selection; it does not know what will be done with it.
+- **No unnecessary services.** Still a single Next.js app: no database, no
+  queue, no worker, no object storage.
 
 ---
 
@@ -57,8 +66,17 @@ decisions explicit. Where the platform already solves a problem well, the
 platform is used: `<dialog>` for the modal, `<details>` for FAQs, `<input
 type="search">` for search.
 
+**pdf-lib for PDF work.** Nothing already in the project could parse or write
+PDFs. pdf-lib is pure TypeScript with no native binaries or system packages
+(unlike Ghostscript/qpdf bindings), which keeps deployment simple, and its
+`copyPages` API is exactly what merging needs. It runs only in the Node runtime,
+never in the browser bundle.
+
 **Vitest + Testing Library.** Vite-native and fast, and tests query by
-accessible role/name, which doubles as an accessibility check.
+accessible role/name, which doubles as an accessibility check. Server tests opt
+into the Node environment with `// @vitest-environment node`, and the
+`server-only` marker is aliased to an empty stub so those modules can be unit
+tested directly.
 
 **Self-hosted fonts (`geist` package).** No third-party font CDN request, which
 matches the privacy positioning and removes an external dependency from the
@@ -78,6 +96,7 @@ src/
 ├─ app/                       Routing and page composition only
 │  ├─ layout.tsx              Providers, header/footer, skip link, theme script
 │  ├─ page.tsx                Homepage — composes src/components/home sections
+│  ├─ api/tools/merge-pdf/    POST endpoint (delegates to the HTTP adapter)
 │  ├─ tools/page.tsx          Catalog page (search + filters)
 │  ├─ tools/[toolId]/         Tool page, generated from the catalog
 │  ├─ categories/[categoryId] Category page, generated from the catalog
@@ -91,11 +110,22 @@ src/
 │  ├─ home/                   Homepage sections
 │  ├─ tools/                  Tool card, category card, search, tool page shell
 │  ├─ upload/                 UploadZone, FileCard
+│  ├─ tools/workspaces/       Interactive UIs for implemented tools
 │  └─ theme/                  ThemeProvider
 └─ lib/
    ├─ tools/                  types, categories, catalog, search, selectors
-   ├─ upload/file-validation  Pure validation rules (no React, no DOM)
-   ├─ processing/contract.ts  Future boundary — types only
+   ├─ upload/file-validation  Pure client-side rules (no React, no DOM)
+   ├─ processing/
+   │  ├─ contract.ts          The boundary: request, artifact, result, processor
+   │  ├─ registry.ts          Implemented processors (authoritative)
+   │  ├─ service.ts           Validate → run → structured result + safe logging
+   │  ├─ http.ts              Multipart parsing, size guards, response headers
+   │  ├─ errors.ts            Error codes, HTTP mapping, safe bodies (isomorphic)
+   │  ├─ limits.ts            Env-configured limits with documented defaults
+   │  ├─ rules.ts             Per-tool input rules shared with the UI
+   │  ├─ client.ts            Browser-side API client (the only fetch)
+   │  ├─ validation/          PDF signature and limit checks
+   │  └─ processors/          merge-pdf.ts
    ├─ config/site.ts          Site metadata and navigation
    ├─ theme.ts                Theme store + pre-paint script
    └─ utils/                  cn(), formatting helpers
@@ -203,11 +233,59 @@ why search feels instant and works without JavaScript-heavy machinery.
 
 ---
 
+## 5a. Merge PDF: how a request flows
+
+1. **Selection.** `UploadZone` (controlled, `orderable`) validates types and
+   sizes in the browser and lets the user reorder or remove documents. Order is
+   just array order — no drag-and-drop dependency was added.
+2. **Request.** `runMergePdf()` builds a `FormData` with one `files` field per
+   document, in display order, and POSTs it with an `AbortSignal` so Cancel
+   really cancels.
+3. **HTTP adapter.** Rejects non-multipart requests, rejects an oversized
+   `Content-Length` before reading the body (with a small allowance for
+   multipart overhead), caps the file count, then reads each part while
+   accumulating the total size.
+4. **Service.** Resolves the processor from the registry, runs shared validation
+   (count, extension, MIME, emptiness, per-file size, **PDF signature**, total
+   size), then calls the processor.
+5. **Processor.** Loads each document with pdf-lib, copies its pages into a new
+   document in order, serialises the result. Every library failure is mapped to
+   a typed `ProcessingError` — malformed input is never silently skipped.
+6. **Response.** Bytes are streamed back as `application/pdf` with
+   `Content-Disposition`, `no-store` and `nosniff`. The browser turns the blob
+   into an object URL for the download link and revokes it when it is replaced.
+
+Failure handling is uniform: every expected problem is a `ProcessingError` with
+a code, an HTTP status, a user-safe message and optional per-file details.
+Unexpected errors collapse to `INTERNAL_ERROR`; the real cause is logged
+server-side only.
+
+### Temporary data and logging
+
+The MVP never writes uploads to disk. Documents live in memory for the duration
+of one request; the service clears the input array in a `finally` block, on
+success and failure alike, so buffers are released immediately. Because there
+are no temporary files, there is no cleanup job, no public temp directory and
+no predictable file names to guess.
+
+Logging is deliberately thin: `tool`, `outcome`, `files`, `bytes`, `ms` and an
+error code. File names, metadata and document contents are never logged.
+
+### Two guards that keep this honest
+
+- `registry.test.ts` asserts catalog ↔ registry parity in both directions: a
+  tool may only claim `AVAILABLE` if a processor exists, and every processor
+  must have a catalog entry marked `AVAILABLE`.
+- `import "server-only"` in every processing module makes the build fail if the
+  browser bundle ever reaches for them.
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:
 
-- states: empty, hover, drag-over, selected, error, disabled;
+- states: empty, hover, drag-over, selected, error, disabled, busy;
+- optional controlled mode (`files` + `onFilesChange`) and `orderable` mode with
+  accessible move up/down controls, used by Merge PDF;
 - validation delegated to `src/lib/upload/file-validation.ts`, which is pure and
   independently tested (type, size, empty file, duplicates, count);
 - rejections render as an accessible error region, selections as removable
@@ -216,14 +294,17 @@ why search feels instant and works without JavaScript-heavy machinery.
   **Coming soon** badge and a plain-language explanation.
 
 `src/lib/processing/contract.ts` declares `ProcessingRequest`,
-`ProcessingResult` and `ToolProcessor` — and nothing else. Phase 2 will:
+`ProcessingArtifact`, `ProcessingResult` and `ToolProcessor`. Adding the next
+tool is now a fixed, four-step recipe:
 
-1. implement a `ToolProcessor` for one tool on the server;
-2. expose it through a route handler under `src/app/api/`;
-3. call that endpoint from the tool page (never a processing library directly);
-4. flip that tool's `status` to `AVAILABLE`.
+1. implement a `ToolProcessor` under `src/lib/processing/processors/`;
+2. register it in `registry.ts` and add its input rules to `rules.ts`;
+3. add a ~10-line route handler that calls `handleProcessingRequest`;
+4. add a workspace component, map it in `components/tools/workspaces`, and flip
+   the catalog status to `AVAILABLE`.
 
-No component, hook or page will need restructuring for that to happen.
+Validation, limits, error shaping, logging and response headers are shared, so
+no component, hook or page needs restructuring.
 
 ---
 
@@ -257,14 +338,28 @@ No component, hook or page will need restructuring for that to happen.
 
 ---
 
-## 9. Security posture (Phase 1)
+## 9. Security posture
 
-- No secrets exist in the app; `.env*` is git-ignored apart from `.env.example`.
-- Only `NEXT_PUBLIC_*` values are read, and they contain no sensitive data.
-- No analytics, tracking or third-party runtime scripts.
-- The single inline script is a static, self-contained theme initialiser.
-- Future server credentials must stay server-side (no `NEXT_PUBLIC_` prefix) and
-  be read only in route handlers or server modules.
+Every uploaded file is treated as untrusted input:
+
+- **Independent server-side validation.** File name, extension and browser MIME
+  type are all advisory; the server additionally checks the `%PDF-` signature in
+  the first kilobyte before handing anything to the parser.
+- **Request-size protection.** `Content-Length` is checked before the body is
+  read, then the file count and per-file and cumulative sizes are enforced while
+  parsing. All three limits are configurable.
+- **No public temporary files.** Nothing is written to disk or to `public/`.
+- **Safe errors.** Clients receive a code and a short message; stack traces,
+  library internals and causes never leave the server.
+- **Privacy-safe logging.** Counts, byte totals, durations and error codes only.
+- **Response hardening.** `no-store`, `nosniff` and a sanitised
+  `Content-Disposition` file name (control characters and quotes stripped, so
+  the header cannot be split).
+- **Secrets.** None exist; `.env*` is git-ignored apart from `.env.example`, and
+  future credentials must stay server-side (no `NEXT_PUBLIC_` prefix).
+
+This is a foundation, not a hardened production deployment: there is no rate
+limiting, no authentication, no virus scanning and no per-IP quota yet.
 
 ---
 
@@ -275,7 +370,11 @@ No component, hook or page will need restructuring for that to happen.
 - **Components** are tested through the DOM with Testing Library, using roles
   and accessible names, covering navigation, theme switching, search, tool cards
   and every meaningful upload state.
-- **Honesty guard:** a test fails the build if any tool is marked available
-  while no processing exists — the rule is enforced, not just documented.
+- **Server tests** run in the Node environment and exercise the real processor
+  with real PDFs built by pdf-lib, plus the route handler through its exported
+  `POST`/`GET` functions.
+- **Honesty guard:** a test fails if a tool is marked available without a
+  registered processor, or a processor exists without an available catalog entry
+  — the rule is enforced, not just documented.
 - `next/link` and `next/navigation` are mocked in `vitest.setup.ts` so component
   tests run without the Next.js runtime.
