@@ -1,9 +1,10 @@
 # PDFKit architecture
 
 This document describes how PDFKit is actually built today (Phase 1: foundation
-and product shell; Phase 2: the processing layer and the first working tool,
-Merge PDF) and the boundaries that keep future phases — more tools, OCR, AI,
-accounts, storage and billing — additive rather than a rewrite.
+and product shell; Phase 2: the processing layer and Merge PDF; Phase 3:
+page-level infrastructure, multi-artifact processing and Split PDF) and the
+boundaries that keep future phases — more tools, OCR, AI, accounts, storage and
+billing — additive rather than a rewrite.
 
 ---
 
@@ -14,7 +15,7 @@ Presentation            src/app, src/components
       ↓  (browser)
 Processing client       src/lib/processing/client.ts      — the only fetch call
       ↓  HTTP multipart
-API route               src/app/api/tools/merge-pdf/route.ts (thin)
+API route               src/app/api/tools/<tool>/route.ts (thin)
       ↓
 HTTP adapter            src/lib/processing/http.ts        — parsing, limits, headers
       ↓
@@ -24,7 +25,7 @@ Tool processor          src/lib/processing/processors/*   — implements the con
       ↓
 PDF library             pdf-lib
       ↓
-Result                  bytes streamed back in the same response
+Result                  one document streamed back, or several bundled as a ZIP
 ```
 
 Rules that hold in the current codebase:
@@ -65,6 +66,12 @@ cards). Writing them locally avoids a large dependency and keeps accessibility
 decisions explicit. Where the platform already solves a problem well, the
 platform is used: `<dialog>` for the modal, `<details>` for FAQs, `<input
 type="search">` for search.
+
+**fflate for ZIP bundling.** Split PDF can produce many documents and browsers
+cannot download a set of files from one response. fflate is ~8 kB with zero
+dependencies and a synchronous API, so bundling stays a small delivery detail
+rather than a new subsystem. Archives are *stored*, not deflated: the entries
+are PDFs pdf-lib already compressed.
 
 **pdf-lib for PDF work.** Nothing already in the project could parse or write
 PDFs. pdf-lib is pure TypeScript with no native binaries or system packages
@@ -233,7 +240,52 @@ why search feels instant and works without JavaScript-heavy machinery.
 
 ---
 
-## 5a. Merge PDF: how a request flows
+## 5a. Page-level infrastructure (Phase 3)
+
+`src/lib/processing/pages.ts` is a tool-agnostic answer to "which pages does the
+user mean?", and it is deliberately isomorphic — no `server-only`, no pdf-lib —
+so the browser validates with exactly the code the server enforces.
+
+- **Model:** `PageRange { start, end }`, `PageSelection { mode, ranges }`,
+  `PageSelectionMode = "every-page" | "ranges"`.
+- **Numbering:** 1-based and inclusive everywhere, because users think in page
+  numbers. `toZeroBasedIndices()` is the *single* place that converts to the
+  0-based indices pdf-lib wants, which keeps the off-by-one risk in one tested
+  function.
+- **Syntax:** `1-3, 5, 7-9`; commas, semicolons or newlines; whitespace ignored;
+  a bare number is a single-page range.
+- **Validation:** empty input, zero/negative pages, reversed ranges, missing
+  endpoints, non-numeric tokens and pages beyond the document are all rejected
+  with a user-safe message. Nothing is silently corrected.
+- **Overlaps are rejected by default** (`allowOverlap` exists for future tools).
+  For splitting, `1-5, 4-8` is far more likely to be a typo than a request to
+  duplicate pages, and silently duplicating them would be a surprising result.
+
+Two other pieces of shared infrastructure landed with it:
+
+- `pdf-document.ts` — one defensive wrapper around pdf-lib (`loadPdfDocument`,
+  `readPageCount`, `readPageIndices`, `copyPagesInto`, `savePdfDocument`). Merge
+  and Split both use it, so encrypted and lazily-failing documents are handled
+  identically and only once.
+- `inspect.ts` + `POST /api/documents/inspect` — the server-authoritative page
+  count. The browser never derives a page count itself.
+
+### Multi-artifact processing
+
+`ProcessingSuccess.artifacts` was already an array, so the contract needed only
+two additions: an optional `bundleName`, and a `ProcessingContext` passed to
+`process()` carrying the effective limits (so a processor can enforce
+`maxOutputs` without reading the environment itself).
+
+Delivery stays in the HTTP layer, where it belongs:
+
+- exactly one artifact → streamed as-is (`application/pdf`) — Merge PDF is
+  byte-for-byte unchanged;
+- several artifacts → `createZipArchive()` bundles them (`application/zip`).
+
+`X-PDFKit-Artifacts` reports how many documents were produced.
+
+## 5b. Split PDF: how a request flows
 
 1. **Selection.** `UploadZone` (controlled, `orderable`) validates types and
    sizes in the browser and lets the user reorder or remove documents. Order is
@@ -279,6 +331,21 @@ error code. File names, metadata and document contents are never logged.
 - `import "server-only"` in every processing module makes the build fail if the
   browser bundle ever reaches for them.
 
+### Split PDF specifics
+
+1. **Inspect.** On upload the workspace posts the file to
+   `/api/documents/inspect` and shows the real page count ("24 pages"), or an
+   error — never a guess.
+2. **Configure.** Mode radios; range mode validates as you type with
+   `parseAndValidatePageRanges`, so obvious mistakes never reach the server.
+3. **Process.** `POST /api/tools/split-pdf` with `mode` and `ranges`. The
+   processor re-parses and re-validates everything against the real document.
+4. **Guard.** `ranges.length > limits.maxOutputs` fails with `TOO_MANY_OUTPUTS`
+   *before* a single output is generated — no partial results.
+5. **Generate.** One new `PDFDocument` per range, pages copied in the requested
+   order, each saved and named from the sanitised source name.
+6. **Deliver.** One output → PDF; several → ZIP with sanitised entry names.
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:
@@ -297,16 +364,32 @@ error code. File names, metadata and document contents are never logged.
 `ProcessingArtifact`, `ProcessingResult` and `ToolProcessor`. Adding the next
 tool is now a fixed, four-step recipe:
 
-1. implement a `ToolProcessor` under `src/lib/processing/processors/`;
+1. implement a `ToolProcessor` under `src/lib/processing/processors/`
+   (reusing `pages.ts` for page selection and `pdf-document.ts` for pdf-lib);
 2. register it in `registry.ts` and add its input rules to `rules.ts`;
-3. add a ~10-line route handler that calls `handleProcessingRequest`;
+3. add a ~15-line route handler that calls `handleProcessingRequest`, with a
+   `readOptions` callback if the tool takes options;
 4. add a workspace component, map it in `components/tools/workspaces`, and flip
    the catalog status to `AVAILABLE`.
+
+Split PDF was built exactly this way, and multi-artifact delivery, ZIP bundling,
+page counting and range validation are now shared by whatever comes next.
 
 Validation, limits, error shaping, logging and response headers are shared, so
 no component, hook or page needs restructuring.
 
 ---
+
+### Memory and future scaling
+
+Processing is still entirely in memory, which is why the size, count and output
+limits exist — together they bound what one request can allocate. Buffers are
+released in a `finally` block after every job and after every inspection.
+
+This design has a ceiling: very large documents, or many concurrent jobs, will
+eventually need streaming to temporary storage and a worker/queue architecture
+so requests do not hold a whole document set in RAM. That is deliberately **not**
+built yet; the limits keep the current approach honest until it is needed.
 
 ## 7. Accessibility
 
@@ -349,6 +432,12 @@ Every uploaded file is treated as untrusted input:
   read, then the file count and per-file and cumulative sizes are enforced while
   parsing. All three limits are configurable.
 - **No public temporary files.** Nothing is written to disk or to `public/`.
+- **Output limits.** A job may not produce more than `PDFKIT_MAX_SPLIT_OUTPUTS`
+  documents, checked before generation so a long PDF cannot be used to force
+  large amounts of work.
+- **Safe file names.** Output names come from the sanitised source name, and ZIP
+  entry names are stripped of directories, traversal (`../`), drive letters and
+  control characters, then de-duplicated.
 - **Safe errors.** Clients receive a code and a short message; stack traces,
   library internals and causes never leave the server.
 - **Privacy-safe logging.** Counts, byte totals, durations and error codes only.
@@ -370,9 +459,12 @@ limiting, no authentication, no virus scanning and no per-IP quota yet.
 - **Components** are tested through the DOM with Testing Library, using roles
   and accessible names, covering navigation, theme switching, search, tool cards
   and every meaningful upload state.
-- **Server tests** run in the Node environment and exercise the real processor
-  with real PDFs built by pdf-lib, plus the route handler through its exported
-  `POST`/`GET` functions.
+- **Server tests** run in the Node environment and exercise the real processors
+  with real PDFs built by pdf-lib, plus the route handlers through their exported
+  `POST`/`GET` functions. Split PDF tests build documents whose page widths encode
+  the page number, so page identity and ordering can be asserted after copying.
+- **ZIP responses are opened in tests**, every PDF inside is parsed, and its page
+  count and page identity are checked — an HTTP 200 is never treated as proof.
 - **Honesty guard:** a test fails if a tool is marked available without a
   registered processor, or a processor exists without an available catalog entry
   — the rule is enforced, not just documented.

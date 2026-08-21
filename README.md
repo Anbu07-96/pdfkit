@@ -6,10 +6,13 @@ PDFKit is a fast, privacy-conscious web application for everyday PDF and
 document work — organising pages, converting formats, editing, securing, and
 later OCR and AI document intelligence.
 
-> ## Current status: Phase 2 — first working tool
+> ## Current status: Phase 3 — page-level processing
 >
-> **[Merge PDF](http://localhost:3000/tools/merge-pdf) genuinely works**: upload
-> two or more PDFs, arrange them, and the server returns a real merged document.
+> **Two tools genuinely work:**
+>
+> - **Merge PDF** — combine several PDFs in the order you choose.
+> - **Split PDF** — split every page into its own file, or split by page ranges;
+>   several outputs are delivered as a ZIP.
 >
 > **Every other tool is still unimplemented** and honestly marked
 > **Coming soon**, with its upload area disabled. There is no simulated
@@ -25,6 +28,8 @@ later OCR and AI document intelligence.
 - [Available scripts](#available-scripts)
 - [What is implemented today](#what-is-implemented-today)
 - [Merge PDF](#merge-pdf)
+- [Split PDF](#split-pdf)
+- [Page ranges](#page-ranges)
 - [Processing limits](#processing-limits)
 - [What is deliberately not implemented](#what-is-deliberately-not-implemented)
 - [Project structure](#project-structure)
@@ -46,7 +51,8 @@ A single web app for common document tasks, built around three product rules:
    desktop screens, keyboard-accessible throughout.
 
 The catalog describes **42 tools** in six categories — Organize, Convert, Edit,
-Security, OCR and AI — of which **1 (Merge PDF) is implemented** today.
+Security, OCR and AI — of which **2 (Merge PDF, Split PDF) are implemented**
+today.
 
 ---
 
@@ -62,7 +68,8 @@ Security, OCR and AI — of which **1 (Merge PDF) is implemented** today.
 | Icons              | **lucide-react**                              | Tree-shakeable SVG icon set; icons are decorative and always paired with text. |
 | Class utilities    | **clsx** + **tailwind-merge**                 | Tiny helpers for conditional and conflict-free class names. |
 | Fonts              | **geist** (self-hosted via `next/font/local`) | No requests to third-party font CDNs, which fits the privacy goal and avoids a render-blocking external dependency. |
-| PDF engine         | **pdf-lib**                                   | Pure TypeScript, no native binaries or system dependencies, runs in the Node runtime and handles document merging (`copyPages`) reliably. Nothing already in the project could parse or write PDFs. |
+| PDF engine         | **pdf-lib**                                   | Pure TypeScript, no native binaries or system dependencies, runs in the Node runtime and handles page copying (`copyPages`) reliably for both merging and splitting. |
+| ZIP bundling       | **fflate**                                    | ~8 kB, zero dependencies, synchronous API; needed to deliver the several PDFs a split produces as one download. |
 | Server guard       | **server-only**                               | Makes `next build` fail if a client component ever imports the processing layer. |
 | Tests              | **Vitest** + **Testing Library** + jsdom      | Fast, Vite-native, and tests behaviour through accessible roles rather than implementation details. |
 | Linting            | **ESLint** with `eslint-config-next`          | Catches React, hooks and Next.js issues, including accessibility rules. |
@@ -116,6 +123,20 @@ npm start
 ---
 
 ## What is implemented today
+
+**Split PDF (real, end to end)**
+
+- Server-authoritative page count shown after upload (never guessed in the browser)
+- Two modes: split every page, or split by page ranges (`1-3, 4-6, 7-10`)
+- Live range validation using the same module the server enforces
+- One PDF is downloaded directly; several arrive as a ZIP
+- Configurable output limit, checked before anything is generated
+
+**Page-level infrastructure** (`src/lib/processing/pages.ts`)
+
+- `PageRange`, `PageSelection`, `PageSelectionMode` — 1-based and inclusive
+- Parser, validator and the single 0-based conversion point for pdf-lib
+- Isomorphic, so Extract / Delete / Reorder Pages can reuse it unchanged
 
 **Merge PDF (real, end to end)**
 
@@ -221,6 +242,62 @@ Failures return JSON:
 the same request. Nothing is written to disk, nothing is stored, and only
 counts, byte totals and durations are logged — never file names or contents.
 
+## Split PDF
+
+**In the interface:** open `/tools/split-pdf`, upload a PDF (its real page count
+appears), pick a mode, and download the result.
+
+**Through the API:**
+
+```bash
+# Every page becomes its own PDF (returned as a ZIP)
+curl -X POST http://localhost:3000/api/tools/split-pdf \
+  -F "files=@document.pdf;type=application/pdf" \
+  -F "mode=every-page" \
+  -o document-split.zip
+
+# One PDF per range, in the order given
+curl -X POST http://localhost:3000/api/tools/split-pdf \
+  -F "files=@document.pdf;type=application/pdf" \
+  -F "mode=ranges" -F "ranges=1-3, 4-7, 8-10" \
+  -o document-split.zip
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `files` | yes | Exactly one PDF |
+| `mode` | yes | `every-page` or `ranges` |
+| `ranges` | for `ranges` mode | e.g. `1-3, 4-6, 7-10` |
+
+**Output naming:** `document-1.pdf`, `document-2.pdf`, … for every-page mode;
+`document-part-1.pdf`, … for ranges. A single output is returned as
+`application/pdf`; several are bundled into `document-split.zip`
+(`application/zip`). Responses carry `X-PDFKit-Artifacts` and `X-PDFKit-Pages`.
+
+**Page count:** `POST /api/documents/inspect` with one `files` entry returns
+`{ "fileName": "report.pdf", "size": 248113, "pageCount": 24 }`. The interface
+uses it so the page count always comes from the server.
+
+Additional error codes: `INVALID_SPLIT_CONFIGURATION` (400),
+`INVALID_PAGE_RANGE` (400), `PAGE_OUT_OF_RANGE` (400), `OVERLAPPING_RANGES`
+(400), `TOO_MANY_OUTPUTS` (413).
+
+## Page ranges
+
+Ranges are **1-based and inclusive**: `1-3` means pages 1, 2 and 3. Separate
+them with commas, semicolons or line breaks; a bare number is a single page.
+
+```text
+1            → page 1
+1-3          → pages 1, 2, 3
+1-3, 5, 7-9  → three separate outputs
+```
+
+Rejected (never silently corrected): `0`, `-1`, `3-1`, `1-`, `abc`, and any page
+beyond the end of the document. **Overlapping or duplicated ranges are rejected**
+— `1-5, 4-8` is far more likely to be a typo than a request to duplicate pages.
+The same module runs in the browser and on the server, so the messages match.
+
 ## Processing limits
 
 Configurable through the environment, with safe defaults:
@@ -230,6 +307,7 @@ Configurable through the environment, with safe defaults:
 | `PDFKIT_MAX_FILES_PER_JOB` | `20` | Files accepted in one request |
 | `PDFKIT_MAX_UPLOAD_SIZE` | `26214400` (25 MB) | Maximum size of one file |
 | `PDFKIT_MAX_TOTAL_UPLOAD_SIZE` | `104857600` (100 MB) | Maximum combined size |
+| `PDFKIT_MAX_SPLIT_OUTPUTS` | `50` | Documents one job may produce |
 
 Limits are enforced by the server on every request. The numbers shown in the
 interface come from the build-time configuration, so rebuild after changing
@@ -237,11 +315,11 @@ them if you want the hints to match exactly.
 
 ## What is deliberately not implemented
 
-Split, compress, rotate, delete/reorder/extract pages, JPG↔PDF, PDF↔Office,
-editing, security tools, OCR, AI, authentication, cloud storage, databases,
-payments, API keys, a public developer API, background workers and job queues
-are **not** implemented. There is no simulated processing anywhere: no fake
-progress bars, no fake results, no fake downloads. Only Merge PDF is real.
+Compress, rotate, delete/reorder/extract pages, JPG↔PDF, PDF↔Office, editing,
+security tools, OCR, AI, authentication, cloud storage, databases, payments, API
+keys, a public developer API, background workers and job queues are **not**
+implemented. There is no simulated processing anywhere: no fake progress bars,
+no fake results, no fake downloads. Only Merge PDF and Split PDF are real.
 
 ---
 
@@ -252,6 +330,8 @@ src/
 ├─ app/                      # Routes (App Router)
 │  ├─ page.tsx               # Homepage
 │  ├─ api/tools/merge-pdf/   # Merge PDF endpoint (thin route handler)
+│  ├─ api/tools/split-pdf/   # Split PDF endpoint (thin route handler)
+│  ├─ api/documents/inspect/ # Page count for page-level tools
 │  ├─ tools/                 # Catalog + dynamic tool pages
 │  ├─ categories/            # Category pages
 │  ├─ styleguide/            # Internal design-system reference
@@ -291,6 +371,7 @@ Copy `.env.example` to `.env.local`. Every value is optional in Phase 1.
 | `PDFKIT_MAX_FILES_PER_JOB`      | Files per processing request (default 20)  |
 | `PDFKIT_MAX_UPLOAD_SIZE`        | Bytes per file (default 25 MB)             |
 | `PDFKIT_MAX_TOTAL_UPLOAD_SIZE`  | Bytes per request (default 100 MB)         |
+| `PDFKIT_MAX_SPLIT_OUTPUTS`      | Documents one job may produce (default 50) |
 
 `.env` files are git-ignored (`.env.example` is the only tracked one). Secrets
 for future phases must be server-only — never prefixed with `NEXT_PUBLIC_`.
@@ -305,8 +386,15 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (15 files, 123 tests):
+Covered today (22 files, 219 tests):
 
+- **Page selection** — range parser, validation, overlap and boundary rules, and
+  the 1-based → 0-based conversion
+- **Split processor** — every-page and range modes against real PDFs, page
+  identity and order, output limits, malformed and encrypted documents
+- **ZIP bundling** — archive contents, path-traversal safety, name collisions
+- **Split API** — ZIPs are extracted and every PDF inside is parsed and checked
+- **Inspect API** — real page counts, invalid documents rejected
 - **Merge processor** — real PDFs built with pdf-lib are merged, page counts and
   order verified, malformed and password-protected documents rejected
 - **API route** — success response and headers, ordering, and every validation
@@ -331,10 +419,10 @@ Covered today (15 files, 123 tests):
 
 ## Future phases
 
-Phase 2 stops here on purpose. The planned order (see also `/roadmap`):
+Phase 3 stops here on purpose. The planned order (see also `/roadmap`):
 
-1. **Phase 3 — more organise tools:** split, extract, delete and reorder pages
-   on the same processing foundation, with page previews.
+1. **Phase 4 — remaining organise tools:** extract, delete and reorder pages on
+   the same page-selection foundation, with page thumbnails.
 2. Convert tools (images ↔ PDF, Office ↔ PDF).
 3. Editing and security tools.
 4. OCR.
