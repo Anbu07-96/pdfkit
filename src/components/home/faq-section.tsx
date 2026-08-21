@@ -8,7 +8,7 @@ export const HOME_FAQ: FaqItem[] = [
   {
     question: "What is PDFKit?",
     answer:
-      "PDFKit is a web app for everyday PDF and document tasks — organising pages, converting between formats, editing, securing and, later, OCR and AI document tools. It is in early development: Merge PDF and Split PDF work today, and the remaining tools in the catalog are being built one at a time.",
+      "PDFKit is a web app for everyday PDF and document tasks — organising pages, converting between formats, editing, securing and, later, OCR and AI document tools. It is in early development: merging, splitting, extracting and deleting PDF pages work today, and the remaining tools in the catalog are being built one at a time.",
   },
   {
     question: "Do I need to install anything?",
@@ -23,15 +23,16 @@ export const HOME_FAQ: FaqItem[] = [
   {
     question: "How are uploaded files handled?",
     answer:
-      "For a working tool such as Merge PDF or Split PDF, your files are sent to the PDFKit server over HTTPS, held in memory only while the operation runs, and discarded as soon as the result is returned. They are never written to disk, never stored and never logged — only counts and timings are recorded. Tools that are not implemented upload nothing at all.",
+      "For a working tool, your files are sent to the PDFKit server over HTTPS, held in memory only while the operation runs, and discarded as soon as the result is returned. They are never written to disk, never stored and never logged — only counts and timings are recorded. Tools that are not implemented upload nothing at all.",
   },
   {
     question: "What tools does PDFKit support?",
     answer: (
       <>
-        The catalog lists {TOOLS.length} tools across six categories. Merge PDF and
-        Split PDF are implemented and free to use; every other tool page states its
-        availability clearly instead of pretending to work. You can{" "}
+        The catalog lists {TOOLS.length} tools across six categories. Merge PDF, Split
+        PDF, Extract PDF Pages and Delete PDF Pages are implemented and free to use;
+        every other tool page states its availability clearly instead of pretending to
+        work. You can{" "}
         <Link href="/tools" className="text-primary underline underline-offset-4">
           browse the full catalog
         </Link>{" "}

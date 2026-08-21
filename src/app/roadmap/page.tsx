@@ -48,11 +48,22 @@ const PHASES = [
     ],
   },
   {
-    title: "Phase 4 — Remaining organise tools",
+    title: "Phase 4 — Extract and Delete PDF pages",
+    status: "Completed" as const,
+    items: [
+      "Reusable page complement helper (pages kept when pages are removed)",
+      "Extract PDF Pages: keep the selected pages, in the selected order",
+      "Delete PDF Pages: remove the selected pages, keeping document order",
+      "Zero-page output blocked in the browser and rejected by the server",
+      "Both tools reuse the Phase 3 page selection, validation and inspection",
+    ],
+  },
+  {
+    title: "Phase 5 — Reorder pages and page previews",
     status: "Planned" as const,
     items: [
-      "Extract, delete and reorder pages on the same page-selection foundation",
-      "Page thumbnails and visual page pickers",
+      "Reorder Pages using the same page-selection foundation",
+      "Page thumbnails and a visual page picker shared by the page tools",
     ],
   },
   {

@@ -27,6 +27,14 @@ export default function HelpPage() {
             split every page into its own file or enter page ranges such as{" "}
             <code>1-3, 4-6</code>. Several outputs arrive as a ZIP.
           </li>
+          <li>
+            <strong>Extract PDF Pages</strong> — keep only the pages you list, in the
+            order you list them, as one new PDF.
+          </li>
+          <li>
+            <strong>Delete PDF Pages</strong> — remove the pages you list and keep
+            everything else in its original order. You must keep at least one page.
+          </li>
           <li>Browsing the tool catalog by category.</li>
           <li>Searching tools by name, description or category.</li>
           <li>Opening any tool page to see what the tool will do and what it accepts.</li>
@@ -36,8 +44,9 @@ export default function HelpPage() {
         <h2>What does not work yet</h2>
         <ul>
           <li>
-            Every tool other than Merge PDF and Split PDF. Their upload areas are
-            intentionally disabled and labelled <strong>Coming soon</strong>.
+            Every tool other than Merge PDF, Split PDF, Extract PDF Pages and Delete PDF
+            Pages. Their upload areas are intentionally disabled and labelled{" "}
+            <strong>Coming soon</strong>.
           </li>
           <li>There are no accounts, no cloud storage, no API keys and no billing.</li>
         </ul>

@@ -11,7 +11,8 @@ import type { Tool } from "./types";
  * implemented. A tool is only `AVAILABLE` when it has a registered processor in
  * `src/lib/processing/registry.ts`; a test enforces that both sides agree.
  *
- * Implemented today: Merge PDF, Split PDF. Everything else is `COMING_SOON`.
+ * Implemented today: Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages.
+ * Everything else is `COMING_SOON`.
  */
 
 const PDF_EXT = [".pdf"];
@@ -95,16 +96,18 @@ export const TOOLS: readonly Tool[] = [
     ],
   }),
   pdfTool({
-    id: "delete-pages",
-    name: "Delete Pages",
+    id: "delete-pdf-pages",
+    name: "Delete PDF Pages",
     description: "Remove pages you do not need from a PDF document.",
     category: "organize",
     icon: "trash",
+    // Implemented in Phase 4: server-side page removal with pdf-lib.
+    status: "AVAILABLE",
     plannedTier: "free",
-    keywords: ["remove pages", "erase", "drop pages"],
+    keywords: ["remove pages", "erase", "drop pages", "delete"],
     howItWorks: [
       "Upload your PDF.",
-      "Select the pages that should be removed.",
+      "Enter the pages to remove, such as 2, 4, 7-9.",
       "Download the PDF without those pages.",
     ],
   }),
@@ -123,17 +126,19 @@ export const TOOLS: readonly Tool[] = [
     ],
   }),
   pdfTool({
-    id: "extract-pages",
-    name: "Extract Pages",
+    id: "extract-pdf-pages",
+    name: "Extract PDF Pages",
     description: "Pull selected pages out of a PDF into a new file.",
     category: "organize",
     icon: "extract",
+    // Implemented in Phase 4: server-side page extraction with pdf-lib.
+    status: "AVAILABLE",
     plannedTier: "free",
-    keywords: ["pick pages", "copy pages", "subset"],
+    keywords: ["pick pages", "copy pages", "subset", "keep pages"],
     howItWorks: [
       "Upload the source PDF.",
-      "Select the pages you want to keep.",
-      "Download them as a new PDF.",
+      "Enter the pages to keep, such as 1-3, 5, 8-10.",
+      "Download them as one new PDF.",
     ],
   }),
 
@@ -677,8 +682,8 @@ export const POPULAR_TOOL_IDS = [
   "split-pdf",
   "compress-pdf",
   "rotate-pdf",
-  "delete-pages",
-  "reorder-pages",
+  "delete-pdf-pages",
+  "extract-pdf-pages",
   "jpg-to-pdf",
   "pdf-to-jpg",
 ] as const;

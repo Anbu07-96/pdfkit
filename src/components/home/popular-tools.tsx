@@ -13,7 +13,7 @@ export function PopularTools() {
         <SectionHeader
           id="popular-tools-title"
           title="Popular tools"
-          description="The document tasks people reach for most often. Merge PDF and Split PDF are ready to use; the others show their real availability and are still being built."
+          description="The document tasks people reach for most often. Four are ready to use today; the others show their real availability and are still being built."
           action={
             <ButtonLink href="/tools" variant="secondary">
               Browse all tools

@@ -45,9 +45,15 @@ describe("tool catalog", () => {
   });
 
   it("only marks genuinely implemented tools as usable", () => {
-    // Merge PDF (Phase 2) and Split PDF (Phase 3) are implemented; everything
-    // else must still say so. `registry.test.ts` asserts catalog/registry parity.
-    const implemented = ["merge-pdf", "split-pdf"];
+    // Merge (Phase 2), Split (Phase 3), Extract and Delete pages (Phase 4) are
+    // implemented; everything else must still say so. `registry.test.ts`
+    // asserts catalog/registry parity in both directions.
+    const implemented = [
+      "merge-pdf",
+      "split-pdf",
+      "extract-pdf-pages",
+      "delete-pdf-pages",
+    ];
 
     for (const tool of TOOLS) {
       if (implemented.includes(tool.id)) {
