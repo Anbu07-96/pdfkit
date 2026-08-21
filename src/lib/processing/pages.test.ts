@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   complementPageRanges,
+  formatPageOrder,
+  identityPageOrder,
+  isIdentityPageOrder,
+  movePageInOrder,
+  parseAndValidatePageOrder,
+  parsePageOrder,
+  validatePageOrder,
   complementPages,
   countPagesInRanges,
   everyPageRanges,
@@ -311,5 +318,173 @@ describe("complementPageRanges", () => {
     expect(toZeroBasedIndices(complementPageRanges(parsed("2"), 5))).toEqual([
       0, 2, 3, 4,
     ]);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Page order (Phase 5)                                                       */
+/* -------------------------------------------------------------------------- */
+
+function order(input: string) {
+  const result = parsePageOrder(input);
+  if (!result.ok) throw new Error(`expected "${input}" to parse: ${result.issue.message}`);
+  return result.order;
+}
+
+describe("identityPageOrder", () => {
+  it("lists the document's own order", () => {
+    expect(identityPageOrder(3)).toEqual([1, 2, 3]);
+    expect(identityPageOrder(1)).toEqual([1]);
+  });
+
+  it("returns nothing for a nonsensical page count", () => {
+    expect(identityPageOrder(0)).toEqual([]);
+    expect(identityPageOrder(-2)).toEqual([]);
+  });
+
+  it("recognises an unchanged order", () => {
+    expect(isIdentityPageOrder([1, 2, 3])).toBe(true);
+    expect(isIdentityPageOrder([1, 3, 2])).toBe(false);
+    expect(isIdentityPageOrder([])).toBe(true);
+  });
+});
+
+describe("parsePageOrder", () => {
+  it("parses a comma-separated order", () => {
+    expect(order("5,3,1,2,4")).toEqual([5, 3, 1, 2, 4]);
+    expect(order(" 2 , 1 ")).toEqual([2, 1]);
+    expect(order("3 1 2")).toEqual([3, 1, 2]);
+  });
+
+  it("rejects empty and whitespace-only input", () => {
+    expect(parsePageOrder("")).toMatchObject({ ok: false, issue: { code: "EMPTY" } });
+    expect(parsePageOrder("   ")).toMatchObject({ ok: false, issue: { code: "EMPTY" } });
+  });
+
+  it("rejects non-numeric, decimal and negative values", () => {
+    expect(parsePageOrder("abc")).toMatchObject({ ok: false, issue: { code: "SYNTAX" } });
+    expect(parsePageOrder("1,2,x")).toMatchObject({ ok: false, issue: { code: "SYNTAX" } });
+    expect(parsePageOrder("1.5,2")).toMatchObject({ ok: false, issue: { code: "SYNTAX" } });
+    expect(parsePageOrder("-1,2")).toMatchObject({ ok: false, issue: { code: "SYNTAX" } });
+    expect(parsePageOrder("1-3")).toMatchObject({ ok: false, issue: { code: "SYNTAX" } });
+  });
+
+  it("rejects zero", () => {
+    expect(parsePageOrder("0,1")).toMatchObject({
+      ok: false,
+      issue: { code: "OUT_OF_RANGE" },
+    });
+  });
+});
+
+describe("validatePageOrder", () => {
+  it("accepts complete permutations", () => {
+    expect(validatePageOrder([1, 2, 3, 4, 5], 5)).toBeNull();
+    expect(validatePageOrder([5, 4, 3, 2, 1], 5)).toBeNull();
+    expect(validatePageOrder([3, 1, 5, 2, 4], 5)).toBeNull();
+    expect(validatePageOrder([1], 1)).toBeNull();
+    expect(validatePageOrder([2, 1], 2)).toBeNull();
+  });
+
+  it("rejects a missing page", () => {
+    const issue = validatePageOrder([1, 2, 3, 4], 5);
+    expect(issue?.code).toBe("MISSING");
+    expect(issue?.message).toContain("5");
+  });
+
+  it("lists several missing pages", () => {
+    expect(validatePageOrder([1, 2], 5)?.message).toMatch(/Pages 3, 4, 5 are missing/);
+  });
+
+  it("rejects duplicates", () => {
+    expect(validatePageOrder([1, 2, 3, 4, 4], 5)?.code).toBe("DUPLICATE");
+    expect(validatePageOrder([1, 2, 2, 3, 5], 5)?.code).toBe("DUPLICATE");
+  });
+
+  it("rejects out-of-range pages", () => {
+    expect(validatePageOrder([1, 2, 3, 5, 6], 5)?.code).toBe("OUT_OF_RANGE");
+    expect(validatePageOrder([0, 1, 2, 3, 4], 5)?.code).toBe("OUT_OF_RANGE");
+    expect(validatePageOrder([1, 2, 3, 4, 999999], 5)?.code).toBe("OUT_OF_RANGE");
+  });
+
+  it("rejects an order that is too short or too long", () => {
+    expect(validatePageOrder([1, 2, 3], 5)?.code).toBe("MISSING");
+    expect(validatePageOrder([1, 2, 3, 4, 5, 5], 5)?.code).toBe("DUPLICATE");
+  });
+
+  it("rejects a duplicate combined with a missing page", () => {
+    const issue = validatePageOrder([1, 1, 3, 4, 5], 5);
+    expect(issue?.code).toBe("DUPLICATE");
+  });
+
+  it("rejects an empty order", () => {
+    expect(validatePageOrder([], 5)?.code).toBe("EMPTY");
+  });
+
+  it("rejects non-integers", () => {
+    expect(validatePageOrder([1.5, 2], 2)?.code).toBe("SYNTAX");
+  });
+
+  it("rejects a document with no pages", () => {
+    expect(validatePageOrder([1], 0)?.code).toBe("WRONG_LENGTH");
+  });
+
+  it("never repairs invalid input", () => {
+    const input = [1, 2, 3, 4];
+    validatePageOrder(input, 5);
+    // The validator must not append the missing page or mutate the caller's array.
+    expect(input).toEqual([1, 2, 3, 4]);
+  });
+});
+
+describe("parseAndValidatePageOrder", () => {
+  it("accepts a full permutation", () => {
+    const result = parseAndValidatePageOrder("3,1,2", 3);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.order).toEqual([3, 1, 2]);
+  });
+
+  it("reports the validation problem", () => {
+    expect(parseAndValidatePageOrder("1,2", 3)).toMatchObject({
+      ok: false,
+      issue: { code: "MISSING" },
+    });
+  });
+});
+
+describe("movePageInOrder", () => {
+  it("moves an entry earlier and later", () => {
+    expect(movePageInOrder([1, 2, 3, 4, 5], 4, 0)).toEqual([5, 1, 2, 3, 4]);
+    expect(movePageInOrder([5, 1, 2, 3, 4], 1, 4)).toEqual([5, 2, 3, 4, 1]);
+    expect(movePageInOrder([1, 2, 3], 0, 1)).toEqual([2, 1, 3]);
+  });
+
+  it("keeps every page exactly once, whatever the move", () => {
+    const start = [1, 2, 3, 4, 5];
+    for (let from = 0; from < 5; from += 1) {
+      for (let to = 0; to < 5; to += 1) {
+        const moved = movePageInOrder(start, from, to);
+        expect([...moved].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
+      }
+    }
+  });
+
+  it("does not mutate the input", () => {
+    const start = [1, 2, 3];
+    movePageInOrder(start, 0, 2);
+    expect(start).toEqual([1, 2, 3]);
+  });
+
+  it("clamps or ignores out-of-bounds moves", () => {
+    expect(movePageInOrder([1, 2, 3], 0, -5)).toEqual([1, 2, 3]);
+    expect(movePageInOrder([1, 2, 3], 0, 99)).toEqual([2, 3, 1]);
+    expect(movePageInOrder([1, 2, 3], 9, 0)).toEqual([1, 2, 3]);
+    expect(movePageInOrder([1, 2, 3], 1, 1)).toEqual([1, 2, 3]);
+  });
+});
+
+describe("formatPageOrder", () => {
+  it("serialises for the API", () => {
+    expect(formatPageOrder([5, 3, 1])).toBe("5,3,1");
   });
 });

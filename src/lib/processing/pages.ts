@@ -329,6 +329,188 @@ export function complementPageRanges(
   return pagesToRanges(complementPages(ranges, pageCount));
 }
 
+/* -------------------------------------------------------------------------- */
+/* Page order (permutations)                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A complete ordering of a document's pages: every page from 1..pageCount,
+ * exactly once, in the order the result should have.
+ *
+ * This is a different question from a page *selection*. Extract and Delete ask
+ * "which pages?"; Reorder asks "in what order?" and therefore requires a full
+ * permutation — no missing pages, no duplicates, no extras.
+ */
+export type PageOrder = number[];
+
+export type PageOrderIssueCode =
+  | "EMPTY"
+  | "SYNTAX"
+  | "OUT_OF_RANGE"
+  | "DUPLICATE"
+  | "MISSING"
+  | "WRONG_LENGTH";
+
+export interface PageOrderIssue {
+  code: PageOrderIssueCode;
+  /** Short, user-facing explanation. Safe to render directly. */
+  message: string;
+}
+
+export type PageOrderParseResult =
+  | { ok: true; order: PageOrder }
+  | { ok: false; issue: PageOrderIssue };
+
+/** `[1, 2, 3]` for a 3-page document: the document's existing order. */
+export function identityPageOrder(pageCount: number): PageOrder {
+  if (!Number.isInteger(pageCount) || pageCount < 1) return [];
+  return Array.from({ length: pageCount }, (_, index) => index + 1);
+}
+
+export function isIdentityPageOrder(order: readonly number[]): boolean {
+  return order.every((page, index) => page === index + 1);
+}
+
+/**
+ * Parse a comma-separated order such as `"5,3,1,2,4"`.
+ *
+ * Only plain page numbers are accepted — ranges would be ambiguous here, since
+ * the whole point is an explicit position-by-position ordering.
+ */
+export function parsePageOrder(input: string): PageOrderParseResult {
+  const trimmed = (input ?? "").trim();
+  if (trimmed.length === 0) {
+    return { ok: false, issue: { code: "EMPTY", message: "Enter a page order." } };
+  }
+
+  const order: number[] = [];
+  for (const token of trimmed.split(/[\s,;]+/).filter(Boolean)) {
+    if (!/^\d+$/.test(token)) {
+      return {
+        ok: false,
+        issue: {
+          code: "SYNTAX",
+          message: `“${token}” is not a page number. List every page once, for example 3,1,2.`,
+        },
+      };
+    }
+    const page = Number.parseInt(token, 10);
+    if (page < 1) {
+      return {
+        ok: false,
+        issue: {
+          code: "OUT_OF_RANGE",
+          message: "Page numbers start at 1.",
+        },
+      };
+    }
+    order.push(page);
+  }
+
+  return { ok: true, order };
+}
+
+/**
+ * Check that an order is a complete permutation of `1..pageCount`.
+ * Returns `null` when valid. Invalid input is never repaired: missing pages are
+ * not appended and duplicates are not dropped.
+ */
+export function validatePageOrder(
+  order: readonly number[],
+  pageCount: number,
+): PageOrderIssue | null {
+  if (!Number.isInteger(pageCount) || pageCount < 1) {
+    return { code: "WRONG_LENGTH", message: "This PDF has no pages to reorder." };
+  }
+
+  if (order.length === 0) {
+    return { code: "EMPTY", message: "Enter a page order." };
+  }
+
+  const seen = new Set<number>();
+  for (const page of order) {
+    if (!Number.isInteger(page)) {
+      return {
+        code: "SYNTAX",
+        message: `“${page}” is not a whole page number.`,
+      };
+    }
+    if (page < 1 || page > pageCount) {
+      return {
+        code: "OUT_OF_RANGE",
+        message: `Page ${page} does not exist. This PDF has ${pageCount} ${
+          pageCount === 1 ? "page" : "pages"
+        }.`,
+      };
+    }
+    if (seen.has(page)) {
+      return {
+        code: "DUPLICATE",
+        message: `Page ${page} appears more than once. Each page must appear exactly once.`,
+      };
+    }
+    seen.add(page);
+  }
+
+  if (order.length !== pageCount) {
+    const missing = identityPageOrder(pageCount).filter((page) => !seen.has(page));
+    if (missing.length > 0) {
+      return {
+        code: "MISSING",
+        message:
+          missing.length === 1
+            ? `Page ${missing[0]} is missing. Every page must appear exactly once.`
+            : `Pages ${missing.join(", ")} are missing. Every page must appear exactly once.`,
+      };
+    }
+    return {
+      code: "WRONG_LENGTH",
+      message: `The order must list all ${pageCount} pages. You listed ${order.length}.`,
+    };
+  }
+
+  return null;
+}
+
+/** Parse and validate in one step, against a known page count. */
+export function parseAndValidatePageOrder(
+  input: string,
+  pageCount: number,
+): PageOrderParseResult {
+  const parsed = parsePageOrder(input);
+  if (!parsed.ok) return parsed;
+
+  const problem = validatePageOrder(parsed.order, pageCount);
+  return problem ? { ok: false, issue: problem } : parsed;
+}
+
+/**
+ * Move the entry at `from` to index `to`, returning a new order.
+ *
+ * Used by the reorder interface for move controls and drag and drop, so the
+ * same tested function backs every gesture. Out-of-bounds moves return the
+ * order unchanged rather than throwing.
+ */
+export function movePageInOrder(
+  order: readonly number[],
+  from: number,
+  to: number,
+): PageOrder {
+  if (from === to) return [...order];
+  if (from < 0 || from >= order.length) return [...order];
+
+  const target = Math.max(0, Math.min(order.length - 1, to));
+  const next = [...order];
+  const [moved] = next.splice(from, 1);
+  next.splice(target, 0, moved);
+  return next;
+}
+
+/** Serialise an order for the API: `[5, 3, 1]` → `"5,3,1"`. */
+export function formatPageOrder(order: readonly number[]): string {
+  return order.join(",");
+}
+
 /** `{ start: 5, end: 5 }` → `"5"`, `{ start: 1, end: 3 }` → `"1-3"`. */
 export function formatPageRange(range: PageRange): string {
   return range.start === range.end ? `${range.start}` : `${range.start}-${range.end}`;
