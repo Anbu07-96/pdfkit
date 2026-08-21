@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  CheckCircle2,
-  Download,
-  FileText,
-  Loader2,
-  Scissors,
-} from "lucide-react";
+import { CheckCircle2, Download, FileText, Loader2 } from "lucide-react";
 import * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,23 +11,52 @@ import { UploadZone, type SelectedFile } from "@/components/upload/upload-zone";
 import {
   inspectPdfFile,
   ProcessingRequestError,
-  runSplitPdf,
   type ProcessedDocument,
 } from "@/lib/processing/client";
 import {
-  PAGE_RANGE_SYNTAX_HINT,
   parseAndValidatePageRanges,
-  type PageSelectionMode,
+  type PageRange,
 } from "@/lib/processing/pages";
 import { formatBytes } from "@/lib/utils/format";
-import { cn } from "@/lib/utils/cn";
 
-export interface SplitPdfWorkspaceProps {
-  /** Server-configured limits, passed down so the UI matches the API exactly. */
-  limits: {
-    maxFileSize: number;
-    maxOutputs: number;
+/**
+ * Shared workspace for the single-PDF, page-selection tools.
+ *
+ * Extract PDF Pages and Delete PDF Pages differ only in wording, in one extra
+ * validation rule and in what they ask the server to do, so the upload →
+ * inspect → validate → process → download flow lives here once. Both keep their
+ * own thin component, and neither knows anything about pdf-lib.
+ */
+export interface PageSelectionWorkspaceProps {
+  /** Server-configured limits, so the UI matches the API. */
+  limits: { maxFileSize: number };
+  labels: {
+    /** Accessible label for the range field, e.g. "Pages to extract". */
+    rangeLabel: string;
+    rangePlaceholder: string;
+    /** Helper text; the real page count is appended automatically. */
+    rangeHelp: string;
+    /** Primary button, e.g. "Extract Pages". */
+    action: string;
+    /** Shown while the request is running, e.g. "Extracting pages…". */
+    processing: string;
+    /** Reset button, e.g. "Extract another PDF". */
+    reset: string;
+    /** Toast + heading, e.g. "Successfully extracted 6 pages." */
+    success: (outputPages: number) => string;
+    /** Optional extra line under the success heading. */
+    successDetail?: (outputPages: number, pageCount: number) => React.ReactNode;
   };
+  /** Extra rule beyond syntax/bounds/overlap, e.g. "keep at least one page". */
+  extraValidation?: (ranges: PageRange[], pageCount: number) => string | null;
+  /** Live summary of a valid selection. */
+  summary: (ranges: PageRange[], pageCount: number) => React.ReactNode;
+  /** Performs the request. Provided by the tool's own workspace. */
+  run: (options: {
+    file: File;
+    ranges: string;
+    signal: AbortSignal;
+  }) => Promise<ProcessedDocument>;
 }
 
 type Status = "idle" | "reading" | "ready" | "processing" | "success" | "error";
@@ -43,30 +66,15 @@ interface FailureState {
   details?: string[];
 }
 
-const MODES: { id: PageSelectionMode; title: string; description: string }[] = [
-  {
-    id: "every-page",
-    title: "Split every page",
-    description: "Each page becomes its own PDF.",
-  },
-  {
-    id: "ranges",
-    title: "Split by page ranges",
-    description: "Each range you enter becomes a separate PDF.",
-  },
-];
-
-/**
- * Split PDF workspace.
- *
- * Owns interaction state only. The page count comes from the server (never
- * guessed in the browser), range validation reuses the very same module the
- * processor uses, and the split itself happens server-side.
- */
-export function SplitPdfWorkspace({ limits }: SplitPdfWorkspaceProps) {
+export function PageSelectionWorkspace({
+  limits,
+  labels,
+  extraValidation,
+  summary,
+  run,
+}: PageSelectionWorkspaceProps) {
   const [files, setFiles] = React.useState<SelectedFile[]>([]);
   const [pageCount, setPageCount] = React.useState<number | null>(null);
-  const [mode, setMode] = React.useState<PageSelectionMode>("every-page");
   const [ranges, setRanges] = React.useState("");
   const [status, setStatus] = React.useState<Status>("idle");
   const [result, setResult] = React.useState<ProcessedDocument | null>(null);
@@ -119,33 +127,25 @@ export function SplitPdfWorkspace({ limits }: SplitPdfWorkspaceProps) {
     }
   }
 
-  const rangeCheck = React.useMemo(() => {
-    if (mode !== "ranges" || pageCount === null || ranges.trim() === "") return null;
-    return parseAndValidatePageRanges(ranges, pageCount);
-  }, [mode, ranges, pageCount]);
+  const selection = React.useMemo(() => {
+    if (pageCount === null || ranges.trim() === "") return null;
 
-  const rangeError = rangeCheck && !rangeCheck.ok ? rangeCheck.issue.message : undefined;
-  const plannedOutputs =
-    pageCount === null
-      ? 0
-      : mode === "every-page"
-        ? pageCount
-        : rangeCheck?.ok
-          ? rangeCheck.ranges.length
-          : 0;
-  const overOutputLimit = plannedOutputs > limits.maxOutputs;
+    const parsed = parseAndValidatePageRanges(ranges, pageCount);
+    if (!parsed.ok) return { ok: false as const, message: parsed.issue.message };
 
+    const extra = extraValidation?.(parsed.ranges, pageCount);
+    if (extra) return { ok: false as const, message: extra };
+
+    return { ok: true as const, ranges: parsed.ranges };
+  }, [ranges, pageCount, extraValidation]);
+
+  const selectionError = selection && !selection.ok ? selection.message : undefined;
   const busy = status === "processing";
-  const canSplit =
-    Boolean(file) &&
-    pageCount !== null &&
-    !busy &&
-    status !== "reading" &&
-    !overOutputLimit &&
-    (mode === "every-page" || Boolean(rangeCheck?.ok));
+  const canRun =
+    Boolean(file) && pageCount !== null && !busy && Boolean(selection?.ok);
 
-  async function handleSplit() {
-    if (!canSplit || !file) return;
+  async function handleRun() {
+    if (!canRun || !file) return;
 
     setResult(null);
     setFailure(null);
@@ -155,27 +155,24 @@ export function SplitPdfWorkspace({ limits }: SplitPdfWorkspaceProps) {
     abortRef.current = controller;
 
     try {
-      const document = await runSplitPdf({
+      const document = await run({
         file: file.file,
-        mode,
-        ranges: mode === "ranges" ? ranges : undefined,
+        ranges,
         signal: controller.signal,
       });
       setResult(document);
       setStatus("success");
       showToast({
         tone: "success",
-        title: "Split complete",
-        description: `${document.artifacts} ${
-          document.artifacts === 1 ? "PDF is" : "PDFs are"
-        } ready to download.`,
+        title: labels.success(document.outputPages ?? 0),
+        description: `${document.fileName} is ready to download.`,
       });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         setStatus("ready");
         return;
       }
-      setFailure(toFailure(error, "This PDF could not be split."));
+      setFailure(toFailure(error, "This PDF could not be processed."));
       setStatus("error");
     } finally {
       abortRef.current = null;
@@ -210,7 +207,7 @@ export function SplitPdfWorkspace({ limits }: SplitPdfWorkspaceProps) {
       {file ? (
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
           <FileText aria-hidden="true" className="size-4" />
-          <span className="font-medium text-foreground">{file.name}</span>
+          <span className="font-medium break-all text-foreground">{file.name}</span>
           <span>· {formatBytes(file.size)}</span>
           <span>·</span>
           {status === "reading" ? (
@@ -229,89 +226,31 @@ export function SplitPdfWorkspace({ limits }: SplitPdfWorkspaceProps) {
       ) : null}
 
       {file && pageCount !== null ? (
-        <fieldset className="flex flex-col gap-3">
-          <legend className="mb-1 text-sm font-medium text-foreground">
-            How should this PDF be split?
-          </legend>
-
-          {MODES.map((option) => {
-            const selected = mode === option.id;
-            return (
-              <label
-                key={option.id}
-                className={cn(
-                  "flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors",
-                  "focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ring",
-                  selected
-                    ? "border-primary bg-primary-soft/40"
-                    : "border-border bg-surface hover:border-border-strong",
-                  busy && "pointer-events-none opacity-60",
-                )}
-              >
-                <input
-                  type="radio"
-                  name="split-mode"
-                  value={option.id}
-                  checked={selected}
-                  disabled={busy}
-                  onChange={() => setMode(option.id)}
-                  className="mt-1 size-4 accent-[var(--color-primary)] focus:outline-none"
-                />
-                <span>
-                  <span className="block text-sm font-medium text-foreground">
-                    {option.title}
-                  </span>
-                  <span className="block text-sm text-muted">{option.description}</span>
-                  {option.id === "every-page" && selected ? (
-                    <span className="mt-2 block text-sm text-muted">
-                      This {pageCount}-page PDF will produce{" "}
-                      <strong className="font-medium text-foreground">
-                        {pageCount} {pageCount === 1 ? "PDF" : "PDFs"}
-                      </strong>
-                      . Maximum {limits.maxOutputs} output files.
-                    </span>
-                  ) : null}
-                </span>
-              </label>
-            );
-          })}
-
-          {mode === "ranges" ? (
-            <div className="ps-1">
-              <Input
-                label="Page ranges"
-                placeholder="1-3, 4-6, 7-10"
-                value={ranges}
-                disabled={busy}
-                onChange={(event) => setRanges(event.target.value)}
-                hint={`${PAGE_RANGE_SYNTAX_HINT} Each range becomes a separate PDF. This PDF has ${pageCount} ${
-                  pageCount === 1 ? "page" : "pages"
-                }.`}
-                error={rangeError}
-                inputMode="numeric"
-                autoComplete="off"
-              />
-              {rangeCheck?.ok ? (
-                <p className="mt-2 text-sm text-muted">
-                  {rangeCheck.ranges.length}{" "}
-                  {rangeCheck.ranges.length === 1 ? "PDF" : "PDFs"} will be created.
-                </p>
-              ) : null}
+        <div>
+          <Input
+            label={labels.rangeLabel}
+            placeholder={labels.rangePlaceholder}
+            value={ranges}
+            disabled={busy}
+            onChange={(event) => setRanges(event.target.value)}
+            hint={`${labels.rangeHelp} This PDF has ${pageCount} ${
+              pageCount === 1 ? "page" : "pages"
+            }.`}
+            error={selectionError}
+            inputMode="numeric"
+            autoComplete="off"
+          />
+          {selection?.ok ? (
+            <div className="mt-2 text-sm text-muted">
+              {summary(selection.ranges, pageCount)}
             </div>
           ) : null}
-
-          {overOutputLimit ? (
-            <ErrorState
-              title="Too many output files"
-              description={`This would create ${plannedOutputs} PDFs, above the limit of ${limits.maxOutputs}. Use page ranges, or a shorter document.`}
-            />
-          ) : null}
-        </fieldset>
+        </div>
       ) : null}
 
       {status === "error" && failure ? (
         <ErrorState
-          title="Split failed"
+          title="Something went wrong"
           description={
             <>
               <span>{failure.message}</span>
@@ -328,13 +267,9 @@ export function SplitPdfWorkspace({ limits }: SplitPdfWorkspaceProps) {
       ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button size="lg" onClick={handleSplit} disabled={!canSplit}>
-          {busy ? (
-            <Loader2 aria-hidden="true" className="size-4 animate-spin" />
-          ) : (
-            <Scissors aria-hidden="true" className="size-4" />
-          )}
-          {busy ? "Splitting…" : "Split PDF"}
+        <Button size="lg" onClick={handleRun} disabled={!canRun}>
+          {busy ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : null}
+          {busy ? labels.processing : labels.action}
         </Button>
 
         {busy ? (
@@ -362,13 +297,11 @@ export function SplitPdfWorkspace({ limits }: SplitPdfWorkspaceProps) {
         {status === "reading"
           ? "Reading the PDF to count its pages."
           : status === "processing"
-            ? "Splitting your PDF. This may take a moment."
+            ? `${labels.processing} This may take a moment.`
             : status === "success" && result
-              ? `Split complete. ${result.artifacts} ${
-                  result.artifacts === 1 ? "PDF" : "PDFs"
-                } ready to download.`
+              ? labels.success(result.outputPages ?? 0)
               : status === "error" && failure
-                ? `Split failed. ${failure.message}`
+                ? failure.message
                 : status === "ready" && pageCount !== null
                   ? `PDF loaded with ${pageCount} pages.`
                   : ""}
@@ -376,12 +309,15 @@ export function SplitPdfWorkspace({ limits }: SplitPdfWorkspaceProps) {
 
       {busy ? (
         <div className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4">
-          <Loader2 aria-hidden="true" className="size-5 shrink-0 animate-spin text-primary" />
+          <Loader2
+            aria-hidden="true"
+            className="size-5 shrink-0 animate-spin text-primary"
+          />
           <div>
-            <p className="text-sm font-medium text-foreground">Splitting your PDF…</p>
+            <p className="text-sm font-medium text-foreground">{labels.processing}</p>
             <p className="text-sm text-muted">
-              Your file is processed on the server and discarded as soon as the results
-              are returned.
+              Your file is processed on the server and discarded as soon as the result
+              is returned.
             </p>
           </div>
         </div>
@@ -390,17 +326,25 @@ export function SplitPdfWorkspace({ limits }: SplitPdfWorkspaceProps) {
       {status === "success" && result ? (
         <div className="rounded-xl border border-success/40 bg-success-soft/50 p-5">
           <div className="flex items-start gap-3">
-            <CheckCircle2 aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-success" />
+            <CheckCircle2
+              aria-hidden="true"
+              className="mt-0.5 size-5 shrink-0 text-success"
+            />
             <div className="min-w-0 flex-1">
               <h3 className="text-base font-semibold text-foreground">
-                Successfully created {result.artifacts}{" "}
-                {result.artifacts === 1 ? "PDF" : "PDFs"}
+                {labels.success(result.outputPages ?? 0)}
               </h3>
+              {labels.successDetail && pageCount !== null ? (
+                <p className="mt-1 text-sm text-muted">
+                  {labels.successDetail(result.outputPages ?? 0, pageCount)}
+                </p>
+              ) : null}
               <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
                 <FileText aria-hidden="true" className="size-4" />
-                <span className="font-medium text-foreground">{result.fileName}</span>
+                <span className="font-medium break-all text-foreground">
+                  {result.fileName}
+                </span>
                 <span>· {formatBytes(result.size)}</span>
-                {result.isArchive ? <span>· ZIP archive</span> : null}
               </p>
 
               <div className="mt-4 flex flex-wrap gap-3">
@@ -410,10 +354,10 @@ export function SplitPdfWorkspace({ limits }: SplitPdfWorkspaceProps) {
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-xs transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-10"
                 >
                   <Download aria-hidden="true" className="size-4" />
-                  {result.isArchive ? "Download all (ZIP)" : "Download PDF"}
+                  Download PDF
                 </a>
                 <Button variant="secondary" onClick={handleStartOver}>
-                  Split another PDF
+                  {labels.reset}
                 </Button>
               </div>
 
