@@ -2,6 +2,7 @@
 
 import { CheckCircle2, Download, FileText, Loader2 } from "lucide-react";
 import * as React from "react";
+import { PagePreviewGrid } from "@/components/tools/page-preview-grid";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,12 +10,18 @@ import { ErrorState } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
 import { UploadZone, type SelectedFile } from "@/components/upload/upload-zone";
 import {
+  fetchPageThumbnails,
   inspectPdfFile,
   ProcessingRequestError,
+  type PageThumbnailData,
   type ProcessedDocument,
 } from "@/lib/processing/client";
 import {
+  expandPageRanges,
+  formatPageRanges,
+  pagesToRanges,
   parseAndValidatePageRanges,
+  parsePageRanges,
   type PageRange,
 } from "@/lib/processing/pages";
 import { formatBytes } from "@/lib/utils/format";
@@ -57,6 +64,19 @@ export interface PageSelectionWorkspaceProps {
     ranges: string;
     signal: AbortSignal;
   }) => Promise<ProcessedDocument>;
+  /**
+   * Optional visual page picker. Thumbnails are an enhancement layered on top
+   * of the range field, never a replacement: the range string stays the single
+   * source of truth, and everything still works when previews are unavailable.
+   */
+  thumbnails?: {
+    /** Server preview limit; longer documents fall back to the text field. */
+    maxPages: number;
+    /** Clicking a page toggles it in the selection. */
+    selectable: boolean;
+    /** Accessible verb for the toggle, e.g. "extract" or "delete". */
+    selectVerb: string;
+  };
 }
 
 type Status = "idle" | "reading" | "ready" | "processing" | "success" | "error";
@@ -72,6 +92,7 @@ export function PageSelectionWorkspace({
   extraValidation,
   summary,
   run,
+  thumbnails: thumbnailConfig,
 }: PageSelectionWorkspaceProps) {
   const [files, setFiles] = React.useState<SelectedFile[]>([]);
   const [pageCount, setPageCount] = React.useState<number | null>(null);
@@ -79,6 +100,8 @@ export function PageSelectionWorkspace({
   const [status, setStatus] = React.useState<Status>("idle");
   const [result, setResult] = React.useState<ProcessedDocument | null>(null);
   const [failure, setFailure] = React.useState<FailureState | null>(null);
+  const [previews, setPreviews] = React.useState<PageThumbnailData[] | null>(null);
+  const [previewFailure, setPreviewFailure] = React.useState<string | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
   const { showToast } = useToast();
 
@@ -103,6 +126,8 @@ export function PageSelectionWorkspace({
     setResult(null);
     setFailure(null);
     setPageCount(null);
+    setPreviews(null);
+    setPreviewFailure(null);
 
     const chosen = next[0];
     if (!chosen) {
@@ -118,6 +143,25 @@ export function PageSelectionWorkspace({
       const inspection = await inspectPdfFile(chosen.file, controller.signal);
       setPageCount(inspection.pageCount);
       setStatus("ready");
+
+      // Previews are optional context: a failure here never blocks the tool.
+      if (thumbnailConfig && inspection.pageCount <= thumbnailConfig.maxPages) {
+        try {
+          const response = await fetchPageThumbnails(
+            chosen.file,
+            undefined,
+            controller.signal,
+          );
+          setPreviews(response.thumbnails);
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          setPreviewFailure(
+            error instanceof ProcessingRequestError
+              ? error.message
+              : "Page previews could not be generated.",
+          );
+        }
+      }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       setFailure(toFailure(error, "This PDF could not be read."));
@@ -138,6 +182,31 @@ export function PageSelectionWorkspace({
 
     return { ok: true as const, ranges: parsed.ranges };
   }, [ranges, pageCount, extraValidation]);
+
+  /**
+   * Pages currently covered by the range field. Derived, never stored: the
+   * range string remains the one source of truth for both input methods.
+   */
+  const selectedPages = React.useMemo(() => {
+    if (pageCount === null || ranges.trim() === "") return new Set<number>();
+    const parsed = parsePageRanges(ranges);
+    if (!parsed.ok) return new Set<number>();
+    return new Set(
+      expandPageRanges(parsed.ranges).filter(
+        (page) => page >= 1 && page <= pageCount,
+      ),
+    );
+  }, [ranges, pageCount]);
+
+  /** Clicking a page rewrites the range field, keeping the two in step. */
+  function togglePage(page: number) {
+    const next = new Set(selectedPages);
+    if (next.has(page)) next.delete(page);
+    else next.add(page);
+
+    const sorted = [...next].sort((a, b) => a - b);
+    setRanges(formatPageRanges(pagesToRanges(sorted)));
+  }
 
   const selectionError = selection && !selection.ok ? selection.message : undefined;
   const busy = status === "processing";
@@ -244,6 +313,21 @@ export function PageSelectionWorkspace({
             <div className="mt-2 text-sm text-muted">
               {summary(selection.ranges, pageCount)}
             </div>
+          ) : null}
+
+          {thumbnailConfig ? (
+            <PagePreviewGrid
+              pageCount={pageCount}
+              previews={previews}
+              previewFailure={previewFailure}
+              maxPages={thumbnailConfig.maxPages}
+              selectable={thumbnailConfig.selectable}
+              selectVerb={thumbnailConfig.selectVerb}
+              selectedPages={selectedPages}
+              disabled={busy}
+              onToggle={togglePage}
+              caption={`Tap a page to choose it, or keep typing ranges above.`}
+            />
           ) : null}
         </div>
       ) : null}
@@ -379,3 +463,4 @@ function toFailure(error: unknown, fallback: string): FailureState {
   }
   return { message: fallback };
 }
+

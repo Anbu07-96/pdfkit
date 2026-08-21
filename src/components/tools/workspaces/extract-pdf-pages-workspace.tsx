@@ -5,7 +5,7 @@ import { runExtractPdfPages } from "@/lib/processing/client";
 import { countPagesInRanges, PAGE_RANGE_SYNTAX_HINT } from "@/lib/processing/pages";
 
 export interface ExtractPdfPagesWorkspaceProps {
-  limits: { maxFileSize: number };
+  limits: { maxFileSize: number; thumbnailMaxPages: number };
 }
 
 /**
@@ -14,7 +14,7 @@ export interface ExtractPdfPagesWorkspaceProps {
 export function ExtractPdfPagesWorkspace({ limits }: ExtractPdfPagesWorkspaceProps) {
   return (
     <PageSelectionWorkspace
-      limits={limits}
+      limits={{ maxFileSize: limits.maxFileSize }}
       labels={{
         rangeLabel: "Pages to extract",
         rangePlaceholder: "1-3, 5, 8-10",
@@ -39,6 +39,11 @@ export function ExtractPdfPagesWorkspace({ limits }: ExtractPdfPagesWorkspacePro
             will be extracted into one PDF, in the order you entered.
           </>
         );
+      }}
+      thumbnails={{
+        maxPages: limits.thumbnailMaxPages,
+        selectable: true,
+        selectVerb: "extract",
       }}
       run={({ file, ranges, signal }) => runExtractPdfPages({ file, ranges, signal })}
     />

@@ -8,6 +8,7 @@ import {
   Scissors,
 } from "lucide-react";
 import * as React from "react";
+import { PagePreviewGrid } from "@/components/tools/page-preview-grid";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,9 +16,11 @@ import { ErrorState } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
 import { UploadZone, type SelectedFile } from "@/components/upload/upload-zone";
 import {
+  fetchPageThumbnails,
   inspectPdfFile,
   ProcessingRequestError,
   runSplitPdf,
+  type PageThumbnailData,
   type ProcessedDocument,
 } from "@/lib/processing/client";
 import {
@@ -33,6 +36,8 @@ export interface SplitPdfWorkspaceProps {
   limits: {
     maxFileSize: number;
     maxOutputs: number;
+    /** Preview limit; longer documents simply show no previews. */
+    thumbnailMaxPages: number;
   };
 }
 
@@ -71,6 +76,8 @@ export function SplitPdfWorkspace({ limits }: SplitPdfWorkspaceProps) {
   const [status, setStatus] = React.useState<Status>("idle");
   const [result, setResult] = React.useState<ProcessedDocument | null>(null);
   const [failure, setFailure] = React.useState<FailureState | null>(null);
+  const [previews, setPreviews] = React.useState<PageThumbnailData[] | null>(null);
+  const [previewFailure, setPreviewFailure] = React.useState<string | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
   const { showToast } = useToast();
 
@@ -95,6 +102,8 @@ export function SplitPdfWorkspace({ limits }: SplitPdfWorkspaceProps) {
     setResult(null);
     setFailure(null);
     setPageCount(null);
+    setPreviews(null);
+    setPreviewFailure(null);
 
     const chosen = next[0];
     if (!chosen) {
@@ -110,6 +119,26 @@ export function SplitPdfWorkspace({ limits }: SplitPdfWorkspaceProps) {
       const inspection = await inspectPdfFile(chosen.file, controller.signal);
       setPageCount(inspection.pageCount);
       setStatus("ready");
+
+      // Previews are context only here: Split keeps its tested range workflow,
+      // and a preview failure never blocks splitting.
+      if (inspection.pageCount <= limits.thumbnailMaxPages) {
+        try {
+          const response = await fetchPageThumbnails(
+            chosen.file,
+            undefined,
+            controller.signal,
+          );
+          setPreviews(response.thumbnails);
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          setPreviewFailure(
+            error instanceof ProcessingRequestError
+              ? error.message
+              : "Page previews could not be generated.",
+          );
+        }
+      }
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       setFailure(toFailure(error, "This PDF could not be read."));
@@ -307,6 +336,16 @@ export function SplitPdfWorkspace({ limits }: SplitPdfWorkspaceProps) {
             />
           ) : null}
         </fieldset>
+      ) : null}
+
+      {file && pageCount !== null ? (
+        <PagePreviewGrid
+          pageCount={pageCount}
+          previews={previews}
+          previewFailure={previewFailure}
+          maxPages={limits.thumbnailMaxPages}
+          caption="Page previews, for reference while you choose ranges."
+        />
       ) : null}
 
       {status === "error" && failure ? (

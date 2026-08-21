@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SplitPdfWorkspace } from "@/components/tools/workspaces/split-pdf-workspace";
 import { ToastProvider } from "@/components/ui/toast";
 
-const LIMITS = { maxFileSize: 25 * 1024 * 1024, maxOutputs: 50 };
+const LIMITS = { maxFileSize: 25 * 1024 * 1024, maxOutputs: 50, thumbnailMaxPages: 60 };
 
 function pdfFile(name = "document.pdf", size = 4096) {
   const file = new File(["%PDF-1.7"], name, { type: "application/pdf" });
@@ -43,6 +43,25 @@ function fakeResponse({
   } as unknown as Response;
 }
 
+const PIXEL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+function thumbnailListResponse(pageCount: number) {
+  return fakeResponse({
+    headers: { "content-type": "application/json" },
+    json: {
+      pageCount,
+      thumbnails: Array.from({ length: pageCount }, (_, index) => ({
+        pageNumber: index + 1,
+        rotation: 0,
+        width: 220,
+        height: 300,
+        dataUrl: PIXEL,
+      })),
+    },
+  });
+}
+
 function inspectResponse(pageCount: number) {
   return fakeResponse({
     headers: { "content-type": "application/json" },
@@ -75,14 +94,25 @@ let fetchMock: ReturnType<typeof vi.fn>;
 /** Route each call by URL so inspection and splitting can be stubbed apart. */
 function routeFetch(handlers: {
   inspect?: () => Response;
+  thumbnails?: () => Response;
   split?: () => Response;
 }) {
   fetchMock.mockImplementation(async (url: string) => {
     if (url.includes("/api/documents/inspect")) {
       return handlers.inspect?.() ?? inspectResponse(10);
     }
+    if (url.includes("/api/documents/thumbnails")) {
+      return handlers.thumbnails?.() ?? thumbnailListResponse(10);
+    }
     return handlers.split?.() ?? zipResponse(10);
   });
+}
+
+/** Calls made to the split endpoint (i.e. actual processing requests). */
+function splitCalls() {
+  return fetchMock.mock.calls.filter(
+    (call) => call[0] === "/api/tools/split-pdf",
+  );
 }
 
 async function uploadPdf(
@@ -178,8 +208,8 @@ describe("SplitPdfWorkspace", () => {
     expect(await screen.findByText(/2 PDFs will be created/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^split pdf$/i })).toBeEnabled();
 
-    // Only the inspection call happened: invalid input never reached the server.
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Invalid input never reached the processing endpoint.
+    expect(splitCalls()).toHaveLength(0);
   });
 
   it("sends the chosen mode and ranges to the API", async () => {
@@ -197,10 +227,9 @@ describe("SplitPdfWorkspace", () => {
     );
     await user.click(screen.getByRole("button", { name: /^split pdf$/i }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(splitCalls()).toHaveLength(1));
 
-    const [url, init] = fetchMock.mock.calls[1];
-    expect(url).toBe("/api/tools/split-pdf");
+    const [, init] = splitCalls()[0];
     const body = init.body as FormData;
     expect(body.get("mode")).toBe("ranges");
     expect(body.get("ranges")).toBe("1-3, 4-7, 8-10");
@@ -253,14 +282,14 @@ describe("SplitPdfWorkspace", () => {
   it("blocks every-page mode when it would exceed the output limit", async () => {
     const user = userEvent.setup();
     routeFetch({ inspect: () => inspectResponse(12) });
-    renderWorkspace({ maxFileSize: LIMITS.maxFileSize, maxOutputs: 5 });
+    renderWorkspace({ ...LIMITS, maxOutputs: 5 });
 
     await uploadPdf(user);
     await screen.findByText("12 pages");
 
     expect(screen.getByText(/too many output files/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^split pdf$/i })).toBeDisabled();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(splitCalls()).toHaveLength(0);
   });
 
   it("resets everything when starting over", async () => {

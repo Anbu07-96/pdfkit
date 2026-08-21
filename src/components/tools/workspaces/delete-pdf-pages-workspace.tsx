@@ -5,7 +5,7 @@ import { runDeletePdfPages } from "@/lib/processing/client";
 import { countPagesInRanges, PAGE_RANGE_SYNTAX_HINT } from "@/lib/processing/pages";
 
 export interface DeletePdfPagesWorkspaceProps {
-  limits: { maxFileSize: number };
+  limits: { maxFileSize: number; thumbnailMaxPages: number };
 }
 
 /**
@@ -16,7 +16,7 @@ export interface DeletePdfPagesWorkspaceProps {
 export function DeletePdfPagesWorkspace({ limits }: DeletePdfPagesWorkspaceProps) {
   return (
     <PageSelectionWorkspace
-      limits={limits}
+      limits={{ maxFileSize: limits.maxFileSize }}
       labels={{
         rangeLabel: "Pages to delete",
         rangePlaceholder: "2, 4, 7-9",
@@ -53,6 +53,11 @@ export function DeletePdfPagesWorkspace({ limits }: DeletePdfPagesWorkspaceProps
             will remain.
           </>
         );
+      }}
+      thumbnails={{
+        maxPages: limits.thumbnailMaxPages,
+        selectable: true,
+        selectVerb: "delete",
       }}
       run={({ file, ranges, signal }) => runDeletePdfPages({ file, ranges, signal })}
     />

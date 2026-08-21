@@ -5,7 +5,7 @@ import { DeletePdfPagesWorkspace } from "@/components/tools/workspaces/delete-pd
 import { ExtractPdfPagesWorkspace } from "@/components/tools/workspaces/extract-pdf-pages-workspace";
 import { ToastProvider } from "@/components/ui/toast";
 
-const LIMITS = { maxFileSize: 25 * 1024 * 1024 };
+const LIMITS = { maxFileSize: 25 * 1024 * 1024, thumbnailMaxPages: 60 };
 
 function pdfFile(name = "document.pdf", size = 4096) {
   const file = new File(["%PDF-1.7"], name, { type: "application/pdf" });
@@ -34,6 +34,25 @@ function fakeResponse({
     blob: async () => blob ?? new Blob([]),
     json: async () => json,
   } as unknown as Response;
+}
+
+const PIXEL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+function thumbnailResponse(pageCount: number) {
+  return fakeResponse({
+    headers: { "content-type": "application/json" },
+    json: {
+      pageCount,
+      thumbnails: Array.from({ length: pageCount }, (_, index) => ({
+        pageNumber: index + 1,
+        rotation: 0,
+        width: 220,
+        height: 300,
+        dataUrl: PIXEL,
+      })),
+    },
+  });
 }
 
 function inspectResponse(pageCount: number) {
@@ -66,13 +85,25 @@ function errorResponse(status: number, code: string, message: string) {
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
-function routeFetch(handlers: { inspect?: () => Response; run?: () => Response }) {
+function routeFetch(handlers: {
+  inspect?: () => Response;
+  thumbnails?: () => Response;
+  run?: () => Response;
+}) {
   fetchMock.mockImplementation(async (url: string) => {
     if (url.includes("/api/documents/inspect")) {
       return handlers.inspect?.() ?? inspectResponse(10);
     }
+    if (url.includes("/api/documents/thumbnails")) {
+      return handlers.thumbnails?.() ?? thumbnailResponse(10);
+    }
     return handlers.run?.() ?? pdfResponse("document-extracted.pdf", 3);
   });
+}
+
+/** Calls made to a tool endpoint (i.e. actual processing requests). */
+function toolCalls(endpoint: string) {
+  return fetchMock.mock.calls.filter((call) => call[0] === endpoint);
 }
 
 async function uploadPdf(user: ReturnType<typeof userEvent.setup>) {
@@ -161,8 +192,8 @@ describe("ExtractPdfPagesWorkspace", () => {
     expect(screen.getByText("4 pages")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /extract pages/i })).toBeEnabled();
 
-    // Nothing invalid ever reached the server.
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Nothing invalid ever reached the processing endpoint.
+    expect(toolCalls("/api/tools/extract-pdf-pages")).toHaveLength(0);
   });
 
   it("sends the selection and offers a real download", async () => {
@@ -181,9 +212,10 @@ describe("ExtractPdfPagesWorkspace", () => {
     );
     await user.click(screen.getByRole("button", { name: /extract pages/i }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    const [url, init] = fetchMock.mock.calls[1];
-    expect(url).toBe("/api/tools/extract-pdf-pages");
+    await waitFor(() =>
+      expect(toolCalls("/api/tools/extract-pdf-pages")).toHaveLength(1),
+    );
+    const [, init] = toolCalls("/api/tools/extract-pdf-pages")[0];
     expect((init.body as FormData).get("ranges")).toBe("1-2, 5, 8-10");
 
     expect(
@@ -322,7 +354,7 @@ describe("DeletePdfPagesWorkspace", () => {
 
     expect(await screen.findByText(/must keep at least one page/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /delete pages/i })).toBeDisabled();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(toolCalls("/api/tools/delete-pdf-pages")).toHaveLength(0);
   });
 
   it("validates syntax, bounds and overlap", async () => {
@@ -361,9 +393,10 @@ describe("DeletePdfPagesWorkspace", () => {
     await user.type(screen.getByRole("textbox", { name: /pages to delete/i }), "2, 4, 7");
     await user.click(screen.getByRole("button", { name: /delete pages/i }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    const [url, init] = fetchMock.mock.calls[1];
-    expect(url).toBe("/api/tools/delete-pdf-pages");
+    await waitFor(() =>
+      expect(toolCalls("/api/tools/delete-pdf-pages")).toHaveLength(1),
+    );
+    const [, init] = toolCalls("/api/tools/delete-pdf-pages")[0];
     expect((init.body as FormData).get("ranges")).toBe("2, 4, 7");
 
     expect(
