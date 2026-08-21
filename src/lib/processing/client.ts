@@ -14,8 +14,10 @@ export interface ProcessedDocument {
   url: string;
   fileName: string;
   size: number;
-  /** Page count reported by the server, when available. */
+  /** Page count of the input document, reported by the server. */
   pages?: number;
+  /** Page count of the produced document, reported by the server. */
+  outputPages?: number;
   /** How many documents the job produced (>1 means the download is a ZIP). */
   artifacts: number;
   /** True when several documents were bundled into a ZIP. */
@@ -92,6 +94,10 @@ async function toProcessedDocument(
   const blob = await response.blob();
   const pagesHeader = response.headers.get("x-pdfkit-pages");
   const pages = pagesHeader ? Number.parseInt(pagesHeader, 10) : undefined;
+  const outputPagesHeader = response.headers.get("x-pdfkit-output-pages");
+  const outputPages = outputPagesHeader
+    ? Number.parseInt(outputPagesHeader, 10)
+    : undefined;
   const artifactsHeader = response.headers.get("x-pdfkit-artifacts");
   const artifacts = artifactsHeader ? Number.parseInt(artifactsHeader, 10) : 1;
   const contentType = response.headers.get("content-type") ?? "";
@@ -105,6 +111,7 @@ async function toProcessedDocument(
     ),
     size: blob.size,
     pages: Number.isFinite(pages) ? pages : undefined,
+    outputPages: Number.isFinite(outputPages) ? outputPages : undefined,
     artifacts: Number.isFinite(artifacts) && artifacts > 0 ? artifacts : 1,
     isArchive: contentType.includes("zip"),
   };
@@ -161,6 +168,49 @@ export async function runSplitPdf({
 
   const response = await postForm("/api/tools/split-pdf", form, signal);
   return toProcessedDocument(response, "split.zip");
+}
+
+export interface RunPageSelectionToolOptions {
+  file: File;
+  /** Raw range input, e.g. "1-3, 5, 8-10". */
+  ranges: string;
+  signal?: AbortSignal;
+}
+
+/** Shared request shape for the single-file, page-selection tools. */
+async function runPageSelectionTool(
+  endpoint: string,
+  fallbackName: string,
+  { file, ranges, signal }: RunPageSelectionToolOptions,
+): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("ranges", ranges);
+
+  const response = await postForm(endpoint, form, signal);
+  return toProcessedDocument(response, fallbackName);
+}
+
+/** Keep only the selected pages, in the order they were selected. */
+export async function runExtractPdfPages(
+  options: RunPageSelectionToolOptions,
+): Promise<ProcessedDocument> {
+  return runPageSelectionTool(
+    "/api/tools/extract-pdf-pages",
+    "extracted.pdf",
+    options,
+  );
+}
+
+/** Remove the selected pages and keep the rest, in document order. */
+export async function runDeletePdfPages(
+  options: RunPageSelectionToolOptions,
+): Promise<ProcessedDocument> {
+  return runPageSelectionTool(
+    "/api/tools/delete-pdf-pages",
+    "pages-removed.pdf",
+    options,
+  );
 }
 
 /** Ask the server for a document's real page count. */

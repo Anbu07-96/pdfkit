@@ -22,6 +22,22 @@ export const SPLIT_PDF_INPUT_RULES: ProcessorInputRules = {
   mimeTypes: ["application/pdf"],
 };
 
+/** Extract keeps the selected pages of one document. */
+export const EXTRACT_PDF_PAGES_INPUT_RULES: ProcessorInputRules = {
+  minFiles: 1,
+  maxFiles: 1,
+  extensions: [".pdf"],
+  mimeTypes: ["application/pdf"],
+};
+
+/** Delete removes the selected pages of one document. */
+export const DELETE_PDF_PAGES_INPUT_RULES: ProcessorInputRules = {
+  minFiles: 1,
+  maxFiles: 1,
+  extensions: [".pdf"],
+  mimeTypes: ["application/pdf"],
+};
+
 /** Generic rules for reading a single PDF (page inspection). */
 export const SINGLE_PDF_INPUT_RULES: ProcessorInputRules = {
   minFiles: 1,
@@ -33,6 +49,8 @@ export const SINGLE_PDF_INPUT_RULES: ProcessorInputRules = {
 export const INPUT_RULES_BY_TOOL: Record<string, ProcessorInputRules> = {
   "merge-pdf": MERGE_PDF_INPUT_RULES,
   "split-pdf": SPLIT_PDF_INPUT_RULES,
+  "extract-pdf-pages": EXTRACT_PDF_PAGES_INPUT_RULES,
+  "delete-pdf-pages": DELETE_PDF_PAGES_INPUT_RULES,
 };
 
 export function getInputRules(toolId: string): ProcessorInputRules | undefined {

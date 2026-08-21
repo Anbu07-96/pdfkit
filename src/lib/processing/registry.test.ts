@@ -16,9 +16,16 @@ import { makePdf } from "@/test/pdf-fixtures";
 
 describe("processor registry", () => {
   it("exposes the implemented tools", () => {
-    expect(getImplementedToolIds()).toEqual(["merge-pdf", "split-pdf"]);
+    expect(getImplementedToolIds()).toEqual([
+      "delete-pdf-pages",
+      "extract-pdf-pages",
+      "merge-pdf",
+      "split-pdf",
+    ]);
     expect(hasProcessor("merge-pdf")).toBe(true);
     expect(hasProcessor("split-pdf")).toBe(true);
+    expect(hasProcessor("extract-pdf-pages")).toBe(true);
+    expect(hasProcessor("delete-pdf-pages")).toBe(true);
     expect(hasProcessor("compress-pdf")).toBe(false);
   });
 
@@ -34,8 +41,13 @@ describe("processor registry", () => {
   });
 
   it("keeps the catalog and the registry in sync", () => {
-    // Phase 3 adds split-pdf; nothing else may claim to work.
-    expect(getImplementedToolIds()).toEqual(["merge-pdf", "split-pdf"]);
+    // Phase 4 adds the two page tools; nothing else may claim to work.
+    expect(getImplementedToolIds()).toEqual([
+      "delete-pdf-pages",
+      "extract-pdf-pages",
+      "merge-pdf",
+      "split-pdf",
+    ]);
 
     // A tool may only claim to be usable if it really has an implementation…
     for (const tool of TOOLS) {

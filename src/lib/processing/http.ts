@@ -218,6 +218,10 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
     ...(result.meta?.pages !== undefined
       ? { "x-pdfkit-pages": String(result.meta.pages) }
       : {}),
+    // Pages in the produced document, when it differs from the input.
+    ...(result.meta?.outputPages !== undefined
+      ? { "x-pdfkit-output-pages": String(result.meta.outputPages) }
+      : {}),
   };
 
   // A single document is streamed as-is; several are bundled into a ZIP.

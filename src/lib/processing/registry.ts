@@ -2,6 +2,8 @@ import "server-only";
 
 import type { ToolProcessor } from "@/lib/processing/contract";
 import { ProcessingError } from "@/lib/processing/errors";
+import { deletePdfPagesProcessor } from "@/lib/processing/processors/delete-pdf-pages";
+import { extractPdfPagesProcessor } from "@/lib/processing/processors/extract-pdf-pages";
 import { mergePdfProcessor } from "@/lib/processing/processors/merge-pdf";
 import { splitPdfProcessor } from "@/lib/processing/processors/split-pdf";
 
@@ -15,6 +17,11 @@ import { splitPdfProcessor } from "@/lib/processing/processors/split-pdf";
 const PROCESSORS = new Map<string, ToolProcessor<never>>([
   [mergePdfProcessor.toolId, mergePdfProcessor as ToolProcessor<never>],
   [splitPdfProcessor.toolId, splitPdfProcessor as ToolProcessor<never>],
+  [
+    extractPdfPagesProcessor.toolId,
+    extractPdfPagesProcessor as ToolProcessor<never>,
+  ],
+  [deletePdfPagesProcessor.toolId, deletePdfPagesProcessor as ToolProcessor<never>],
 ]);
 
 /** Tool ids with a working implementation. */
