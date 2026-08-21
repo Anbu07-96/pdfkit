@@ -2,6 +2,7 @@ import { DeletePdfPagesWorkspace } from "@/components/tools/workspaces/delete-pd
 import { ExtractPdfPagesWorkspace } from "@/components/tools/workspaces/extract-pdf-pages-workspace";
 import { MergePdfWorkspace } from "@/components/tools/workspaces/merge-pdf-workspace";
 import { ReorderPdfPagesWorkspace } from "@/components/tools/workspaces/reorder-pdf-pages-workspace";
+import { RotatePdfWorkspace } from "@/components/tools/workspaces/rotate-pdf-workspace";
 import { SplitPdfWorkspace } from "@/components/tools/workspaces/split-pdf-workspace";
 import { getProcessingLimits } from "@/lib/processing/limits";
 import { getThumbnailLimits } from "@/lib/thumbnails/limits";
@@ -36,22 +37,52 @@ export function getToolWorkspace(toolId: string): React.ReactNode | null {
     }
     case "split-pdf": {
       const limits = getProcessingLimits();
+      const thumbnails = getThumbnailLimits();
       return (
         <SplitPdfWorkspace
           limits={{
             maxFileSize: limits.maxFileSize,
             maxOutputs: limits.maxOutputs,
+            thumbnailMaxPages: thumbnails.maxPages,
           }}
         />
       );
     }
     case "extract-pdf-pages": {
       const limits = getProcessingLimits();
-      return <ExtractPdfPagesWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
+      const thumbnails = getThumbnailLimits();
+      return (
+        <ExtractPdfPagesWorkspace
+          limits={{
+            maxFileSize: limits.maxFileSize,
+            thumbnailMaxPages: thumbnails.maxPages,
+          }}
+        />
+      );
     }
     case "delete-pdf-pages": {
       const limits = getProcessingLimits();
-      return <DeletePdfPagesWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
+      const thumbnails = getThumbnailLimits();
+      return (
+        <DeletePdfPagesWorkspace
+          limits={{
+            maxFileSize: limits.maxFileSize,
+            thumbnailMaxPages: thumbnails.maxPages,
+          }}
+        />
+      );
+    }
+    case "rotate-pdf": {
+      const limits = getProcessingLimits();
+      const thumbnails = getThumbnailLimits();
+      return (
+        <RotatePdfWorkspace
+          limits={{
+            maxFileSize: limits.maxFileSize,
+            thumbnailMaxPages: thumbnails.maxPages,
+          }}
+        />
+      );
     }
     case "reorder-pdf-pages": {
       const limits = getProcessingLimits();
@@ -76,6 +107,7 @@ const TOOLS_WITH_WORKSPACE = new Set([
   "extract-pdf-pages",
   "delete-pdf-pages",
   "reorder-pdf-pages",
+  "rotate-pdf",
 ]);
 
 export function hasToolWorkspace(toolId: string): boolean {

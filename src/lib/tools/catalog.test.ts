@@ -54,6 +54,7 @@ describe("tool catalog", () => {
       "extract-pdf-pages",
       "delete-pdf-pages",
       "reorder-pdf-pages",
+      "rotate-pdf",
     ];
 
     for (const tool of TOOLS) {

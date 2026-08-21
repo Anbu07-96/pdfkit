@@ -39,6 +39,10 @@ export default function HelpPage() {
             <strong>Reorder PDF Pages</strong> — see a real preview of every page,
             then drag them or use the arrow buttons to put them in a new order.
           </li>
+          <li>
+            <strong>Rotate PDF</strong> — turn individual pages, or every page at
+            once, and watch the previews update before you save.
+          </li>
           <li>Browsing the tool catalog by category.</li>
           <li>Searching tools by name, description or category.</li>
           <li>Opening any tool page to see what the tool will do and what it accepts.</li>
@@ -48,7 +52,7 @@ export default function HelpPage() {
         <h2>What does not work yet</h2>
         <ul>
           <li>
-            Every tool other than the five above. Their upload areas are intentionally
+            Every tool other than the six above. Their upload areas are intentionally
             disabled and labelled <strong>Coming soon</strong>.
           </li>
           <li>There are no accounts, no cloud storage, no API keys and no billing.</li>

@@ -12,7 +12,7 @@ import type { Tool } from "./types";
  * `src/lib/processing/registry.ts`; a test enforces that both sides agree.
  *
  * Implemented today: Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages,
- * Reorder PDF Pages. Everything else is `COMING_SOON`.
+ * Reorder PDF Pages, Rotate PDF. Everything else is `COMING_SOON`.
  */
 
 const PDF_EXT = [".pdf"];
@@ -87,11 +87,13 @@ export const TOOLS: readonly Tool[] = [
     description: "Turn selected pages so every page faces the right way.",
     category: "organize",
     icon: "rotate",
+    // Implemented in Phase 6: server-side rotation with real page previews.
+    status: "AVAILABLE",
     plannedTier: "free",
-    keywords: ["turn", "orientation", "landscape", "portrait"],
+    keywords: ["turn", "orientation", "landscape", "portrait", "sideways"],
     howItWorks: [
       "Upload the PDF with pages facing the wrong way.",
-      "Rotate individual pages or the whole document.",
+      "Rotate individual pages, or rotate them all at once.",
       "Download the corrected PDF.",
     ],
   }),

@@ -70,11 +70,22 @@ const PHASES = [
     ],
   },
   {
-    title: "Phase 6 — Rotate PDF and shared page toolbox",
+    title: "Phase 6 — Rotate PDF and visual page selection",
+    status: "Completed" as const,
+    items: [
+      "Rotate PDF: per-page and whole-document rotation, additive to any existing rotation",
+      "Previews re-rendered by the server so they match what will be saved",
+      "Visual page picker for Extract and Delete, synced with the range field",
+      "Page previews as context in Split, keeping its tested range workflow",
+      "Rotation model with strict 0/90/180/270 validation shared by UI and server",
+    ],
+  },
+  {
+    title: "Phase 7 — Compress PDF",
     status: "Planned" as const,
     items: [
-      "Rotate individual pages using the same previews",
-      "Reuse the page organiser across Split, Extract and Delete",
+      "Server-side size reduction with honest before/after reporting",
+      "Quality options that describe what they actually do",
     ],
   },
   {

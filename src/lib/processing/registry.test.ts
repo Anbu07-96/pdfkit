@@ -21,10 +21,12 @@ describe("processor registry", () => {
       "extract-pdf-pages",
       "merge-pdf",
       "reorder-pdf-pages",
+      "rotate-pdf",
       "split-pdf",
     ]);
     expect(hasProcessor("merge-pdf")).toBe(true);
     expect(hasProcessor("reorder-pdf-pages")).toBe(true);
+    expect(hasProcessor("rotate-pdf")).toBe(true);
     expect(hasProcessor("split-pdf")).toBe(true);
     expect(hasProcessor("extract-pdf-pages")).toBe(true);
     expect(hasProcessor("delete-pdf-pages")).toBe(true);
@@ -49,6 +51,7 @@ describe("processor registry", () => {
       "extract-pdf-pages",
       "merge-pdf",
       "reorder-pdf-pages",
+      "rotate-pdf",
       "split-pdf",
     ]);
 
