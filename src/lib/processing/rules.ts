@@ -14,8 +14,25 @@ export const MERGE_PDF_INPUT_RULES: ProcessorInputRules = {
   mimeTypes: ["application/pdf"],
 };
 
+/** Split works on exactly one document at a time. */
+export const SPLIT_PDF_INPUT_RULES: ProcessorInputRules = {
+  minFiles: 1,
+  maxFiles: 1,
+  extensions: [".pdf"],
+  mimeTypes: ["application/pdf"],
+};
+
+/** Generic rules for reading a single PDF (page inspection). */
+export const SINGLE_PDF_INPUT_RULES: ProcessorInputRules = {
+  minFiles: 1,
+  maxFiles: 1,
+  extensions: [".pdf"],
+  mimeTypes: ["application/pdf"],
+};
+
 export const INPUT_RULES_BY_TOOL: Record<string, ProcessorInputRules> = {
   "merge-pdf": MERGE_PDF_INPUT_RULES,
+  "split-pdf": SPLIT_PDF_INPUT_RULES,
 };
 
 export function getInputRules(toolId: string): ProcessorInputRules | undefined {

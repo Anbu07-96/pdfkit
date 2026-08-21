@@ -15,6 +15,32 @@ export async function makePdf(labels: string[]): Promise<Uint8Array> {
   return document.save();
 }
 
+/**
+ * A valid PDF whose pages are individually identifiable: page N is
+ * `(100 + N) x 200`, so page order can be asserted after copying.
+ */
+export async function makeNumberedPdf(pageCount: number): Promise<Uint8Array> {
+  const document = await PDFDocument.create();
+  const font = await document.embedFont(StandardFonts.Helvetica);
+
+  for (let page = 1; page <= pageCount; page += 1) {
+    const created = document.addPage([100 + page, 200]);
+    created.drawText(`page ${page}`, { x: 10, y: 100, size: 10, font });
+  }
+
+  return document.save();
+}
+
+/** Page widths of a document, used to assert page identity and order. */
+export function pageWidths(document: PDFDocument): number[] {
+  return document.getPages().map((page) => Math.round(page.getSize().width));
+}
+
+/** Widths expected for 1-based page numbers produced by `makeNumberedPdf`. */
+export function expectedWidths(pages: number[]): number[] {
+  return pages.map((page) => 100 + page);
+}
+
 /** Bytes that start with the PDF header but are not parseable. */
 export function makeBrokenPdf(): Uint8Array {
   return new TextEncoder().encode("%PDF-1.7 but truncated nonsense");
