@@ -544,6 +544,46 @@ function, ships them in `meta`, the HTTP adapter forwards them as `X-PDFKit-*`
 headers, and the browser reads the headers — the interface never measures or
 guesses anything itself.
 
+## 5g. Image ↔ PDF conversion (Phase 8)
+
+**Three tools, one extension.** Images to PDF, PDF to JPG and PDF to PNG reuse
+every existing layer — contract, service, registry, HTTP adapter, validation,
+ZIP delivery, UploadZone, the AbortController client pattern and the catalog
+guards. Nothing was duplicated; the additions are one input rule set, two
+error codes, a content-check hook and a render API.
+
+**Content validation without a second validator.** `ProcessorInputRules`
+gained an optional `contentKind: "pdf" | "image"`. Unset means `pdf`, so every
+Phase 2–7 tool validates exactly as before; `image` switches the shared
+signature check to the JPEG (`FF D8 FF`) and PNG headers and raises the new
+`INVALID_IMAGE` (422) for disguised files. The new `OUTPUT_TOO_LARGE` (413)
+covers rendered outputs above the conversion byte cap.
+
+**Images → PDF** (`processors/images-to-pdf.ts`, `lib/processing/images.ts`):
+pixel dimensions are read straight from the headers — no decoding — and
+rejected above 24 MP / 12 000 px per side *before* anything is embedded.
+JPEG bytes are placed into the PDF untouched (`embedJpg`, no re-encode, no
+quality loss); PNGs go through `embedPng`, which keeps the alpha channel as a
+soft mask, over a white rectangle because a PDF page has no background of its
+own. Each page matches its image at 96 DPI (uniformly capped at the PDF
+14 400 pt limit), centred, full-bleed — never stretched or cropped.
+
+**Full-page rendering API.** The renderer gained `renderEachPdfPage(bytes,
+{dpi, maxPages}, handlePage)`: the conversion-grade counterpart of the
+thumbnail path, sharing the same single-instance WASM discipline and
+serialised queue while keeping deliberately separate limits. Exactly one
+bitmap exists at a time — `handlePage` encodes and releases before the next
+page renders — and the page-count rejection happens before a pixel is
+allocated.
+
+**PDF → JPG/PNG** (`processors/pdf-to-image.ts`): one shared processor class;
+the format selects the encoder (jpeg-js quality 90 / the in-house RGBA PNG
+encoder), the file names and the bundle name. One page returns a single
+image; several pages return artifacts that the existing HTTP layer bundles
+into a sanitised ZIP — the Split PDF delivery contract. The pooled-Node-Buffer
+trap from Phase 7 is shared as `freshBytes` in `lib/processing/images.ts`,
+used by the JPEG encoder path and the compress rasteriser.
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:

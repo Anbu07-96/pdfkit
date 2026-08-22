@@ -91,6 +91,16 @@ const PHASES = [
     ],
   },
   {
+    title: "Phase 8 — Image ↔ PDF conversion",
+    status: "Completed" as const,
+    items: [
+      "Images to PDF: JPG/JPEG/PNG, one page per image, your order, JPEG data untouched",
+      "PDF to JPG and PDF to PNG at 150 DPI via the shared pdfium renderer",
+      "One image for single pages, a ZIP per document otherwise",
+      "Signature checks, pixel/page/output limits, all enforced server-side",
+    ],
+  },
+  {
     title: "Later phases",
     status: "Planned" as const,
     items: [

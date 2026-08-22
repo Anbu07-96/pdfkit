@@ -48,6 +48,15 @@ export default function HelpPage() {
             before/after numbers. Low and medium are lossless; high also
             rasterises image-heavy pages and says so when it does.
           </li>
+          <li>
+            <strong>Images to PDF</strong> — turn JPG, JPEG and PNG images into
+            one PDF with exactly one page per image, in the order you arrange.
+          </li>
+          <li>
+            <strong>PDF to JPG / PDF to PNG</strong> — export every page as an
+            image at 150 DPI. One page gives a single image; longer documents
+            download as a ZIP.
+          </li>
           <li>Browsing the tool catalog by category.</li>
           <li>Searching tools by name, description or category.</li>
           <li>Opening any tool page to see what the tool will do and what it accepts.</li>
@@ -57,7 +66,7 @@ export default function HelpPage() {
         <h2>What does not work yet</h2>
         <ul>
           <li>
-            Every tool other than the seven above. Their upload areas are
+            Every tool other than the ten above. Their upload areas are
             intentionally disabled and labelled <strong>Coming soon</strong>.
           </li>
           <li>There are no accounts, no cloud storage, no API keys and no billing.</li>

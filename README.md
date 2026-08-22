@@ -8,7 +8,7 @@ later OCR and AI document intelligence.
 
 > ## Current status: Phase 6 — rotation and visual page selection
 >
-> **Seven tools genuinely work:**
+> **Ten tools genuinely work:**
 >
 > - **Merge PDF** — combine several PDFs in the order you choose.
 > - **Split PDF** — split every page into its own file, or split by page ranges;
@@ -20,6 +20,10 @@ later OCR and AI document intelligence.
 >   that update to match.
 > - **Compress PDF** — real size reduction with honest before/after numbers;
 >   lossless optimisation, plus an aggressive image-heavy mode.
+> - **Images to PDF** — JPG/JPEG/PNG images become one PDF, one page per image,
+>   in your order (JPEG data is embedded untouched).
+> - **PDF to JPG / PDF to PNG** — every page rendered by pdfium at 150 DPI;
+>   one image for single pages, a ZIP per document otherwise.
 >
 > **Every other tool is still unimplemented** and honestly marked
 > **Coming soon**, with its upload area disabled. There is no simulated
@@ -40,6 +44,8 @@ later OCR and AI document intelligence.
 - [Reorder PDF Pages](#reorder-pdf-pages)
 - [Rotate PDF](#rotate-pdf)
 - [Compress PDF](#compress-pdf)
+- [Images to PDF](#images-to-pdf)
+- [PDF to JPG and PDF to PNG](#pdf-to-jpg-and-pdf-to-png)
 - [Page previews](#page-previews)
 - [Page ranges](#page-ranges)
 - [Processing limits](#processing-limits)
@@ -64,8 +70,8 @@ A single web app for common document tasks, built around three product rules:
 
 The catalog describes **42 tools** in six categories — Organize, Convert, Edit,
 Security, OCR and AI — of which **6 are implemented** today: Merge PDF, Split
-PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF Pages, Rotate PDF and
-Compress PDF.
+PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF Pages, Rotate PDF,
+Compress PDF, Images to PDF, PDF to JPG and PDF to PNG.
 
 ---
 
@@ -138,6 +144,23 @@ npm start
 ---
 
 ## What is implemented today
+
+**Images to PDF (real, end to end)**
+
+- JPG, JPEG and PNG, mixed freely; each image becomes exactly one page, in your
+  order — the server re-validates every signature
+- JPEG data is embedded **untouched** (no re-encoding, no quality loss); PNG
+  transparency is preserved as a soft mask over a white page background
+- Pages match each image's aspect ratio at 96 DPI — never stretched, never
+  cropped; oversized pixel dimensions are rejected before any allocation
+
+**PDF to JPG / PDF to PNG (real, end to end)**
+
+- Every page is rendered by pdfium at the configured DPI (default 150),
+  in display orientation and exact aspect ratio
+- One page → a single image; several pages → a ZIP with `name-page-N.jpg|png`
+- JPG uses jpeg-js at quality 90; PNG uses the in-house lossless RGBA encoder
+- Page count, render resolution and output size are limited and configurable
 
 **Compress PDF (real, end to end)**
 
@@ -468,6 +491,47 @@ text becomes pixels — no longer selectable — and image quality drops.
 or `medium` — those files only shrink at `high` (or through structural gains).
 Streams with predictor parameters are left untouched for safety.
 
+## Images to PDF
+
+```bash
+curl -X POST http://localhost:3000/api/tools/images-to-pdf \
+  -F "files=@image1.jpg;type=image/jpeg" \
+  -F "files=@image2.png;type=image/png" \
+  -o images-to-pdf.pdf
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `files` | yes | One or more `.jpg` / `.jpeg` / `.png` images |
+
+The multipart order **is** the page order. Every image is signature-checked
+server-side (`FF D8 FF` / PNG header) — the browser's MIME type is never
+trusted, and disguised files get `INVALID_IMAGE` (422). Page geometry: the
+image's pixel size at 96 DPI (1 px = 0.75 pt), centred, full-bleed, aspect
+exact; a white rectangle is painted behind transparent PNGs so output is
+predictable in every viewer. JPEG bytes are embedded as-is. Pixel caps:
+24 MP and 12 000 px per side, rejected before embedding. Output name is always
+`images-to-pdf.pdf`.
+
+## PDF to JPG and PDF to PNG
+
+```bash
+curl -X POST http://localhost:3000/api/tools/pdf-to-jpg \
+  -F "files=@document.pdf;type=application/pdf" \
+  -o page-1.jpg            # one page → a single image
+
+# several pages → application/zip with document-page-1.jpg … document-page-N.jpg
+```
+
+Same contract for `/api/tools/pdf-to-png` with `.png` outputs. Rendering uses
+the shared pdfium rasteriser: display orientation (page rotation included),
+exact aspect ratio, one bitmap in memory at a time, 150 DPI by default
+(`PDFKIT_CONVERSION_DPI`, ceiling 300) with hard pixel guards. JPG quality is
+90; PNG is lossless RGBA. Limits: `PDFKIT_CONVERSION_MAX_PAGES` (default 50,
+ceiling 200) rejected with `TOO_MANY_OUTPUTS` (413) **before** rendering, and
+each produced image is capped by `PDFKIT_CONVERSION_MAX_IMAGE_BYTES`
+(default 6 MB) → `OUTPUT_TOO_LARGE` (413). ZIP entry names are sanitised.
+
 ## Page previews
 
 ```bash
@@ -527,6 +591,9 @@ Configurable through the environment, with safe defaults:
 | `PDFKIT_MAX_TOTAL_UPLOAD_SIZE` | `104857600` (100 MB) | Maximum combined size |
 | `PDFKIT_MAX_SPLIT_OUTPUTS` | `50` | Documents one job may produce |
 | `PDFKIT_COMPRESS_MAX_RASTER_PAGES` | `60` | Pages the aggressive compress pass may rasterise (ceiling 300) |
+| `PDFKIT_CONVERSION_MAX_PAGES` | `50` | Pages a PDF → image export may render (ceiling 200) |
+| `PDFKIT_CONVERSION_DPI` | `150` | Render resolution for image exports (ceiling 300) |
+| `PDFKIT_CONVERSION_MAX_IMAGE_BYTES` | `6291456` | Maximum size of one produced image (ceiling 16 MB) |
 
 Limits are enforced by the server on every request. The numbers shown in the
 interface come from the build-time configuration, so rebuild after changing
@@ -534,12 +601,13 @@ them if you want the hints to match exactly.
 
 ## What is deliberately not implemented
 
-JPG↔PDF, PDF↔Office, editing, security tools, OCR, AI, authentication, cloud
-storage, databases, payments, API keys, a public developer API, background
-workers and job queues are **not** implemented. There is no simulated processing anywhere: no fake
+Office↔PDF conversion, editing, security tools, OCR, AI, authentication,
+cloud storage, databases, payments, API keys, a public developer API,
+background workers and job queues are **not** implemented. There is no simulated processing anywhere: no fake
 progress bars, no fake results, no fake downloads, no placeholder page images.
 Only Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF
-Pages, Rotate PDF and Compress PDF are real.
+Pages, Rotate PDF, Compress PDF, Images to PDF, PDF to JPG and PDF to PNG are
+real.
 
 ---
 
@@ -600,6 +668,9 @@ Copy `.env.example` to `.env.local`. Every value is optional in Phase 1.
 | `PDFKIT_MAX_TOTAL_UPLOAD_SIZE`  | Bytes per request (default 100 MB)         |
 | `PDFKIT_MAX_SPLIT_OUTPUTS`      | Documents one job may produce (default 50) |
 | `PDFKIT_COMPRESS_MAX_RASTER_PAGES` | Pages the aggressive compress pass may rasterise (default 60, ceiling 300) |
+| `PDFKIT_CONVERSION_MAX_PAGES` | Pages a PDF → image export may render (default 50, ceiling 200) |
+| `PDFKIT_CONVERSION_DPI` | Export render resolution (default 150, ceiling 300) |
+| `PDFKIT_CONVERSION_MAX_IMAGE_BYTES` | Maximum size of one produced image (default 6 MB) |
 | `PDFKIT_THUMBNAIL_MAX_PAGES`    | Pages rendered per preview request (default 60) |
 
 `.env` files are git-ignored (`.env.example` is the only tracked one). Secrets
@@ -615,7 +686,23 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (43 files, 621 tests):
+Covered today (50 files, 753 tests):
+
+- **Image inspection** — JPEG/PNG signature detection, header dimension
+  parsing, pixel caps, near-miss headers
+- **Images-to-PDF processor** — single/mixed/multi-image conversions, exact
+  order and aspect ratios, JPEG pass-through (DCTDecode), PNG transparency
+  (SMask), 96 DPI page sizing, disguised/wrong-type/empty/oversized/too-many
+  rejections, input immutability
+- **PDF-to-image processors** — one page → single image, multi-page → ordered
+  bundle, ZIP entries decode (JPEG and PNG), aspect and rotation, colours,
+  DPI override, page/byte limits, malformed/encrypted rejections, hostile
+  names sanitised
+- **Three new API routes** — headers, content types, ZIP delivery, every
+  failure mode, no internals leaked
+- **Two new workspaces** — ordering before conversion, predictions from the
+  real page count, indeterminate progress, cancel, ZIP vs single-file results,
+  server/network errors, live announcements
 
 - **Compression model** — level validation, exact statistics math
   (1000→750 reports 250 saved, 25.0 %), honest no-reduction behaviour, and the
@@ -696,9 +783,9 @@ Covered today (43 files, 621 tests):
 
 ## Future phases
 
-Phase 7 stops here on purpose. The planned order (see also `/roadmap`):
+Phase 8 stops here on purpose. The planned order (see also `/roadmap`):
 
-1. Convert tools (images ↔ PDF, Office ↔ PDF).
+1. Office ↔ PDF conversion.
 2. Editing and security tools.
 3. OCR.
 4. AI document intelligence.
