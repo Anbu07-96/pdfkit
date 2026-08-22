@@ -477,6 +477,14 @@ scaling, and a test asserts the rotated area equals the original area.
 turning a page back to an angle already seen costs nothing and a stale preview
 is never shown. It is browser-side state only — no server cache, no storage.
 
+**Selection announcements (Phase 10).** The picker's page buttons are real
+buttons (`aria-pressed`, screen-reader labels, focus rings), so keyboard
+operation works natively; because pressed-state changes alone are not reliably
+spoken, the grid also mirrors the selection count into a polite live region
+(deliberately without `role="status"` — the workspace owns that one for
+processing and results). Tests cover the keyboard path and the announcements
+for both input directions.
+
 **Visual page selection.** Extract and Delete gained a page picker built from
 the same `PdfPageThumbnail`, extracted into a shared `PagePreviewGrid`. It is an
 *alternative editor for the existing range field*, not a second model: clicking

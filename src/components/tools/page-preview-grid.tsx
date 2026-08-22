@@ -74,6 +74,16 @@ export function PagePreviewGrid({
   return (
     <div className="mt-4">
       {caption ? <p className="mb-2 text-sm text-muted">{caption}</p> : null}
+      {selectable ? (
+        // Spoken feedback for selection changes: `aria-pressed` alone is not
+        // reliably announced, so the current count is mirrored here. No
+        // `role="status"` — the workspace already owns one for progress.
+        <p aria-live="polite" className="sr-only" data-testid="selection-live">
+          {selectedPages?.size ?? 0} of {pageCount}{" "}
+          {(selectedPages?.size ?? 0) === 1 ? "page" : "pages"} selected to{" "}
+          {selectVerb}.
+        </p>
+      ) : null}
       <ul
         className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6"
         data-testid="page-preview-grid"

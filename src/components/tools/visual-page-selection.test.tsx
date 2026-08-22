@@ -294,6 +294,65 @@ describe("Extract PDF Pages — visual selection", () => {
     expect(screen.queryByTestId("page-preview-grid")).not.toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /pages to extract/i })).toBeInTheDocument();
   });
+  it("toggles pages with the keyboard alone", async () => {
+    const user = userEvent.setup();
+    routeFetch({ pageCount: 5 });
+    renderExtract();
+    await uploadPdf(user);
+    await screen.findByTestId("page-preview-grid");
+
+    // Keyboard path: focus + Enter selects, focus + Space deselects — the
+    // picker must never depend on a pointer.
+    const pageTwo = screen.getByRole("button", {
+      name: /select page 2 to extract/i,
+    });
+    pageTwo.focus();
+    expect(document.activeElement).toBe(pageTwo);
+    await user.keyboard("{Enter}");
+    expect(pageTwo).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText(/pages to extract/i)).toHaveValue("2");
+
+    await user.keyboard(" ");
+    expect(pageTwo).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByLabelText(/pages to extract/i)).toHaveValue("");
+  });
+
+  it("announces selection changes to screen readers", async () => {
+    const user = userEvent.setup();
+    routeFetch({ pageCount: 5 });
+    renderExtract();
+    await uploadPdf(user);
+    await screen.findByTestId("page-preview-grid");
+
+    const live = screen.getByTestId("selection-live");
+    expect(live).toHaveAttribute("aria-live", "polite");
+    // Not a second status region: the workspace owns the processing one.
+    expect(live).not.toHaveAttribute("role");
+    expect(live).toHaveTextContent("0 of 5 pages selected to extract.");
+
+    await user.click(screen.getByRole("button", { name: /select page 1 to extract/i }));
+    await user.click(screen.getByRole("button", { name: /select page 3 to extract/i }));
+    expect(live).toHaveTextContent("2 of 5 pages selected to extract.");
+
+    await user.click(
+      screen.getByRole("button", { name: /page 1 is selected to extract/i }),
+    );
+    expect(live).toHaveTextContent("1 of 5 page selected to extract.");
+  });
+
+  it("announces the selection driven by the range field too", async () => {
+    const user = userEvent.setup();
+    routeFetch({ pageCount: 5 });
+    renderExtract();
+    await uploadPdf(user);
+    await screen.findByTestId("page-preview-grid");
+
+    await user.type(screen.getByLabelText(/pages to extract/i), "2-4");
+    expect(screen.getByTestId("selection-live")).toHaveTextContent(
+      "3 of 5 pages selected to extract.",
+    );
+  });
+
 });
 
 describe("Delete PDF Pages — visual selection", () => {

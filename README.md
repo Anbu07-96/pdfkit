@@ -183,6 +183,8 @@ npm start
 - Extract and Delete show a page picker that stays in sync with the range field
   in both directions — the range string remains the single source of truth
 - Split shows the same previews as read-only context, keeping its range workflow
+- Pages can be toggled with the keyboard alone, and selection changes are
+  announced politely to screen readers (`aria-pressed` plus a live count)
 - Documents above the preview limit fall back to the text field, and say so
 
 **Reorder PDF Pages (real, end to end)**
@@ -686,7 +688,7 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (51 files, 762 tests):
+Covered today (51 files, 765 tests):
 
 - **Image inspection** — JPEG/PNG signature detection, header dimension
   parsing, pixel caps, near-miss headers
