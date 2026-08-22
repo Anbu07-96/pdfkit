@@ -108,6 +108,90 @@ export async function runWithPdfiumDocument<T>(
 }
 
 /**
+ * A rendered PDF page as raw pixels — the unit of the full-page rendering API.
+ * `pixels` is RGBA (`width * height * 4` bytes), row-major, opaque (pdfium
+ * paints the page background white).
+ */
+export interface FullPageBitmap {
+  pageNumber: number;
+  width: number;
+  height: number;
+  pixels: Uint8Array;
+}
+
+/** Bitmap guards for full-page renders: pathological page sizes must not
+ * exhaust memory — a huge page renders at a lower effective resolution. */
+const FULL_PAGE_MAX_SIDE_PX = 5000;
+const FULL_PAGE_MAX_PIXELS = 12_000_000;
+
+/**
+ * Render every page of a PDF at `dpi`, one page at a time.
+ *
+ * This is the conversion-grade counterpart of the thumbnail renderer: same
+ * single-instance WASM discipline, same serialised queue, same guaranteed
+ * document destruction — but full pages at a configurable resolution, with
+ * limits that are deliberately separate from the thumbnail limits. Only one
+ * bitmap exists at a time: `handlePage` receives it, encodes what it needs,
+ * and the bitmap is released before the next page renders. Nothing is written
+ * to disk.
+ */
+export async function renderEachPdfPage(
+  bytes: Uint8Array,
+  options: { dpi: number; maxPages: number },
+  handlePage: (page: FullPageBitmap) => void | Promise<void>,
+): Promise<{ pageCount: number }> {
+  return runWithPdfiumDocument(bytes, async (document) => {
+    const pageCount = document.getPageCount();
+    if (!Number.isInteger(pageCount) || pageCount < 1) {
+      throw new ProcessingError("INVALID_PDF", "This PDF contains no pages.");
+    }
+    if (pageCount > options.maxPages) {
+      throw new ProcessingError(
+        "TOO_MANY_OUTPUTS",
+        `This PDF has ${pageCount} pages; the limit for image export is ${options.maxPages}.`,
+      );
+    }
+
+    const scaleWanted = options.dpi / 72;
+
+    for (let index = 0; index < pageCount; index += 1) {
+      // Page objects are single-use in pdfium: fetch a fresh one per call.
+      const { originalWidth, originalHeight } = document
+        .getPage(index)
+        .getOriginalSize();
+
+      if (!(originalWidth > 0) || !(originalHeight > 0)) {
+        throw new ProcessingError(
+          "INVALID_PDF",
+          "A page of this PDF has no usable size.",
+        );
+      }
+
+      const scale = Math.min(
+        scaleWanted,
+        FULL_PAGE_MAX_SIDE_PX / Math.max(originalWidth, originalHeight),
+        Math.sqrt(FULL_PAGE_MAX_PIXELS / (originalWidth * originalHeight)),
+      );
+
+      const rendered = await document.getPage(index).render({
+        scale,
+        render: "bitmap",
+      });
+
+      await handlePage({
+        pageNumber: index + 1,
+        width: rendered.width,
+        height: rendered.height,
+        // pdfium hands back RGBA pixels; `png.test.ts` locks that assumption.
+        pixels: rendered.data as unknown as Uint8Array,
+      });
+    }
+
+    return { pageCount };
+  });
+}
+
+/**
  * Render the requested pages of a PDF as PNG thumbnails.
  *
  * `pages` are 1-based and are returned in the order given. The caller is

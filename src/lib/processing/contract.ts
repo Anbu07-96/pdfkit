@@ -92,6 +92,12 @@ export interface ProcessorInputRules {
   extensions: readonly string[];
   /** Accepted MIME types (advisory: content is verified separately). */
   mimeTypes: readonly string[];
+  /**
+   * Which byte signature the content check verifies. Unset means `pdf`, the
+   * behaviour every Phase 2-7 tool relies on; `image` verifies the JPEG/PNG
+   * signatures instead (Images to PDF).
+   */
+  contentKind?: "pdf" | "image";
 }
 
 /** Runtime context handed to a processor by the service. */

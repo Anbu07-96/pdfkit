@@ -15,6 +15,10 @@ import { formatBytes } from "@/lib/utils/format";
 
 /** `%PDF-` — the header every PDF must contain. */
 const PDF_SIGNATURE = [0x25, 0x50, 0x44, 0x46, 0x2d]; // % P D F -
+/** `FF D8 FF` — every JPEG file starts with these three bytes. */
+const JPEG_SIGNATURE = [0xff, 0xd8, 0xff];
+/** `89 50 4E 47 0D 0A 1A 0A` — the eight-byte PNG header. */
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 /**
  * Some real-world PDFs carry a small amount of leading junk before the header,
@@ -32,6 +36,19 @@ export function hasPdfSignature(bytes: Uint8Array): boolean {
     return true;
   }
   return false;
+}
+
+function startsWith(bytes: Uint8Array, signature: readonly number[]): boolean {
+  if (bytes.length < signature.length) return false;
+  for (let index = 0; index < signature.length; index += 1) {
+    if (bytes[index] !== signature[index]) return false;
+  }
+  return true;
+}
+
+/** True when the bytes carry a real JPEG (JFIF/Exif/spiff) or PNG header. */
+export function hasImageSignature(bytes: Uint8Array): boolean {
+  return startsWith(bytes, JPEG_SIGNATURE) || startsWith(bytes, PNG_SIGNATURE);
 }
 
 function extensionOf(name: string): string {
@@ -80,6 +97,7 @@ export function validateProcessingInput({
   const oversized: string[] = [];
   const empty: string[] = [];
   const notPdf: string[] = [];
+  const checkContent = rules.contentKind === "image" ? hasImageSignature : hasPdfSignature;
   let totalSize = 0;
 
   for (const file of files) {
@@ -103,8 +121,8 @@ export function validateProcessingInput({
       continue;
     }
 
-    // Content check: the bytes must actually look like a PDF.
-    if (!hasPdfSignature(file.bytes)) {
+    // Content check: the bytes must actually look like the declared kind.
+    if (!checkContent(file.bytes)) {
       notPdf.push(file.name);
       continue;
     }
@@ -139,6 +157,17 @@ export function validateProcessingInput({
   }
 
   if (notPdf.length > 0) {
+    if (rules.contentKind === "image") {
+      throw new ProcessingError(
+        "INVALID_IMAGE",
+        "Some files are not valid JPG or PNG images.",
+        {
+          details: notPdf.map(
+            (name) => `${name} does not contain a JPEG or PNG file signature.`,
+          ),
+        },
+      );
+    }
     throw new ProcessingError(
       "INVALID_PDF",
       "Some files are not valid PDF documents.",

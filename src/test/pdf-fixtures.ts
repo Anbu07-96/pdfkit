@@ -229,3 +229,75 @@ export async function makePdfFile(
   const bytes = await makePdf(labels);
   return new File([bytes as BlobPart], name, { type: "application/pdf" });
 }
+
+/** Deterministic photo-like RGBA pixels (random-walk noise, opaque). */
+export async function makeNoisePixels(
+  width: number,
+  height: number,
+  seed: number,
+  alpha = 255,
+): Promise<Uint8Array> {
+  const pixels = new Uint8Array(width * height * 4);
+  let state = (seed >>> 0) || 1;
+  const next = () => {
+    state ^= state << 13;
+    state >>>= 0;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    state >>>= 0;
+    return state / 0x100000000;
+  };
+  let level = 128;
+  for (let index = 0; index < width * height; index += 1) {
+    level = Math.max(0, Math.min(255, level + (next() - 0.5) * 90));
+    const value = level | 0;
+    pixels[index * 4] = value;
+    pixels[index * 4 + 1] = (value * 0.8 + next() * 30) | 0;
+    pixels[index * 4 + 2] = (value * 0.6 + next() * 50) | 0;
+    pixels[index * 4 + 3] = alpha;
+  }
+  return pixels;
+}
+
+/** Copy into a fresh offset-0 typed array (jpeg-js returns pooled Buffers). */
+function freshBytes(data: Uint8Array): Uint8Array {
+  const copy = new Uint8Array(data.length);
+  copy.set(data);
+  return copy;
+}
+
+/**
+ * A real JPEG fixture: deterministic smooth noise, so images with different
+ * seeds are genuinely different files.
+ */
+export async function makeJpeg(
+  width: number,
+  height: number,
+  seed = 7,
+  quality = 80,
+): Promise<Uint8Array> {
+  const jpeg = (await import("jpeg-js")).default;
+  const pixels = await makeNoisePixels(width, height, seed);
+  const encoded = jpeg.encode({ data: pixels, width, height }, quality);
+  return freshBytes(encoded.data);
+}
+
+/**
+ * A real PNG fixture built with the production encoder (RGBA, filter 0).
+ * `alpha` < 255 produces genuinely transparent pixels.
+ */
+export async function makePng(
+  width: number,
+  height: number,
+  seed = 7,
+  alpha = 255,
+): Promise<Uint8Array> {
+  const { encodePng } = await import("@/lib/thumbnails/png");
+  const pixels = await makeNoisePixels(width, height, seed, alpha);
+  return encodePng({ width, height, pixels });
+}
+
+/** Bytes that are neither a PDF nor an image, whatever the name claims. */
+export function makeNonImage(): Uint8Array {
+  return new TextEncoder().encode("GIF89a definitely not an image");
+}

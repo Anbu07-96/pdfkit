@@ -46,6 +46,23 @@ export const REORDER_PDF_PAGES_INPUT_RULES: ProcessorInputRules = {
   mimeTypes: ["application/pdf"],
 };
 
+/** Images → PDF accepts several JPG/JPEG/PNG files, in upload order. */
+export const IMAGES_TO_PDF_INPUT_RULES: ProcessorInputRules = {
+  minFiles: 1,
+  extensions: [".jpg", ".jpeg", ".png"],
+  mimeTypes: ["image/jpeg", "image/png"],
+  // Content check: real JPEG/PNG signatures instead of the PDF header.
+  contentKind: "image",
+};
+
+/** PDF → image export works on exactly one document at a time. */
+export const SINGLE_PDF_TO_IMAGE_RULES: ProcessorInputRules = {
+  minFiles: 1,
+  maxFiles: 1,
+  extensions: [".pdf"],
+  mimeTypes: ["application/pdf"],
+};
+
 /** Compress reduces the size of one document. */
 export const COMPRESS_PDF_INPUT_RULES: ProcessorInputRules = {
   minFiles: 1,
@@ -78,6 +95,9 @@ export const INPUT_RULES_BY_TOOL: Record<string, ProcessorInputRules> = {
   "reorder-pdf-pages": REORDER_PDF_PAGES_INPUT_RULES,
   "rotate-pdf": ROTATE_PDF_INPUT_RULES,
   "compress-pdf": COMPRESS_PDF_INPUT_RULES,
+  "images-to-pdf": IMAGES_TO_PDF_INPUT_RULES,
+  "pdf-to-jpg": SINGLE_PDF_TO_IMAGE_RULES,
+  "pdf-to-png": SINGLE_PDF_TO_IMAGE_RULES,
 };
 
 export function getInputRules(toolId: string): ProcessorInputRules | undefined {

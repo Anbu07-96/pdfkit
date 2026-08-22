@@ -17,6 +17,9 @@ import "server-only";
  * | PDFKIT_MAX_TOTAL_UPLOAD_SIZE      | 100 MB  | total size of one request  |
  * | PDFKIT_MAX_SPLIT_OUTPUTS          | 50      | documents one job may emit |
  * | PDFKIT_COMPRESS_MAX_RASTER_PAGES  | 60      | pages rasterised per compress job |
+ * | PDFKIT_CONVERSION_MAX_PAGES       | 50      | pages per PDF → image job    |
+ * | PDFKIT_CONVERSION_DPI             | 150     | render resolution for exports |
+ * | PDFKIT_CONVERSION_MAX_IMAGE_BYTES | 6 MB    | size of one produced image   |
  *
  * The MVP processes documents entirely in memory, so these limits also bound
  * the memory a single request can use.
@@ -42,6 +45,12 @@ export interface ProcessingLimits {
    * CPU and memory one compress request can spend.
    */
   maxCompressRasterPages: number;
+  /** Maximum number of pages a PDF → image conversion may render. */
+  maxConversionPages: number;
+  /** Render resolution (dots per inch) for PDF → JPG/PNG exports. */
+  conversionDpi: number;
+  /** Maximum size of a single produced JPG/PNG, in bytes. */
+  conversionMaxImageBytes: number;
 }
 
 export const DEFAULT_PROCESSING_LIMITS: ProcessingLimits = {
@@ -50,10 +59,18 @@ export const DEFAULT_PROCESSING_LIMITS: ProcessingLimits = {
   maxTotalSize: 100 * MB,
   maxOutputs: 50,
   maxCompressRasterPages: 60,
+  maxConversionPages: 50,
+  conversionDpi: 150,
+  conversionMaxImageBytes: 6 * MB,
 };
 
-/** Hard ceiling, so a misconfigured environment cannot exhaust the server. */
+/** Hard ceilings, so a misconfigured environment cannot exhaust the server. */
 const MAX_COMPRESS_RASTER_PAGES_CEILING = 300;
+const CONVERSION_CEILINGS = {
+  maxPages: 200,
+  dpi: 300,
+  maxImageBytes: 16 * MB,
+} as const;
 
 function readPositiveInt(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
@@ -90,11 +107,36 @@ export function getProcessingLimits(): ProcessingLimits {
     MAX_COMPRESS_RASTER_PAGES_CEILING,
   );
 
+  const maxConversionPages = Math.min(
+    readPositiveInt(
+      process.env.PDFKIT_CONVERSION_MAX_PAGES,
+      DEFAULT_PROCESSING_LIMITS.maxConversionPages,
+    ),
+    CONVERSION_CEILINGS.maxPages,
+  );
+  const conversionDpi = Math.min(
+    readPositiveInt(
+      process.env.PDFKIT_CONVERSION_DPI,
+      DEFAULT_PROCESSING_LIMITS.conversionDpi,
+    ),
+    CONVERSION_CEILINGS.dpi,
+  );
+  const conversionMaxImageBytes = Math.min(
+    readPositiveInt(
+      process.env.PDFKIT_CONVERSION_MAX_IMAGE_BYTES,
+      DEFAULT_PROCESSING_LIMITS.conversionMaxImageBytes,
+    ),
+    CONVERSION_CEILINGS.maxImageBytes,
+  );
+
   return {
     maxFiles,
     maxFileSize,
     maxOutputs,
     maxCompressRasterPages,
+    maxConversionPages,
+    conversionDpi,
+    conversionMaxImageBytes,
     // A total smaller than a single file would be contradictory.
     maxTotalSize: Math.max(maxTotalSize, maxFileSize),
   };

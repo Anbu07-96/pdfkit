@@ -3,6 +3,7 @@ import "server-only";
 import jpeg from "jpeg-js";
 import { PDFDocument } from "pdf-lib";
 import { ProcessingError } from "@/lib/processing/errors";
+import { freshBytes } from "@/lib/processing/images";
 import { runWithPdfiumDocument } from "@/lib/thumbnails/renderer";
 
 /**
@@ -46,19 +47,9 @@ function roundPt(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-/**
- * Copy encoded JPEG bytes into a fresh, offset-0 typed array.
- *
- * `jpeg-js` returns a Node `Buffer` — a view into a **pooled** ArrayBuffer at
- * an arbitrary byte offset. pdf-lib's JPEG scanner reads `imageData.buffer`
- * from offset 0 (ignoring the view's offset), so pooled buffers would be
- * misread and rejected. A plain copy always starts at offset 0.
- */
-function jpegBytes(data: Uint8Array): Uint8Array {
-  const copy = new Uint8Array(data.length);
-  copy.set(data);
-  return copy;
-}
+// Encoded bytes are copied into fresh offset-0 arrays before embedding:
+// jpeg-js returns pooled Node Buffers, which pdf-lib's JPEG scanner
+// (it reads `.buffer` from offset 0) would misread. See `images.ts`.
 
 export interface RasterizeResult {
   bytes: Uint8Array;
@@ -121,7 +112,7 @@ export async function rasterizePdfForCompression(
           JPEG_QUALITY,
         );
 
-        const image = await output.embedJpg(jpegBytes(encoded.data));
+        const image = await output.embedJpg(freshBytes(encoded.data));
         // Keep the original geometry: rendered pixels ÷ scale = PDF points.
         const width = roundPt(rendered.width / scale);
         const height = roundPt(rendered.height / scale);
