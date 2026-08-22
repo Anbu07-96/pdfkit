@@ -20,7 +20,10 @@ describe("processor registry", () => {
       "compress-pdf",
       "delete-pdf-pages",
       "extract-pdf-pages",
+      "images-to-pdf",
       "merge-pdf",
+      "pdf-to-jpg",
+      "pdf-to-png",
       "reorder-pdf-pages",
       "rotate-pdf",
       "split-pdf",
@@ -32,11 +35,14 @@ describe("processor registry", () => {
     expect(hasProcessor("extract-pdf-pages")).toBe(true);
     expect(hasProcessor("delete-pdf-pages")).toBe(true);
     expect(hasProcessor("compress-pdf")).toBe(true);
+    expect(hasProcessor("images-to-pdf")).toBe(true);
+    expect(hasProcessor("pdf-to-jpg")).toBe(true);
+    expect(hasProcessor("pdf-to-png")).toBe(true);
   });
 
   it("throws a safe error for tools that are not implemented", () => {
     try {
-      getProcessor("pdf-to-word");
+      getProcessor("png-to-pdf");
       throw new Error("expected getProcessor to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(ProcessingError);
@@ -46,12 +52,15 @@ describe("processor registry", () => {
   });
 
   it("keeps the catalog and the registry in sync", () => {
-    // Phase 7 adds compress; nothing else may claim to work.
+    // Phase 8 adds the image conversions; nothing else may claim to work.
     expect(getImplementedToolIds()).toEqual([
       "compress-pdf",
       "delete-pdf-pages",
       "extract-pdf-pages",
+      "images-to-pdf",
       "merge-pdf",
+      "pdf-to-jpg",
+      "pdf-to-png",
       "reorder-pdf-pages",
       "rotate-pdf",
       "split-pdf",
@@ -86,6 +95,9 @@ describe("getProcessingLimits", () => {
 
     vi.stubEnv("PDFKIT_MAX_SPLIT_OUTPUTS", "7");
     vi.stubEnv("PDFKIT_COMPRESS_MAX_RASTER_PAGES", "25");
+    vi.stubEnv("PDFKIT_CONVERSION_MAX_PAGES", "17");
+    vi.stubEnv("PDFKIT_CONVERSION_DPI", "200");
+    vi.stubEnv("PDFKIT_CONVERSION_MAX_IMAGE_BYTES", "999999");
 
     expect(getProcessingLimits()).toEqual({
       maxFiles: 3,
@@ -93,6 +105,9 @@ describe("getProcessingLimits", () => {
       maxTotalSize: 4096,
       maxOutputs: 7,
       maxCompressRasterPages: 25,
+      maxConversionPages: 17,
+      conversionDpi: 200,
+      conversionMaxImageBytes: 999999,
     });
   });
 

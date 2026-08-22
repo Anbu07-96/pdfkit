@@ -1,4 +1,6 @@
 import { CompressPdfWorkspace } from "@/components/tools/workspaces/compress-pdf-workspace";
+import { ImagesToPdfWorkspace } from "@/components/tools/workspaces/images-to-pdf-workspace";
+import { PdfToImageWorkspace } from "@/components/tools/workspaces/pdf-to-image-workspace";
 import { DeletePdfPagesWorkspace } from "@/components/tools/workspaces/delete-pdf-pages-workspace";
 import { ExtractPdfPagesWorkspace } from "@/components/tools/workspaces/extract-pdf-pages-workspace";
 import { MergePdfWorkspace } from "@/components/tools/workspaces/merge-pdf-workspace";
@@ -22,6 +24,41 @@ import { getInputRules } from "@/lib/processing/rules";
  */
 export function getToolWorkspace(toolId: string): React.ReactNode | null {
   switch (toolId) {
+    case "images-to-pdf": {
+      const limits = getProcessingLimits();
+      return (
+        <ImagesToPdfWorkspace
+          limits={{
+            maxFiles: limits.maxFiles,
+            maxFileSize: limits.maxFileSize,
+          }}
+        />
+      );
+    }
+    case "pdf-to-jpg": {
+      const limits = getProcessingLimits();
+      return (
+        <PdfToImageWorkspace
+          format="jpg"
+          limits={{
+            maxFileSize: limits.maxFileSize,
+            maxPages: limits.maxConversionPages,
+          }}
+        />
+      );
+    }
+    case "pdf-to-png": {
+      const limits = getProcessingLimits();
+      return (
+        <PdfToImageWorkspace
+          format="png"
+          limits={{
+            maxFileSize: limits.maxFileSize,
+            maxPages: limits.maxConversionPages,
+          }}
+        />
+      );
+    }
     case "compress-pdf": {
       const limits = getProcessingLimits();
       return (
@@ -114,6 +151,9 @@ export function getToolWorkspace(toolId: string): React.ReactNode | null {
 }
 
 const TOOLS_WITH_WORKSPACE = new Set([
+  "images-to-pdf",
+  "pdf-to-jpg",
+  "pdf-to-png",
   "compress-pdf",
   "merge-pdf",
   "split-pdf",

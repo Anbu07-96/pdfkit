@@ -27,6 +27,11 @@ const nextConfig: NextConfig = {
         destination: "/tools/reorder-pdf-pages",
         permanent: true,
       },
+      {
+        source: "/tools/jpg-to-pdf",
+        destination: "/tools/images-to-pdf",
+        permanent: true,
+      },
     ];
   },
 };

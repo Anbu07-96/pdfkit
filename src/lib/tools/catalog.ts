@@ -12,7 +12,8 @@ import type { Tool } from "./types";
  * `src/lib/processing/registry.ts`; a test enforces that both sides agree.
  *
  * Implemented today: Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages,
- * Reorder PDF Pages, Rotate PDF, Compress PDF. Everything else is `COMING_SOON`.
+ * Reorder PDF Pages, Rotate PDF, Compress PDF, Images to PDF, PDF to JPG and
+ * PDF to PNG. Everything else is `COMING_SOON`.
  */
 
 const PDF_EXT = [".pdf"];
@@ -153,19 +154,23 @@ export const TOOLS: readonly Tool[] = [
   /* Convert                                                             */
   /* ------------------------------------------------------------------ */
   pdfTool({
-    id: "jpg-to-pdf",
-    name: "JPG to PDF",
-    description: "Turn JPG images into a single PDF document.",
+    id: "images-to-pdf",
+    name: "Images to PDF",
+    description: "Turn JPG and PNG images into a single PDF document.",
     category: "convert",
     icon: "image",
+    // Implemented in Phase 8: server-side embedding with pdf-lib (JPEG data
+    // is passed through untouched; PNG transparency is preserved on a white
+    // page background).
+    status: "AVAILABLE",
     plannedTier: "free",
-    supportedFileTypes: [".jpg", ".jpeg"],
-    acceptedMimeTypes: ["image/jpeg"],
-    keywords: ["jpeg", "photo", "picture", "image to pdf"],
+    supportedFileTypes: [".jpg", ".jpeg", ".png"],
+    acceptedMimeTypes: ["image/jpeg", "image/png"],
+    keywords: ["jpeg", "photo", "picture", "image to pdf", "png to pdf", "jpg to pdf"],
     howItWorks: [
-      "Add the JPG images you want to include.",
-      "Order them and choose page size and margins.",
-      "Download the images as one PDF.",
+      "Add the JPG or PNG images you want to include.",
+      "Arrange them in the order the pages should follow.",
+      "Download one PDF with exactly one page per image.",
     ],
   }),
   pdfTool({
@@ -190,12 +195,15 @@ export const TOOLS: readonly Tool[] = [
     description: "Export every page of a PDF as a JPG image.",
     category: "convert",
     icon: "image",
+    // Implemented in Phase 8: pdfium renders each page at the configured
+    // export resolution; jpeg-js encodes at quality 90.
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["jpeg", "export images", "page images", "screenshot"],
     howItWorks: [
       "Upload the PDF you want to export.",
-      "Choose which pages and what image quality you need.",
-      "Download the images.",
+      "Every page is rendered at 150 DPI (server-configurable).",
+      "Download one JPG, or a ZIP with one JPG per page.",
     ],
   }),
   pdfTool({
@@ -204,12 +212,15 @@ export const TOOLS: readonly Tool[] = [
     description: "Export PDF pages as lossless PNG images.",
     category: "convert",
     icon: "image",
+    // Implemented in Phase 8: pdfium renders each page; the in-house PNG
+    // encoder writes exact RGBA pixels.
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["export images", "page images", "lossless"],
     howItWorks: [
       "Upload the PDF you want to export.",
-      "Choose which pages and what resolution you need.",
-      "Download the images.",
+      "Every page is rendered at 150 DPI (server-configurable).",
+      "Download one PNG, or a ZIP with one PNG per page.",
     ],
   }),
   pdfTool({
@@ -691,6 +702,6 @@ export const POPULAR_TOOL_IDS = [
   "rotate-pdf",
   "delete-pdf-pages",
   "extract-pdf-pages",
-  "jpg-to-pdf",
+  "images-to-pdf",
   "pdf-to-jpg",
 ] as const;

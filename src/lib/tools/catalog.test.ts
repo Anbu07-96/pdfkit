@@ -46,9 +46,9 @@ describe("tool catalog", () => {
 
   it("only marks genuinely implemented tools as usable", () => {
     // Merge (Phase 2), Split (Phase 3), Extract and Delete pages (Phase 4),
-    // Reorder pages (Phase 5), Rotate (Phase 6) and Compress (Phase 7) are
-    // implemented; everything else must still say so. `registry.test.ts`
-    // asserts catalog/registry parity both ways.
+    // Reorder pages (Phase 5), Rotate (Phase 6), Compress (Phase 7) and the
+    // image conversions (Phase 8) are implemented; everything else must still
+    // say so. `registry.test.ts` asserts catalog/registry parity both ways.
     const implemented = [
       "merge-pdf",
       "split-pdf",
@@ -57,6 +57,9 @@ describe("tool catalog", () => {
       "delete-pdf-pages",
       "reorder-pdf-pages",
       "rotate-pdf",
+      "images-to-pdf",
+      "pdf-to-jpg",
+      "pdf-to-png",
     ];
 
     for (const tool of TOOLS) {

@@ -19,7 +19,7 @@ describe("searchTools", () => {
 
   it("matches file formats used in names and keywords", () => {
     const jpg = ids("jpg");
-    expect(jpg).toContain("jpg-to-pdf");
+    expect(jpg).toContain("images-to-pdf"); // renamed from jpg-to-pdf in Phase 8
     expect(jpg).toContain("pdf-to-jpg");
 
     const word = ids("word");

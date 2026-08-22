@@ -355,6 +355,59 @@ export async function runCompressPdf({
   return toProcessedDocument(response, "compressed.pdf");
 }
 
+export interface RunImagesToPdfOptions {
+  /** Images in the exact order the pages should follow. */
+  files: File[];
+  signal?: AbortSignal;
+}
+
+/**
+ * Convert JPG/JPEG/PNG images into one PDF on the server. The order of
+ * `files` is the page order sent to the server.
+ */
+export async function runImagesToPdf({
+  files,
+  signal,
+}: RunImagesToPdfOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  for (const file of files) form.append("files", file, file.name);
+
+  const response = await postForm("/api/tools/images-to-pdf", form, signal);
+  return toProcessedDocument(response, "images-to-pdf.pdf");
+}
+
+export interface RunPdfToImageOptions {
+  file: File;
+  signal?: AbortSignal;
+}
+
+/** Shared request shape for the PDF → image endpoints. */
+async function runPdfToImage(
+  endpoint: string,
+  fallbackName: string,
+  { file, signal }: RunPdfToImageOptions,
+): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+
+  const response = await postForm(endpoint, form, signal);
+  return toProcessedDocument(response, fallbackName);
+}
+
+/** Export every page of a PDF as a JPG (single image or ZIP). */
+export async function runPdfToJpg(
+  options: RunPdfToImageOptions,
+): Promise<ProcessedDocument> {
+  return runPdfToImage("/api/tools/pdf-to-jpg", "page-1.jpg", options);
+}
+
+/** Export every page of a PDF as a PNG (single image or ZIP). */
+export async function runPdfToPng(
+  options: RunPdfToImageOptions,
+): Promise<ProcessedDocument> {
+  return runPdfToImage("/api/tools/pdf-to-png", "page-1.png", options);
+}
+
 export interface PageThumbnailData {
   pageNumber: number;
   /** Extra clockwise rotation baked into this preview. */
