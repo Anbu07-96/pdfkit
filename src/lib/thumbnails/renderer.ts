@@ -305,13 +305,3 @@ export async function renderPdfPageThumbnails(
     }
   });
 }
-
-/** Page count according to the rasterizer. Used by tests and diagnostics. */
-export async function readPdfPageCountForPreview(bytes: Uint8Array): Promise<number> {
-  const { pageCount } = await renderPdfPageThumbnails(bytes, {
-    pages: [],
-    width: 1,
-    maxImageBytes: 1,
-  });
-  return pageCount;
-}

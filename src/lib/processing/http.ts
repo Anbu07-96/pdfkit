@@ -40,6 +40,19 @@ const BINARY_HEADERS = {
 /** Shared JSON response headers for every processing-related route. */
 export const JSON_RESPONSE_HEADERS = JSON_HEADERS;
 
+/**
+ * Hand document bytes to `Response` without copying them.
+ *
+ * `BodyInit` is typed as an ArrayBuffer-backed view, while the processing
+ * contract types bytes as plain `Uint8Array` (`ArrayBufferLike`). At runtime
+ * every processor produces exactly the ArrayBuffer-backed array the platform
+ * expects, so this declares that once, at the boundary, instead of doubling
+ * the peak memory of every large download with a defensive copy.
+ */
+function asResponseBody(bytes: Uint8Array): BodyInit {
+  return bytes as Uint8Array<ArrayBuffer>;
+}
+
 export function jsonError(
   code: ProcessingErrorCode,
   message: string,
@@ -59,13 +72,16 @@ function errorResponse(error: unknown): Response {
   });
 }
 
-/** `report final.pdf` → `report final.pdf`; strips anything header-unsafe. */
-function sanitizeFileName(name: string, fallback: string): string {
+/** `report final.pdf` → `report final.pdf`; strips anything header-unsafe. */function sanitizeFileName(name: string, fallback: string): string {
   const cleaned = name
     .replace(/[\r\n"\\]/g, "")
     .replace(/[/\\]/g, "-")
     // Strip C0 control characters so the header cannot be split.
     .replace(/[\u0000-\u001f\u007f]/g, "")
+    // Header values must be ByteStrings: characters above U+00FF would make
+    // the Response constructor throw, so they are replaced defensively no
+    // matter where the name came from.
+    .replace(/[^\u0000-\u00ff]/g, "_")
     .trim();
   return cleaned.length > 0 && cleaned.length <= 120 ? cleaned : fallback;
 }
@@ -263,7 +279,9 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
     const artifact = result.artifacts[0];
     const fileName = sanitizeFileName(artifact.name, fallbackFileName);
 
-    return new Response(new Uint8Array(artifact.bytes), {
+    // The bytes are handed over as-is: processors produce fresh arrays, and
+    // copying would double the peak memory of every large download.
+    return new Response(asResponseBody(artifact.bytes), {
       status: 200,
       headers: {
         ...BINARY_HEADERS,
@@ -287,7 +305,7 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
     `${toolId}-output.zip`,
   );
 
-  return new Response(new Uint8Array(archive), {
+  return new Response(asResponseBody(archive), {
     status: 200,
     headers: {
       ...BINARY_HEADERS,

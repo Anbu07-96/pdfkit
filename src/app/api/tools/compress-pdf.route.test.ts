@@ -225,3 +225,20 @@ describe("POST /api/tools/compress-pdf", () => {
     expect(GET().status).toBe(405);
   });
 });
+
+describe("POST /api/tools/compress-pdf with a header-hostile filename", () => {
+  it("survives extended-Latin filenames that headers cannot carry", async () => {
+    // Regression (Phase 9): Ő (U+0150) used to pass the filename sanitiser and
+    // made the Response constructor throw, failing the request as an
+    // unstructured 500. The name must be neutralised and the job must succeed.
+    const file = uncompressedFile("Ő-document.pdf");
+    const response = await call({ files: [file], level: "low" });
+
+    expect(response.status).toBe(200);
+    const disposition = response.headers.get("content-disposition") ?? "";
+    expect(disposition).toContain("filename=");
+    expect(disposition).not.toMatch(/[^\u0000-\u00ff]/);
+    expect(response.headers.get("x-pdfkit-reduced")).toBe("yes");
+    await sourcePagesOf(response);
+  });
+});

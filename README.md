@@ -686,7 +686,7 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (50 files, 753 tests):
+Covered today (51 files, 762 tests):
 
 - **Image inspection** — JPEG/PNG signature detection, header dimension
   parsing, pixel caps, near-miss headers

@@ -149,20 +149,3 @@ export function getToolWorkspace(toolId: string): React.ReactNode | null {
       return null;
   }
 }
-
-const TOOLS_WITH_WORKSPACE = new Set([
-  "images-to-pdf",
-  "pdf-to-jpg",
-  "pdf-to-png",
-  "compress-pdf",
-  "merge-pdf",
-  "split-pdf",
-  "extract-pdf-pages",
-  "delete-pdf-pages",
-  "reorder-pdf-pages",
-  "rotate-pdf",
-]);
-
-export function hasToolWorkspace(toolId: string): boolean {
-  return TOOLS_WITH_WORKSPACE.has(toolId);
-}
