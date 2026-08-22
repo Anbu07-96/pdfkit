@@ -12,8 +12,8 @@ import type { Tool } from "./types";
  * `src/lib/processing/registry.ts`; a test enforces that both sides agree.
  *
  * Implemented today: Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages,
- * Reorder PDF Pages, Rotate PDF, Compress PDF, Images to PDF, PDF to JPG and
- * PDF to PNG. Everything else is `COMING_SOON`.
+ * Reorder PDF Pages, Rotate PDF, Compress PDF, Images to PDF, PDF to JPG,
+ * PDF to PNG and Edit PDF Metadata. Everything else is `COMING_SOON`.
  */
 
 const PDF_EXT = [".pdf"];
@@ -436,6 +436,25 @@ export const TOOLS: readonly Tool[] = [
       "Upload the PDF you are reviewing.",
       "Attach comments to specific places on the page.",
       "Download the annotated PDF.",
+    ],
+  }),
+
+  pdfTool({
+    id: "edit-pdf-metadata",
+    name: "Edit PDF Metadata",
+    description: "View and change a document's title, author and keywords.",
+    category: "edit",
+    icon: "metadata",
+    // Implemented in Phase 11: server-side Info-dictionary editing with
+    // pdf-lib; producer and dates are shown read-only because pdf-lib
+    // re-stamps them on every save.
+    status: "AVAILABLE",
+    plannedTier: "free",
+    keywords: ["title", "author", "subject", "keywords", "properties", "info"],
+    howItWorks: [
+      "Upload the PDF and see its current properties.",
+      "Edit title, author, subject, keywords or creator — or clear them.",
+      "Download the updated PDF with every page unchanged.",
     ],
   }),
 

@@ -63,6 +63,14 @@ export const SINGLE_PDF_TO_IMAGE_RULES: ProcessorInputRules = {
   mimeTypes: ["application/pdf"],
 };
 
+/** Edit Metadata works on exactly one document. */
+export const EDIT_PDF_METADATA_INPUT_RULES: ProcessorInputRules = {
+  minFiles: 1,
+  maxFiles: 1,
+  extensions: [".pdf"],
+  mimeTypes: ["application/pdf"],
+};
+
 /** Compress reduces the size of one document. */
 export const COMPRESS_PDF_INPUT_RULES: ProcessorInputRules = {
   minFiles: 1,
@@ -98,6 +106,7 @@ export const INPUT_RULES_BY_TOOL: Record<string, ProcessorInputRules> = {
   "images-to-pdf": IMAGES_TO_PDF_INPUT_RULES,
   "pdf-to-jpg": SINGLE_PDF_TO_IMAGE_RULES,
   "pdf-to-png": SINGLE_PDF_TO_IMAGE_RULES,
+  "edit-pdf-metadata": EDIT_PDF_METADATA_INPUT_RULES,
 };
 
 export function getInputRules(toolId: string): ProcessorInputRules | undefined {

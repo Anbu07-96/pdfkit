@@ -1,4 +1,5 @@
 import { CompressPdfWorkspace } from "@/components/tools/workspaces/compress-pdf-workspace";
+import { EditPdfMetadataWorkspace } from "@/components/tools/workspaces/edit-pdf-metadata-workspace";
 import { ImagesToPdfWorkspace } from "@/components/tools/workspaces/images-to-pdf-workspace";
 import { PdfToImageWorkspace } from "@/components/tools/workspaces/pdf-to-image-workspace";
 import { DeletePdfPagesWorkspace } from "@/components/tools/workspaces/delete-pdf-pages-workspace";
@@ -58,6 +59,10 @@ export function getToolWorkspace(toolId: string): React.ReactNode | null {
           }}
         />
       );
+    }
+    case "edit-pdf-metadata": {
+      const limits = getProcessingLimits();
+      return <EditPdfMetadataWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
     }
     case "compress-pdf": {
       const limits = getProcessingLimits();

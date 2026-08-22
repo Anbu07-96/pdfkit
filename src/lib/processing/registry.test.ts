@@ -19,6 +19,7 @@ describe("processor registry", () => {
     expect(getImplementedToolIds()).toEqual([
       "compress-pdf",
       "delete-pdf-pages",
+      "edit-pdf-metadata",
       "extract-pdf-pages",
       "images-to-pdf",
       "merge-pdf",
@@ -36,13 +37,14 @@ describe("processor registry", () => {
     expect(hasProcessor("delete-pdf-pages")).toBe(true);
     expect(hasProcessor("compress-pdf")).toBe(true);
     expect(hasProcessor("images-to-pdf")).toBe(true);
+    expect(hasProcessor("edit-pdf-metadata")).toBe(true);
     expect(hasProcessor("pdf-to-jpg")).toBe(true);
     expect(hasProcessor("pdf-to-png")).toBe(true);
   });
 
   it("throws a safe error for tools that are not implemented", () => {
     try {
-      getProcessor("png-to-pdf");
+      getProcessor("remove-metadata");
       throw new Error("expected getProcessor to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(ProcessingError);
@@ -56,6 +58,7 @@ describe("processor registry", () => {
     expect(getImplementedToolIds()).toEqual([
       "compress-pdf",
       "delete-pdf-pages",
+      "edit-pdf-metadata",
       "extract-pdf-pages",
       "images-to-pdf",
       "merge-pdf",
