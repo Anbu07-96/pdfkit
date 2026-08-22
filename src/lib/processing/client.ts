@@ -3,6 +3,9 @@ import type {
   CompressionStrategy,
   RasterSkipReason,
 } from "@/lib/processing/compression";
+import type { DocumentMetadata } from "@/lib/processing/metadata";
+
+export type { DocumentMetadata };
 import type { ProcessingErrorCode } from "@/lib/processing/errors";
 import {
   formatPageRotations,
@@ -197,6 +200,8 @@ export interface PdfInspectionResult {
   fileName: string;
   size: number;
   pageCount: number;
+  /** Document metadata reported by the server; `null` entries are absent. */
+  metadata: DocumentMetadata;
 }
 
 export interface RunMergePdfOptions {
@@ -406,6 +411,43 @@ export async function runPdfToPng(
   options: RunPdfToImageOptions,
 ): Promise<ProcessedDocument> {
   return runPdfToImage("/api/tools/pdf-to-png", "page-1.png", options);
+}
+
+export interface RunEditPdfMetadataOptions {
+  file: File;
+  /** Per-field values; `null` means "clear this field". */
+  title: string | null;
+  author: string | null;
+  subject: string | null;
+  /** Comma-separated keywords. */
+  keywords: string | null;
+  creator: string | null;
+  signal?: AbortSignal;
+}
+
+/**
+ * Edit the metadata of one PDF on the server. Every field is sent explicitly
+ * so clearing works: an empty value removes the Info entry, and the server
+ * re-validates types and lengths.
+ */
+export async function runEditPdfMetadata({
+  file,
+  title,
+  author,
+  subject,
+  keywords,
+  creator,
+  signal,
+}: RunEditPdfMetadataOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  const fields = { title, author, subject, keywords, creator };
+  for (const [field, value] of Object.entries(fields)) {
+    form.append(field, value ?? "");
+  }
+
+  const response = await postForm("/api/tools/edit-pdf-metadata", form, signal);
+  return toProcessedDocument(response, "metadata.pdf");
 }
 
 export interface PageThumbnailData {

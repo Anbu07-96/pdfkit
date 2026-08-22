@@ -1,7 +1,12 @@
 // @vitest-environment node
+import { PDFDocument } from "pdf-lib";
 import { describe, expect, it, vi } from "vitest";
 import { GET, POST } from "@/app/api/documents/inspect/route";
-import { makeNonPdf, makeNumberedPdf } from "@/test/pdf-fixtures";
+import {
+  makeNonPdf,
+  makeNumberedPdf,
+  makeUncompressedPdf,
+} from "@/test/pdf-fixtures";
 
 async function inspectRequest(files: File[]) {
   const form = new FormData();
@@ -85,5 +90,67 @@ describe("POST /api/documents/inspect", () => {
 describe("GET /api/documents/inspect", () => {
   it("is not allowed", () => {
     expect(GET().status).toBe(405);
+  });
+});
+
+describe("POST /api/documents/inspect — metadata (Phase 11)", () => {
+  it("reports stored metadata with nulls for absent fields", async () => {
+    const document = await PDFDocument.create();
+    document.addPage([200, 200]);
+    document.setTitle("Quarterly Report");
+    document.setKeywords(["finance, 2026"]);
+    const bytes = await document.save();
+    const form = new FormData();
+    form.append(
+      "files",
+      new File([bytes as BlobPart], "doc.pdf", { type: "application/pdf" }),
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/documents/inspect", {
+        method: "POST",
+        body: form,
+      }),
+    );
+    const body = (await response.json()) as {
+      pageCount: number;
+      metadata: {
+        title: string | null;
+        author: string | null;
+        keywords: string[] | null;
+        producer: string | null;
+        creationDate: string | null;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.pageCount).toBe(1);
+    expect(body.metadata.title).toBe("Quarterly Report");
+    expect(body.metadata.author).toBeNull();
+    expect(body.metadata.keywords).toEqual(["finance", "2026"]);
+    expect(body.metadata.producer).not.toBeNull();
+    expect(body.metadata.creationDate).not.toBeNull();
+  });
+
+  it("reports every metadata field as null for a bare document", async () => {
+    const bytes = makeUncompressedPdf(2);
+    const form = new FormData();
+    form.append(
+      "files",
+      new File([bytes as BlobPart], "bare.pdf", { type: "application/pdf" }),
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/documents/inspect", {
+        method: "POST",
+        body: form,
+      }),
+    );
+    const body = (await response.json()) as { metadata: Record<string, unknown> };
+
+    expect(response.status).toBe(200);
+    for (const value of Object.values(body.metadata)) {
+      expect(value).toBeNull();
+    }
   });
 });
