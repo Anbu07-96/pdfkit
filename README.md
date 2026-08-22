@@ -8,7 +8,7 @@ later OCR and AI document intelligence.
 
 > ## Current status: Phase 6 — rotation and visual page selection
 >
-> **Ten tools genuinely work:**
+> **Eleven tools genuinely work:**
 >
 > - **Merge PDF** — combine several PDFs in the order you choose.
 > - **Split PDF** — split every page into its own file, or split by page ranges;
@@ -24,6 +24,9 @@ later OCR and AI document intelligence.
 >   in your order (JPEG data is embedded untouched).
 > - **PDF to JPG / PDF to PNG** — every page rendered by pdfium at 150 DPI;
 >   one image for single pages, a ZIP per document otherwise.
+> - **Edit PDF Metadata** — see the real document properties, edit title,
+>   author, subject, keywords and creator, or clear them; Producer and dates
+>   are shown read-only because pdf-lib re-stamps them on every save.
 >
 > **Every other tool is still unimplemented** and honestly marked
 > **Coming soon**, with its upload area disabled. There is no simulated
@@ -71,7 +74,7 @@ A single web app for common document tasks, built around three product rules:
 The catalog describes **42 tools** in six categories — Organize, Convert, Edit,
 Security, OCR and AI — of which **6 are implemented** today: Merge PDF, Split
 PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF Pages, Rotate PDF,
-Compress PDF, Images to PDF, PDF to JPG and PDF to PNG.
+Compress PDF, Images to PDF, PDF to JPG, PDF to PNG and Edit PDF Metadata.
 
 ---
 
@@ -144,6 +147,17 @@ npm start
 ---
 
 ## What is implemented today
+
+**Edit PDF Metadata (real, end to end)**
+
+- The server reads the document's Info dictionary; absent entries are reported
+  as `null`, never invented
+- Title, Author, Subject, Keywords and Creator are editable; an empty field
+  **removes** the entry, a missing field leaves it unchanged
+- Producer and both dates are displayed read-only — pdf-lib re-stamps them on
+  every save, so editing them would silently be lost (stated in the interface)
+- Keywords are stored comma-separated and read back as a list; pages and
+  content are never touched, and removals are proven by re-reading the output
 
 **Images to PDF (real, end to end)**
 
@@ -534,6 +548,30 @@ ceiling 200) rejected with `TOO_MANY_OUTPUTS` (413) **before** rendering, and
 each produced image is capped by `PDFKIT_CONVERSION_MAX_IMAGE_BYTES`
 (default 6 MB) → `OUTPUT_TOO_LARGE` (413). ZIP entry names are sanitised.
 
+## Edit PDF Metadata
+
+```bash
+curl -X POST http://localhost:3000/api/tools/edit-pdf-metadata \
+  -F "files=@document.pdf;type=application/pdf" \
+  -F "title=Quarterly Report" \
+  -F "keywords=finance, 2026" \
+  -o document-metadata.pdf
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `files` | yes | Exactly one PDF |
+| `title`/`author`/`subject`/`creator` | no | Empty string removes the entry; absence leaves it unchanged |
+| `keywords` | no | Comma-separated; empty string removes the list |
+
+Values are limited to 2 000 characters each and 50 keywords (200 characters
+per keyword) — `VALIDATION_ERROR` (400) otherwise. Unicode round-trips
+exactly. Reading metadata happens through the existing inspect endpoint, whose
+response now carries a `metadata` object additively. **pdf-lib limitations,
+stated honestly:** the Producer string and both dates are re-stamped by the
+library on every save, so they are read-only; pdf-lib's own keyword setter
+joins with spaces, so PDFKit writes the comma-separated string itself.
+
 ## Page previews
 
 ```bash
@@ -608,8 +646,8 @@ cloud storage, databases, payments, API keys, a public developer API,
 background workers and job queues are **not** implemented. There is no simulated processing anywhere: no fake
 progress bars, no fake results, no fake downloads, no placeholder page images.
 Only Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF
-Pages, Rotate PDF, Compress PDF, Images to PDF, PDF to JPG and PDF to PNG are
-real.
+Pages, Rotate PDF, Compress PDF, Images to PDF, PDF to JPG, PDF to PNG and
+Edit PDF Metadata are real.
 
 ---
 
@@ -688,7 +726,21 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (51 files, 765 tests):
+Covered today (55 files, 812 tests):
+
+- **Metadata model** — editable/read-only field split, keyword parsing and
+  round-trips, date formatting, length/count/type validation, unicode
+- **Metadata inspection** — stored values reported with `null` for absent
+  fields, bare documents fully `null`
+- **Edit Metadata processor** — writes and removals proven by re-reading the
+  output, absent-field preservation, unicode round-trip, Info dictionary
+  created when missing, page identity untouched, hostile names sanitised,
+  malformed/encrypted/oversized/non-string rejections
+- **Edit Metadata API** — standard headers, clearing, absence semantics,
+  every failure mode, GET 405
+- **Edit Metadata workspace** — server-read values, all-fields-explicit
+  payload, clear-all, read-only Producer/dates display, cancel via
+  AbortController, success/error/reset, live announcements
 
 - **Image inspection** — JPEG/PNG signature detection, header dimension
   parsing, pixel caps, near-miss headers

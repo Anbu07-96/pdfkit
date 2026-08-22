@@ -101,6 +101,16 @@ const PHASES = [
     ],
   },
   {
+    title: "Phase 11 — PDF metadata",
+    status: "Completed" as const,
+    items: [
+      "Read document properties through the shared inspect endpoint",
+      "Edit title, author, subject, keywords and creator; empty removes",
+      "Producer and dates honestly read-only (pdf-lib re-stamps them)",
+      "Unicode round-trips; removals proven by re-reading the output",
+    ],
+  },
+  {
     title: "Later phases",
     status: "Planned" as const,
     items: [

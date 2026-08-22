@@ -57,6 +57,11 @@ export default function HelpPage() {
             image at 150 DPI. One page gives a single image; longer documents
             download as a ZIP.
           </li>
+          <li>
+            <strong>Edit PDF Metadata</strong> — see the document&rsquo;s properties
+            and change its title, author, subject, keywords or creator, or
+            clear them entirely.
+          </li>
           <li>Browsing the tool catalog by category.</li>
           <li>Searching tools by name, description or category.</li>
           <li>Opening any tool page to see what the tool will do and what it accepts.</li>
@@ -66,7 +71,7 @@ export default function HelpPage() {
         <h2>What does not work yet</h2>
         <ul>
           <li>
-            Every tool other than the ten above. Their upload areas are
+            Every tool other than the eleven above. Their upload areas are
             intentionally disabled and labelled <strong>Coming soon</strong>.
           </li>
           <li>There are no accounts, no cloud storage, no API keys and no billing.</li>

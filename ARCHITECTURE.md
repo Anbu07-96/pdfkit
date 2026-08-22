@@ -592,6 +592,32 @@ into a sanitised ZIP — the Split PDF delivery contract. The pooled-Node-Buffer
 trap from Phase 7 is shared as `freshBytes` in `lib/processing/images.ts`,
 used by the JPEG encoder path and the compress rasteriser.
 
+## 5h. PDF metadata (Phase 11)
+
+**Model first.** `lib/processing/metadata.ts` is a browser-safe module (like
+`pages.ts`) that states the field split up front: title, author, subject,
+keywords and creator are editable; producer and both dates are read-only
+because pdf-lib re-stamps them on every save — accepting edits for them would
+silently lose the user's input, so the interface says so instead. Length
+budgets (2 000 chars per field, 50 keywords × 200 chars) live in the same
+module and are enforced by the processor, never trusted from the browser.
+
+**Reading reuses inspection.** The shared `inspectPdf` response gained a
+`metadata` object — additive, so every existing consumer simply ignores it.
+Absent Info entries are reported as `null`, never invented. One quirk is
+handled explicitly: pdf-lib keeps Keywords as a single decoded string and its
+array setter joins with spaces, so the readout splits on commas and the
+processor writes the comma-joined string itself — the tool's own output
+round-trips exactly, and a space-separated list from another producer reads
+back as one keyword.
+
+**Editing is Info-dictionary-only.** The processor writes the five supported
+keys via `PDFHexString.fromText` and removes them with a dictionary delete when
+a field arrives empty — removals are proven by re-reading the output in tests.
+`getInfoDict` (the same accessor every pdf-lib metadata getter uses) creates
+the dictionary for documents that have none. Pages, content and structure are
+never touched; absent fields are left unchanged.
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:
