@@ -53,7 +53,8 @@ export default function DevelopersPage() {
             <code>POST /api/tools/images-to-pdf</code>,{" "}
             <code>POST /api/tools/pdf-to-jpg</code> and{" "}
             <code>POST /api/tools/pdf-to-png</code> and{" "}
-            <code>POST /api/tools/edit-pdf-metadata</code>,{" "}
+            <code>POST /api/tools/edit-pdf-metadata</code> and{" "}
+            <code>POST /api/tools/remove-metadata</code>,{" "}
             <code>POST /api/documents/inspect</code> and{" "}
             <code>POST /api/documents/thumbnails</code>) already share the same validation,
             limits, multi-artifact delivery and structured error model a public API

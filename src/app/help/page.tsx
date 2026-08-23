@@ -62,6 +62,11 @@ export default function HelpPage() {
             and change its title, author, subject, keywords or creator, or
             clear them entirely.
           </li>
+          <li>
+            <strong>Remove Metadata</strong> — strip the title, author, subject,
+            keywords, creator and XMP data in one verified step, with the
+            limits of the saving library stated up front.
+          </li>
           <li>Browsing the tool catalog by category.</li>
           <li>Searching tools by name, description or category.</li>
           <li>Opening any tool page to see what the tool will do and what it accepts.</li>
@@ -71,7 +76,7 @@ export default function HelpPage() {
         <h2>What does not work yet</h2>
         <ul>
           <li>
-            Every tool other than the eleven above. Their upload areas are
+            Every tool other than the twelve above. Their upload areas are
             intentionally disabled and labelled <strong>Coming soon</strong>.
           </li>
           <li>There are no accounts, no cloud storage, no API keys and no billing.</li>

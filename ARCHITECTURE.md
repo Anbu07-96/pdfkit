@@ -618,6 +618,30 @@ a field arrives empty — removals are proven by re-reading the output in tests.
 the dictionary for documents that have none. Pages, content and structure are
 never touched; absent fields are left unchanged.
 
+## 5i. Metadata removal (Phase 12)
+
+**The privacy tool that verifies itself.** Remove Metadata reuses the Phase 11
+model and readout, and deletes Title/Author/Subject/Keywords plus the XMP
+stream. Two pdf-lib behaviours had to be understood and are handled
+explicitly:
+
+- **Orphaned objects still get serialised.** Dropping the catalog `/Metadata`
+  reference alone leaves the XMP stream in the file as an unreferenced object
+  whose private bytes are still written — unacceptable for a privacy tool. The
+  processor therefore also deletes the object from the `PDFContext`, and a test
+  asserts the XMP payload bytes are physically absent from the output.
+- **`updateInfoDict` re-stamps on save.** Producer and ModificationDate are
+  overwritten unconditionally; Creator is re-inserted (with pdf-lib's own
+  string) only when the key is missing — so Creator is *emptied* rather than
+  deleted, which keeps the library from re-adding its text while leaving no
+  user data.
+
+The job only succeeds after re-opening the produced bytes and confirming every
+targeted field is gone or empty and the XMP reference is absent; the response
+reports what was found (`X-PDFKit-Removed-Fields`, `-Xmp-Removed`,
+`-Verification`) and the interface states plainly that the document is not
+completely metadata-free.
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:

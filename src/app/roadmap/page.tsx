@@ -101,6 +101,16 @@ const PHASES = [
     ],
   },
   {
+    title: "Phase 12 — Metadata removal",
+    status: "Completed" as const,
+    items: [
+      "Remove title, author, subject, keywords and creator in one verified step",
+      "XMP stream removed from the object graph, bytes proven absent",
+      "Honest library limits stated: creator emptied, producer/timestamps re-stamped",
+      "Pages and content untouched",
+    ],
+  },
+  {
     title: "Phase 11 — PDF metadata",
     status: "Completed" as const,
     items: [

@@ -8,7 +8,7 @@ later OCR and AI document intelligence.
 
 > ## Current status: Phase 6 — rotation and visual page selection
 >
-> **Eleven tools genuinely work:**
+> **Twelve tools genuinely work:**
 >
 > - **Merge PDF** — combine several PDFs in the order you choose.
 > - **Split PDF** — split every page into its own file, or split by page ranges;
@@ -27,6 +27,9 @@ later OCR and AI document intelligence.
 > - **Edit PDF Metadata** — see the real document properties, edit title,
 >   author, subject, keywords and creator, or clear them; Producer and dates
 >   are shown read-only because pdf-lib re-stamps them on every save.
+> - **Remove Metadata** — delete title, author, subject, keywords, creator and
+>   the XMP stream, verified by re-reading the output; the honest limits
+>   (creator emptied, producer/timestamps re-stamped) are stated in the tool.
 >
 > **Every other tool is still unimplemented** and honestly marked
 > **Coming soon**, with its upload area disabled. There is no simulated
@@ -74,7 +77,8 @@ A single web app for common document tasks, built around three product rules:
 The catalog describes **42 tools** in six categories — Organize, Convert, Edit,
 Security, OCR and AI — of which **6 are implemented** today: Merge PDF, Split
 PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF Pages, Rotate PDF,
-Compress PDF, Images to PDF, PDF to JPG, PDF to PNG and Edit PDF Metadata.
+Compress PDF, Images to PDF, PDF to JPG, PDF to PNG, Edit PDF Metadata and
+Remove Metadata.
 
 ---
 
@@ -147,6 +151,20 @@ npm start
 ---
 
 ## What is implemented today
+
+**Remove Metadata (real, end to end)**
+
+- Deletes Title, Author, Subject, Keywords and the XMP metadata stream; the
+  XMP object is removed from the file itself, so its bytes are physically gone
+  (verified, not just unreferenced)
+- The removal is **verified by re-reading the output** before it is returned —
+  a failed verification fails the job, it never returns a "clean" file that is
+  not clean
+- Honest limits, stated in the tool: the Creator field is emptied rather than
+  deleted (pdf-lib re-inserts its own text when the key is missing), and the
+  Producer string and modification timestamp are rewritten on save — the
+  result is never claimed to be completely metadata-free
+- Pages, order, dimensions and content are untouched
 
 **Edit PDF Metadata (real, end to end)**
 
@@ -572,6 +590,25 @@ stated honestly:** the Producer string and both dates are re-stamped by the
 library on every save, so they are read-only; pdf-lib's own keyword setter
 joins with spaces, so PDFKit writes the comma-separated string itself.
 
+## Remove Metadata
+
+```bash
+curl -X POST http://localhost:3000/api/tools/remove-metadata \
+  -F "files=@document.pdf;type=application/pdf" \
+  -o document-metadata-removed.pdf
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `files` | yes | Exactly one PDF |
+
+The response carries the verified outcome in headers: `X-PDFKit-Removed-Fields`
+(how many of the five Info fields contained data), `X-PDFKit-Xmp-Removed`
+(`yes` / `not-present`), `X-PDFKit-Verification` (`verified`). No dependency was
+added for XMP: pdf-lib deletes the catalog `/Metadata` entry and the underlying
+object, the same primitive the compress pass has used since Phase 7 — plus the
+object-graph removal the privacy guarantee requires.
+
 ## Page previews
 
 ```bash
@@ -646,8 +683,8 @@ cloud storage, databases, payments, API keys, a public developer API,
 background workers and job queues are **not** implemented. There is no simulated processing anywhere: no fake
 progress bars, no fake results, no fake downloads, no placeholder page images.
 Only Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF
-Pages, Rotate PDF, Compress PDF, Images to PDF, PDF to JPG, PDF to PNG and
-Edit PDF Metadata are real.
+Pages, Rotate PDF, Compress PDF, Images to PDF, PDF to JPG, PDF to PNG, Edit
+PDF Metadata and Remove Metadata are real.
 
 ---
 
@@ -726,7 +763,16 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (55 files, 812 tests):
+Covered today (58 files, 842 tests):
+
+- **Metadata removal** — all five Info fields plus XMP gone (proven at the
+  byte level, not just unreferenced), unicode metadata, empty/no-Info/XMP-free
+  documents, page identity preserved, verified-removal failure path,
+  malformed/encrypted/multi-file rejections, hostile names sanitised
+- **Remove Metadata API** — verified outcome headers, every error mode, GET
+  405, no internals leaked
+- **Remove Metadata workspace** — server-detected readout, honest limits copy,
+  cancel, verified result state, announcements
 
 - **Metadata model** — editable/read-only field split, keyword parsing and
   round-trips, date formatting, length/count/type validation, unicode
