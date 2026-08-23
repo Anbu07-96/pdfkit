@@ -961,12 +961,14 @@ Covered today (63 files, 905 tests):
 
 ## Future phases
 
-Phase 8 stops here on purpose. The planned order (see also `/roadmap`):
+Phase 19 stops here on purpose. The planned order (see also `/roadmap`):
 
-1. DOCX → PDF (requires the sandboxed LibreOffice worker decided against in
-   the Phase 14 feasibility study — a platform decision, not a code change).
-2. Editing and security tools.
-3. OCR.
+1. Editing tools (watermark, page numbers, headers/footers) on the existing
+   pdf-lib pipeline.
+2. Security tools (flatten, crop).
+3. DOCX → PDF (requires the sandboxed LibreOffice worker decided against in
+   the Phase 14 feasibility study — a platform decision, not a code change);
+   OCR (native engine or external service, both a platform decision).
 4. AI document intelligence.
 5. Accounts, cloud storage, billing and a public developer API.
 
