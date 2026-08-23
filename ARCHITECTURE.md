@@ -654,7 +654,20 @@ plus the MIT-licensed `docx` generator, the one new dependency.
 
 The processor writes one paragraph per extracted line and a page break between
 pages — no layout, image or table reconstruction, and every surface (catalog,
-UI, docs, `X-PDFKit-Mode: text-only` header) states that. Pages without
+UI, docs, `X-PDFKit-Mode: text-only` header) states that.
+
+**Text-quality audit (Phase 19).** Two behaviours were established with
+probes. First, a *confirmed defect*: a PDF can carry raw control bytes inside
+a `Tj` string, pdfium extracts them verbatim, and the `docx` generator writes
+them raw into `word/document.xml` — an invalid Office file. Extracted lines
+are therefore stripped of XML-invalid code points
+(`stripXmlInvalidCharacters`); tabs and all readable text survive, and a
+crafted-PDF regression test proves the output stays well-formed. Second, an
+*unavoidable limitation*, now documented: pdfium merges text on the same
+baseline left-to-right, so single-column wrapped text comes out as separate
+lines (one paragraph each) while side-by-side columns on one baseline are
+interleaved into a single line. Reordering by layout analysis would be
+speculative reconstruction, which this tool deliberately does not do. Pages without
 extractable text get an italic marker instead of silently vanishing; an
 image-only PDF succeeds with `characters: 0` and the interface explains why.
 The output is validated **in memory** as a real Office ZIP

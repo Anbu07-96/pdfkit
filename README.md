@@ -660,7 +660,9 @@ curl -X POST http://localhost:3000/api/tools/pdf-to-word \
 
 Text-only conversion: `application/vnd…wordprocessingml.document` output with
 the page texts in order, one paragraph per extracted line and a page break
-between pages. Response headers carry the measured extraction
+between pages. Extracted text is stripped of XML-invalid control characters
+(a crafted PDF can carry raw control bytes that pdfium extracts verbatim;
+without the strip they would corrupt the Office XML). Response headers carry the measured extraction
 (`X-PDFKit-Characters`, `X-PDFKit-Paragraphs`, `X-PDFKit-Mode: text-only`).
 Built on the existing pdfium text pipeline plus the MIT-licensed `docx`
 generator — no LibreOffice, no Python, no child processes, no temp files.
@@ -833,7 +835,8 @@ Covered today (63 files, 905 tests):
 - **PDF to Word processor** — page/text order, one-paragraph-per-line,
   page breaks, unicode, no-text pages marked, in-memory DOCX validated as a
   real Office ZIP, page limits, malformed/encrypted/multi-file rejections,
-  hostile names sanitised, input immutability
+  hostile names sanitised, input immutability, and XML-invalid control
+  characters stripped so unusual PDF text can never malform the document
 - **PDF to Word API** — standard headers, measured extraction facts,
   zero-character honesty, every error mode, GET 405
 - **PDF to Word workspace** — the text-only warning before and after

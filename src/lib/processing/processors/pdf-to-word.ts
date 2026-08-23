@@ -22,7 +22,9 @@ import { extractPdfPageTexts } from "@/lib/thumbnails/renderer";
  * into a real Word document — one paragraph per extracted line and a page
  * break between pages. Nothing else: formatting, fonts, images, tables and
  * exact layout are **not** preserved, and the interface and catalog say so.
- * There is no fake reconstruction.
+ * There is no fake reconstruction. Extracted text is additionally stripped of
+ * XML-invalid control characters (see `stripXmlInvalidCharacters`), because
+ * unusual PDF text must never be able to malform the generated document.
  *
  * Everything runs in memory: no temp files, no child processes, no external
  * services. The produced DOCX is validated before it is returned — it must be
@@ -33,11 +35,32 @@ import { extractPdfPageTexts } from "@/lib/thumbnails/renderer";
 export const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-/** Split a page's extracted text into non-empty trimmed lines. */
+/**
+ * Characters XML 1.0 permits: tab, and everything from space up through the
+ * BMP/astral ranges minus the non-characters at the edges. Line separators
+ * are handled by the split before this runs.
+ */
+const XML_INVALID = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/gu;
+
+/**
+ * Drop characters a Word document cannot legally contain.
+ *
+ * Confirmed defect (Phase 19 audit): a PDF can carry raw control bytes in its
+ * content stream — a crafted `Tj` string is enough — and pdfium's text
+ * extraction passes them through verbatim. The `docx` generator then writes
+ * them raw into `word/document.xml`, producing an invalid Office file that
+ * Word refuses to open. Stripping XML-invalid code points keeps the document
+ * well-formed; they carry no readable text, so nothing of value is lost.
+ */
+export function stripXmlInvalidCharacters(text: string): string {
+  return text.replace(XML_INVALID, "");
+}
+
+/** Split a page's extracted text into non-empty, XML-safe trimmed lines. */
 function pageLines(text: string): string[] {
   return text
     .split(/\r\n|\r|\n/)
-    .map((line) => line.trim())
+    .map((line) => stripXmlInvalidCharacters(line).trim())
     .filter((line) => line.length > 0);
 }
 

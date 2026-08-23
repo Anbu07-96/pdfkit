@@ -301,3 +301,65 @@ export async function makePng(
 export function makeNonImage(): Uint8Array {
   return new TextEncoder().encode("GIF89a definitely not an image");
 }
+
+/**
+ * A valid PDF whose single content stream carries raw control bytes inside a
+ * text-showing operator — the adversarial case pdfium extracts verbatim.
+ * Proves PDF→Word output cannot be malformed by unusual PDF text.
+ */
+export function makeControlCharPdf(): Uint8Array {
+  const encoder = new TextEncoder();
+  // (a\f b\x01 c) Tj — form feed and 0x01 inside the shown string.
+  const content = encoder.encode("BT /F1 12 Tf 20 150 Td (a\f b\x01 c) Tj ET\n");
+
+  const chunks: Uint8Array[] = [encoder.encode("%PDF-1.4\n")];
+  let length = chunks[0].length;
+  const offsets: number[] = [];
+
+  const writeObject = (index: number, dict: string, stream?: Uint8Array) => {
+    offsets[index] = length;
+    const parts: Uint8Array[] = [encoder.encode(`${index} 0 obj\n${dict}\n`)];
+    if (stream) {
+      parts.push(
+        encoder.encode("stream\n"),
+        stream,
+        encoder.encode("\nendstream\n"),
+      );
+    }
+    parts.push(encoder.encode("endobj\n"));
+    for (const part of parts) {
+      chunks.push(part);
+      length += part.length;
+    }
+  };
+
+  writeObject(1, "<< /Type /Catalog /Pages 2 0 R >>");
+  writeObject(2, "<< /Type /Pages /Count 1 /Kids [3 0 R] >>");
+  writeObject(
+    3,
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+  );
+  writeObject(4, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  writeObject(5, `<< /Length ${content.length} >>`, content);
+
+  const xrefOffset = length;
+  let xref = "xref\n0 6\n0000000000 65535 f \n";
+  for (let index = 1; index < 6; index += 1) {
+    xref += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
+  }
+  chunks.push(
+    encoder.encode(xref),
+    encoder.encode(
+      `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`,
+    ),
+  );
+
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const bytes = new Uint8Array(total);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.length;
+  }
+  return bytes;
+}
