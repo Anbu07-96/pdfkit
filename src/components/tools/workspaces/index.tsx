@@ -8,6 +8,7 @@ import { PngToPdfWorkspace } from "@/components/tools/workspaces/png-to-pdf-work
 import { WatermarkWorkspace } from "@/components/tools/workspaces/watermark-workspace";
 import { PageNumbersWorkspace } from "@/components/tools/workspaces/page-numbers-workspace";
 import { CropWorkspace } from "@/components/tools/workspaces/crop-workspace";
+import { FlattenPdfWorkspace } from "@/components/tools/workspaces/flatten-pdf-workspace";
 import { DeletePdfPagesWorkspace } from "@/components/tools/workspaces/delete-pdf-pages-workspace";
 import { ExtractPdfPagesWorkspace } from "@/components/tools/workspaces/extract-pdf-pages-workspace";
 import { MergePdfWorkspace } from "@/components/tools/workspaces/merge-pdf-workspace";
@@ -73,6 +74,10 @@ export function getToolWorkspace(toolId: string): React.ReactNode | null {
     case "crop": {
       const limits = getProcessingLimits();
       return <CropWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
+    }
+    case "flatten-pdf": {
+      const limits = getProcessingLimits();
+      return <FlattenPdfWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
     }
     case "page-numbers": {
       const limits = getProcessingLimits();

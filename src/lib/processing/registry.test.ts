@@ -22,6 +22,7 @@ describe("processor registry", () => {
       "delete-pdf-pages",
       "edit-pdf-metadata",
       "extract-pdf-pages",
+      "flatten-pdf",
       "images-to-pdf",
       "merge-pdf",
       "page-numbers",
@@ -50,6 +51,7 @@ describe("processor registry", () => {
     expect(hasProcessor("watermark")).toBe(true);
     expect(hasProcessor("page-numbers")).toBe(true);
     expect(hasProcessor("crop")).toBe(true);
+    expect(hasProcessor("flatten-pdf")).toBe(true);
     expect(hasProcessor("pdf-to-jpg")).toBe(true);
     expect(hasProcessor("pdf-to-png")).toBe(true);
   });
@@ -73,6 +75,7 @@ describe("processor registry", () => {
       "delete-pdf-pages",
       "edit-pdf-metadata",
       "extract-pdf-pages",
+      "flatten-pdf",
       "images-to-pdf",
       "merge-pdf",
       "page-numbers",
