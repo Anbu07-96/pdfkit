@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { PDFDocument } from "pdf-lib";
+import { PDFName, type PDFDocument } from "pdf-lib";
 import type { DocumentMetadata } from "@/lib/processing/metadata";
 import { loadPdfDocument, readPageCount } from "@/lib/processing/pdf-document";
 import type { ProcessingInputFile } from "@/lib/processing/contract";
@@ -62,6 +62,9 @@ export function readDocumentMetadata(document: PDFDocument): DocumentMetadata {
     producer: textOrNull(document.getProducer()),
     creationDate: dateOrNull(document.getCreationDate()),
     modificationDate: dateOrNull(document.getModificationDate()),
+    // The XMP stream hangs off the catalog as /Metadata; presence is all the
+    // readout reports — its contents are never parsed or echoed.
+    xmpPresent: document.catalog.get(PDFName.of("Metadata")) !== undefined,
   };
 }
 

@@ -63,6 +63,14 @@ export const SINGLE_PDF_TO_IMAGE_RULES: ProcessorInputRules = {
   mimeTypes: ["application/pdf"],
 };
 
+/** Remove Metadata works on exactly one document. */
+export const REMOVE_METADATA_INPUT_RULES: ProcessorInputRules = {
+  minFiles: 1,
+  maxFiles: 1,
+  extensions: [".pdf"],
+  mimeTypes: ["application/pdf"],
+};
+
 /** Edit Metadata works on exactly one document. */
 export const EDIT_PDF_METADATA_INPUT_RULES: ProcessorInputRules = {
   minFiles: 1,
@@ -107,6 +115,7 @@ export const INPUT_RULES_BY_TOOL: Record<string, ProcessorInputRules> = {
   "pdf-to-jpg": SINGLE_PDF_TO_IMAGE_RULES,
   "pdf-to-png": SINGLE_PDF_TO_IMAGE_RULES,
   "edit-pdf-metadata": EDIT_PDF_METADATA_INPUT_RULES,
+  "remove-metadata": REMOVE_METADATA_INPUT_RULES,
 };
 
 export function getInputRules(toolId: string): ProcessorInputRules | undefined {

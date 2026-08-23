@@ -52,6 +52,8 @@ export interface DocumentMetadata {
   producer: string | null;
   creationDate: string | null;
   modificationDate: string | null;
+  /** True when the document carries an XMP metadata stream (Phase 12). */
+  xmpPresent: boolean;
 }
 
 /** Editable values as they arrive from a multipart form (all optional). */

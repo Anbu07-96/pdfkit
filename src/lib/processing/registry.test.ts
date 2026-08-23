@@ -25,6 +25,7 @@ describe("processor registry", () => {
       "merge-pdf",
       "pdf-to-jpg",
       "pdf-to-png",
+      "remove-metadata",
       "reorder-pdf-pages",
       "rotate-pdf",
       "split-pdf",
@@ -38,13 +39,14 @@ describe("processor registry", () => {
     expect(hasProcessor("compress-pdf")).toBe(true);
     expect(hasProcessor("images-to-pdf")).toBe(true);
     expect(hasProcessor("edit-pdf-metadata")).toBe(true);
+    expect(hasProcessor("remove-metadata")).toBe(true);
     expect(hasProcessor("pdf-to-jpg")).toBe(true);
     expect(hasProcessor("pdf-to-png")).toBe(true);
   });
 
   it("throws a safe error for tools that are not implemented", () => {
     try {
-      getProcessor("remove-metadata");
+      getProcessor("pdf-to-word");
       throw new Error("expected getProcessor to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(ProcessingError);
@@ -64,6 +66,7 @@ describe("processor registry", () => {
       "merge-pdf",
       "pdf-to-jpg",
       "pdf-to-png",
+      "remove-metadata",
       "reorder-pdf-pages",
       "rotate-pdf",
       "split-pdf",

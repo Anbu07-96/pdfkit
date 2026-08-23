@@ -149,8 +149,20 @@ describe("POST /api/documents/inspect — metadata (Phase 11)", () => {
     const body = (await response.json()) as { metadata: Record<string, unknown> };
 
     expect(response.status).toBe(200);
-    for (const value of Object.values(body.metadata)) {
-      expect(value).toBeNull();
+    // The eight Info-backed fields are honestly null; XMP presence is a
+    // boolean, added in Phase 12.
+    for (const key of [
+      "title",
+      "author",
+      "subject",
+      "keywords",
+      "creator",
+      "producer",
+      "creationDate",
+      "modificationDate",
+    ]) {
+      expect(body.metadata[key]).toBeNull();
     }
+    expect(body.metadata.xmpPresent).toBe(false);
   });
 });

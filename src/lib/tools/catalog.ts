@@ -13,7 +13,8 @@ import type { Tool } from "./types";
  *
  * Implemented today: Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages,
  * Reorder PDF Pages, Rotate PDF, Compress PDF, Images to PDF, PDF to JPG,
- * PDF to PNG and Edit PDF Metadata. Everything else is `COMING_SOON`.
+ * PDF to PNG, Edit PDF Metadata and Remove Metadata. Everything else is
+ * `COMING_SOON`.
  */
 
 const PDF_EXT = [".pdf"];
@@ -520,15 +521,19 @@ export const TOOLS: readonly Tool[] = [
   pdfTool({
     id: "remove-metadata",
     name: "Remove Metadata",
-    description: "Strip author, timestamps and other hidden document data.",
+    description: "Strip title, author, keywords and XMP data from a PDF.",
     category: "security",
     icon: "metadata",
+    // Implemented in Phase 12: the Info fields and the XMP stream are deleted
+    // and the removal is verified by re-reading the output. Producer and
+    // timestamps remain (pdf-lib re-stamps them) and the tool says so.
+    status: "AVAILABLE",
     plannedTier: "free",
-    keywords: ["privacy", "exif", "clean", "author", "hidden data"],
+    keywords: ["privacy", "exif", "clean", "author", "hidden data", "title", "keywords"],
     howItWorks: [
-      "Upload your PDF.",
-      "Review the metadata found in the file.",
-      "Download a copy with that metadata removed.",
+      "Upload your PDF and see the metadata it contains.",
+      "The title, author, subject, keywords, creator and XMP data are removed.",
+      "Download the cleaned PDF — every page stays exactly as it was.",
     ],
   }),
 

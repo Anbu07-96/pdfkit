@@ -274,6 +274,18 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
     metaHeaders["x-pdfkit-raster-skipped"] = String(result.meta.rasterSkipped);
   }
 
+  // Metadata removal facts (Remove Metadata): the interface reports what the
+  // server found and verified, never a client-side guess.
+  if (result.meta?.removedFields !== undefined) {
+    metaHeaders["x-pdfkit-removed-fields"] = String(result.meta.removedFields);
+  }
+  if (result.meta?.xmpRemoved !== undefined) {
+    metaHeaders["x-pdfkit-xmp-removed"] = String(result.meta.xmpRemoved);
+  }
+  if (result.meta?.verification !== undefined) {
+    metaHeaders["x-pdfkit-verification"] = String(result.meta.verification);
+  }
+
   // A single document is streamed as-is; several are bundled into a ZIP.
   if (result.artifacts.length === 1) {
     const artifact = result.artifacts[0];

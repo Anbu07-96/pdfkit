@@ -41,6 +41,18 @@ export interface ProcessedDocument {
    * taken from the response headers — the browser never guesses sizes.
    */
   compression?: CompressionSummary;
+  /** Removal outcome measured by the server (Remove Metadata only). */
+  removal?: RemovalSummary;
+}
+
+/** Server-verified outcome of a metadata removal. */
+export interface RemovalSummary {
+  /** How many of the five Info fields were present and removed. */
+  removedFields: number;
+  /** `"yes"` when an XMP stream was removed, `"not-present"` otherwise. */
+  xmp: string;
+  /** Always `"verified"` — checked by re-reading the output. */
+  verification: string;
 }
 
 /** Server-measured result of a compression job, for honest reporting. */
@@ -53,6 +65,19 @@ export interface CompressionSummary {
   compressionLevel: CompressionLevel;
   strategy: CompressionStrategy;
   rasterSkipped?: RasterSkipReason;
+}
+
+function removalFromHeaders(response: Response): RemovalSummary | undefined {
+  const removedFields = Number.parseInt(
+    response.headers.get("x-pdfkit-removed-fields") ?? "",
+    10,
+  );
+  if (!Number.isFinite(removedFields)) return undefined;
+  return {
+    removedFields,
+    xmp: response.headers.get("x-pdfkit-xmp-removed") ?? "",
+    verification: response.headers.get("x-pdfkit-verification") ?? "",
+  };
 }
 
 function compressionFromHeaders(
@@ -179,11 +204,13 @@ async function toProcessedDocument(
   const artifacts = artifactsHeader ? Number.parseInt(artifactsHeader, 10) : 1;
   const contentType = response.headers.get("content-type") ?? "";
   const compression = compressionFromHeaders(response);
+  const removal = removalFromHeaders(response);
 
   return {
     blob,
     url: URL.createObjectURL(blob),
     ...(compression ? { compression } : {}),
+    ...(removal ? { removal } : {}),
     fileName: fileNameFromDisposition(
       response.headers.get("content-disposition"),
       fallbackName,
@@ -448,6 +475,26 @@ export async function runEditPdfMetadata({
 
   const response = await postForm("/api/tools/edit-pdf-metadata", form, signal);
   return toProcessedDocument(response, "metadata.pdf");
+}
+
+export interface RunRemoveMetadataOptions {
+  file: File;
+  signal?: AbortSignal;
+}
+
+/**
+ * Strip the metadata from one PDF on the server. The response headers report
+ * how many fields were found and removed and whether the removal was verified.
+ */
+export async function runRemoveMetadata({
+  file,
+  signal,
+}: RunRemoveMetadataOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+
+  const response = await postForm("/api/tools/remove-metadata", form, signal);
+  return toProcessedDocument(response, "metadata-removed.pdf");
 }
 
 export interface PageThumbnailData {
