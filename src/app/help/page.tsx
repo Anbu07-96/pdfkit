@@ -53,6 +53,11 @@ export default function HelpPage() {
             one PDF with exactly one page per image, in the order you arrange.
           </li>
           <li>
+            <strong>PNG to PDF</strong> — the same tool for PNGs only, with
+            transparency preserved and non-PNG files rejected by their real
+            content.
+          </li>
+          <li>
             <strong>PDF to JPG / PDF to PNG</strong> — export every page as an
             image at 150 DPI. One page gives a single image; longer documents
             download as a ZIP.
@@ -81,7 +86,7 @@ export default function HelpPage() {
         <h2>What does not work yet</h2>
         <ul>
           <li>
-            Every tool other than the thirteen above. Their upload areas are
+            Every tool other than the fourteen above. Their upload areas are
             intentionally disabled and labelled <strong>Coming soon</strong>.
           </li>
           <li>There are no accounts, no cloud storage, no API keys and no billing.</li>

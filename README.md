@@ -8,7 +8,7 @@ later OCR and AI document intelligence.
 
 > ## Current status: Phase 6 — rotation and visual page selection
 >
-> **Thirteen tools genuinely work:**
+> **Fourteen tools genuinely work:**
 >
 > - **Merge PDF** — combine several PDFs in the order you choose.
 > - **Split PDF** — split every page into its own file, or split by page ranges;
@@ -22,6 +22,8 @@ later OCR and AI document intelligence.
 >   lossless optimisation, plus an aggressive image-heavy mode.
 > - **Images to PDF** — JPG/JPEG/PNG images become one PDF, one page per image,
 >   in your order (JPEG data is embedded untouched).
+> - **PNG to PDF** — the same pipeline in PNG-only form: transparency is
+>   preserved as a soft mask, and non-PNG payloads are rejected by signature.
 > - **PDF to JPG / PDF to PNG** — every page rendered by pdfium at 150 DPI;
 >   one image for single pages, a ZIP per document otherwise.
 > - **Edit PDF Metadata** — see the real document properties, edit title,
@@ -80,8 +82,8 @@ A single web app for common document tasks, built around three product rules:
 The catalog describes **42 tools** in six categories — Organize, Convert, Edit,
 Security, OCR and AI — of which **6 are implemented** today: Merge PDF, Split
 PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF Pages, Rotate PDF,
-Compress PDF, Images to PDF, PDF to JPG, PDF to PNG, PDF to Word, Edit PDF
-Metadata and Remove Metadata.
+Compress PDF, Images to PDF, PNG to PDF, PDF to JPG, PDF to PNG, PDF to Word,
+Edit PDF Metadata and Remove Metadata.
 
 ---
 
@@ -582,6 +584,25 @@ ceiling 200) rejected with `TOO_MANY_OUTPUTS` (413) **before** rendering, and
 each produced image is capped by `PDFKIT_CONVERSION_MAX_IMAGE_BYTES`
 (default 6 MB) → `OUTPUT_TOO_LARGE` (413). ZIP entry names are sanitised.
 
+## PNG to PDF
+
+```bash
+curl -X POST http://localhost:3000/api/tools/png-to-pdf \
+  -F "files=@shot1.png;type=image/png" \
+  -F "files=@shot2.png;type=image/png" \
+  -o png-to-pdf.pdf
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `files` | yes | One or more `.png` images |
+
+The multipart order **is** the page order. Every file is signature-checked
+server-side (real PNG header), dimensions are capped before embedding
+(24 MP / 12 000 px per side), and the output is `png-to-pdf.pdf` with one page
+per image at 96 DPI, aspect-exact. Shares the Images to PDF engine — no new
+dependencies.
+
 ## Edit PDF Metadata
 
 ```bash
@@ -722,8 +743,8 @@ cloud storage, databases, payments, API keys, a public developer API,
 background workers and job queues are **not** implemented. There is no simulated processing anywhere: no fake
 progress bars, no fake results, no fake downloads, no placeholder page images.
 Only Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF
-Pages, Rotate PDF, Compress PDF, Images to PDF, PDF to JPG, PDF to PNG, PDF to
-Word (text only), Edit PDF Metadata and Remove Metadata are real.
+Pages, Rotate PDF, Compress PDF, Images to PDF, PNG to PDF, PDF to JPG, PDF to
+PNG, PDF to Word (text only), Edit PDF Metadata and Remove Metadata are real.
 
 ---
 
@@ -802,7 +823,12 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (61 files, 876 tests):
+Covered today (63 files, 905 tests):
+
+- **PNG to PDF processor/API/workspace** — order, 96-DPI dimensions, aspect,
+  transparency soft mask, JPEG-renamed-.png rejection by signature, wrong
+  extension/MIME, oversized dimensions, count/size limits, hostile names,
+  reorder/cancel/reset in the workspace, GET 405
 
 - **PDF to Word processor** — page/text order, one-paragraph-per-line,
   page breaks, unicode, no-text pages marked, in-memory DOCX validated as a

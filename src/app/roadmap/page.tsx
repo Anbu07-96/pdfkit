@@ -101,6 +101,15 @@ const PHASES = [
     ],
   },
   {
+    title: "Phase 17 — PNG to PDF",
+    status: "Completed" as const,
+    items: [
+      "The shared image-to-PDF engine in PNG-only form, one page per image",
+      "Transparency preserved as a soft mask over a white page background",
+      "Non-PNG payloads rejected by real signature, whatever the name claims",
+    ],
+  },
+  {
     title: "Phase 15 — PDF to Word (text only)",
     status: "Completed" as const,
     items: [

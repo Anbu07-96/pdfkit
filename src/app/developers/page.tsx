@@ -50,7 +50,8 @@ export default function DevelopersPage() {
             <code>POST /api/tools/reorder-pdf-pages</code>,{" "}
             <code>POST /api/tools/rotate-pdf</code>,{" "}
             <code>POST /api/tools/compress-pdf</code>,{" "}
-            <code>POST /api/tools/images-to-pdf</code>,{" "}
+            <code>POST /api/tools/images-to-pdf</code> and{" "}
+            <code>POST /api/tools/png-to-pdf</code>,{" "}
             <code>POST /api/tools/pdf-to-jpg</code> and{" "}
             <code>POST /api/tools/pdf-to-png</code> and{" "}
             <code>POST /api/tools/edit-pdf-metadata</code> and{" "}

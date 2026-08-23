@@ -662,6 +662,21 @@ The output is validated **in memory** as a real Office ZIP
 the same self-verifying pattern as metadata removal. Page limits are shared
 with image export (`PDFKIT_CONVERSION_MAX_PAGES`).
 
+## 5k. PNG to PDF (Phase 17)
+
+The Images-to-PDF processor was generalised with a constructor config (tool
+id, input rules, output name, optional `requireExactKind`) so PNG to PDF is
+the *same* conversion core rather than a copy — the existing mixed-tool
+instance and its behaviour are unchanged. The PNG tool differs in one
+security-relevant way: `requireExactKind: "png"` makes the processor verify
+each file's detected signature, so a JPEG renamed to `.png` is rejected with
+`INVALID_IMAGE` instead of being silently embedded as a JPEG (the mixed tool
+deliberately embeds by detected kind). The workspace side follows the same
+principle: `ImagesToPdfWorkspace` accepts a `variant` (acceptance lists,
+labels and the client call, defaulting to the mixed tool), and the PNG
+workspace is a thin client-component wrapper — client-side because a variant
+carries a function, which cannot cross the server/client boundary.
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:

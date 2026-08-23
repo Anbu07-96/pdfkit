@@ -18,12 +18,12 @@ export default function PrivacyPage() {
         <h2>What the current version does</h2>
         <ul>
           <li>
-            The thirteen working tools — <strong>Merge PDF</strong>,{" "}
+            The fourteen working tools — <strong>Merge PDF</strong>,{" "}
             <strong>Split PDF</strong>, <strong>Extract PDF Pages</strong>,{" "}
             <strong>Delete PDF Pages</strong>, <strong>Reorder PDF Pages</strong> and{" "}
             <strong>Rotate PDF</strong>, <strong>Compress PDF</strong>,{" "}
-            <strong>Images to PDF</strong>, <strong>PDF to JPG</strong> and{" "}
-            <strong>PDF to PNG</strong>, <strong>Edit PDF Metadata</strong> and{" "}
+            <strong>Images to PDF</strong>, <strong>PNG to PDF</strong>,{" "}
+            <strong>PDF to JPG</strong> and <strong>PDF to PNG</strong>, <strong>Edit PDF Metadata</strong> and{" "}
             <strong>Remove Metadata</strong> — are the only ones that send data
             anywhere. When you start the operation,
             the selected files are uploaded to the PDFKit server, processed in memory
