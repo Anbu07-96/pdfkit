@@ -690,6 +690,29 @@ labels and the client call, defaulting to the mixed tool), and the PNG
 workspace is a thin client-component wrapper — client-side because a variant
 carries a function, which cannot cross the server/client boundary.
 
+## 5l. Watermark (Phase 21)
+
+The Phase 20 audit's recommendation, implemented with the primitives it
+verified: pdf-lib `drawText` with `opacity` + `rotate` (and the shared
+`rgb` grey), drawn directly onto existing pages — no rasterising, no page
+rebuilding, so size, `/Rotate`, content and count are untouched and the
+output stays a searchable PDF. The watermark is ordinary page content with an
+alpha `ExtGState`; tests prove presence by decoding the produced content
+streams and finding the hex text operators on exactly the selected pages.
+
+The option model (`lib/processing/watermark.ts`, browser-safe like
+`pages.ts`) is deliberately small and exact: text (trimmed, ≤ 200 chars),
+opacity 25/50/75, rotation 0/45/-45, placement center / diagonal-tiled /
+bottom-right corner, pages all/first/last. The server never repairs values —
+anything outside the sets is `INVALID_WATERMARK_CONFIGURATION` (400).
+Diagonal tiling covers a square the size of the page diagonal so every
+rotation angle fully covers the page; corner placement anchors the rotated
+text so its bounding box hugs the bottom-right. Two honest limits, stated in
+the UI and docs: the standard-font watermark covers the standard Latin
+character set only (pdf-lib's WinAnsi fonts; other characters are rejected
+with a clear message), and a visible watermark is a **deterrent, not
+protection**.
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:

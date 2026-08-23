@@ -58,6 +58,11 @@ export default function HelpPage() {
             content.
           </li>
           <li>
+            <strong>Watermark</strong> — stamp adjustable, transparent text
+            over your pages without changing the document underneath. A
+            visible watermark is a deterrent, not protection.
+          </li>
+          <li>
             <strong>PDF to JPG / PDF to PNG</strong> — export every page as an
             image at 150 DPI. One page gives a single image; longer documents
             download as a ZIP.
@@ -86,7 +91,7 @@ export default function HelpPage() {
         <h2>What does not work yet</h2>
         <ul>
           <li>
-            Every tool other than the fourteen above. Their upload areas are
+            Every tool other than the fifteen above. Their upload areas are
             intentionally disabled and labelled <strong>Coming soon</strong>.
           </li>
           <li>There are no accounts, no cloud storage, no API keys and no billing.</li>

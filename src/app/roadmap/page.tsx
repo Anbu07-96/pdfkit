@@ -101,6 +101,16 @@ const PHASES = [
     ],
   },
   {
+    title: "Phase 21 — Watermark",
+    status: "Completed" as const,
+    items: [
+      "Vector text stamps with opacity, angle, placement and page choice",
+      "Pages never rasterised — size, rotation and content untouched",
+      "Server-validated options; stamped-page count reported honestly",
+      "Stated plainly: a visible watermark deters, it does not protect",
+    ],
+  },
+  {
     title: "Phase 17 — PNG to PDF",
     status: "Completed" as const,
     items: [

@@ -8,7 +8,7 @@ later OCR and AI document intelligence.
 
 > ## Current status: Phase 6 — rotation and visual page selection
 >
-> **Fourteen tools genuinely work:**
+> **Fifteen tools genuinely work:**
 >
 > - **Merge PDF** — combine several PDFs in the order you choose.
 > - **Split PDF** — split every page into its own file, or split by page ranges;
@@ -35,6 +35,9 @@ later OCR and AI document intelligence.
 > - **PDF to Word** — text-only extraction into a real .docx (one paragraph per
 >   line, page breaks preserved). The tool says plainly that formatting,
 >   images, tables and exact layout are **not** preserved.
+> - **Watermark** — real vector text stamps (opacity, angle, placement, page
+>   choice) without rasterising pages. Stated plainly: a visible watermark is
+>   a deterrent, not protection.
 >
 > **Every other tool is still unimplemented** and honestly marked
 > **Coming soon**, with its upload area disabled. There is no simulated
@@ -83,7 +86,7 @@ The catalog describes **42 tools** in six categories — Organize, Convert, Edit
 Security, OCR and AI — of which **6 are implemented** today: Merge PDF, Split
 PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF Pages, Rotate PDF,
 Compress PDF, Images to PDF, PNG to PDF, PDF to JPG, PDF to PNG, PDF to Word,
-Edit PDF Metadata and Remove Metadata.
+Edit PDF Metadata, Remove Metadata and Watermark.
 
 ---
 
@@ -584,6 +587,32 @@ ceiling 200) rejected with `TOO_MANY_OUTPUTS` (413) **before** rendering, and
 each produced image is capped by `PDFKIT_CONVERSION_MAX_IMAGE_BYTES`
 (default 6 MB) → `OUTPUT_TOO_LARGE` (413). ZIP entry names are sanitised.
 
+## Watermark
+
+```bash
+curl -X POST http://localhost:3000/api/tools/watermark \
+  -F "files=@document.pdf;type=application/pdf" \
+  -F "text=CONFIDENTIAL" -F "opacity=50" -F "rotation=45" \
+  -F "placement=center" -F "pages=all" \
+  -o document-watermarked.pdf
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `files` | yes | Exactly one PDF |
+| `text` | yes | Watermark text, 1-200 characters after trimming |
+| `opacity` | yes | `25`, `50` or `75` (percent) |
+| `rotation` | yes | `0`, `45` or `-45` degrees |
+| `placement` | yes | `center`, `diagonal-tiled` or `corner` (bottom-right) |
+| `pages` | yes | `all`, `first` or `last` |
+
+Invalid options give `INVALID_WATERMARK_CONFIGURATION` (400) — values are
+never repaired. The watermark is vector text over the original content with an
+alpha `ExtGState`; page geometry and `/Rotate` are untouched. The response
+reports the stamped-page count in `X-PDFKit-Watermarked-Pages`. Standard Latin
+characters only (the watermark font's range). **A visible watermark is a
+deterrent, not protection** — anyone with a PDF editor can remove it.
+
 ## PNG to PDF
 
 ```bash
@@ -746,7 +775,8 @@ background workers and job queues are **not** implemented. There is no simulated
 progress bars, no fake results, no fake downloads, no placeholder page images.
 Only Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF
 Pages, Rotate PDF, Compress PDF, Images to PDF, PNG to PDF, PDF to JPG, PDF to
-PNG, PDF to Word (text only), Edit PDF Metadata and Remove Metadata are real.
+PNG, PDF to Word (text only), Edit PDF Metadata, Remove Metadata and Watermark
+are real.
 
 ---
 
@@ -825,7 +855,21 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (63 files, 905 tests):
+Covered today (67 files, 950 tests):
+
+- **Watermark model** — exact option sets, text trimming and length limits,
+  never-repair validation for opacity/rotation/placement/pages, page-mode
+  resolution
+- **Watermark processor** — vector presence proven by decoding the content
+  streams (hex text operators + alpha state) on the right pages and only
+  there, all 27 placement×rotation×opacity combinations, page
+  size//Rotate/content preservation, font-range rejection, malformed/
+  encrypted/multi-file rejections, hostile names, input immutability
+- **Watermark API** — standard headers, stamped-count header, every error
+  mode, GET 405
+- **Watermark workspace** — defaults, option switching, payload, honest
+  indeterminate processing, cancel, server-confirmed counts, deterrent
+  warning before and after, reset, announcements
 
 - **PNG to PDF processor/API/workspace** — order, 96-DPI dimensions, aspect,
   transparency soft mask, JPEG-renamed-.png rejection by signature, wrong
@@ -961,11 +1005,10 @@ Covered today (63 files, 905 tests):
 
 ## Future phases
 
-Phase 19 stops here on purpose. The planned order (see also `/roadmap`):
+Phase 21 stops here on purpose. The planned order (see also `/roadmap`):
 
-1. Editing tools (watermark, page numbers, headers/footers) on the existing
-   pdf-lib pipeline.
-2. Security tools (flatten, crop).
+1. Page numbers and headers/footers on the proven watermark primitives.
+2. Crop (CropBox) and flatten via the pdfium pipeline.
 3. DOCX → PDF (requires the sandboxed LibreOffice worker decided against in
    the Phase 14 feasibility study — a platform decision, not a code change);
    OCR (native engine or external service, both a platform decision).
