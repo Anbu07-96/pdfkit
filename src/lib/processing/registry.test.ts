@@ -25,6 +25,7 @@ describe("processor registry", () => {
       "merge-pdf",
       "pdf-to-jpg",
       "pdf-to-png",
+      "pdf-to-word",
       "remove-metadata",
       "reorder-pdf-pages",
       "rotate-pdf",
@@ -40,13 +41,14 @@ describe("processor registry", () => {
     expect(hasProcessor("images-to-pdf")).toBe(true);
     expect(hasProcessor("edit-pdf-metadata")).toBe(true);
     expect(hasProcessor("remove-metadata")).toBe(true);
+    expect(hasProcessor("pdf-to-word")).toBe(true);
     expect(hasProcessor("pdf-to-jpg")).toBe(true);
     expect(hasProcessor("pdf-to-png")).toBe(true);
   });
 
   it("throws a safe error for tools that are not implemented", () => {
     try {
-      getProcessor("pdf-to-word");
+      getProcessor("word-to-pdf");
       throw new Error("expected getProcessor to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(ProcessingError);
@@ -66,6 +68,7 @@ describe("processor registry", () => {
       "merge-pdf",
       "pdf-to-jpg",
       "pdf-to-png",
+      "pdf-to-word",
       "remove-metadata",
       "reorder-pdf-pages",
       "rotate-pdf",
@@ -156,7 +159,7 @@ describe("runProcessingJob", () => {
   });
 
   it("fails for a tool without an implementation", async () => {
-    const result = await runProcessingJob({ toolId: "pdf-to-word", files: [] });
+    const result = await runProcessingJob({ toolId: "word-to-pdf", files: [] });
     expect(result).toMatchObject({
       status: "failed",
       error: { code: "TOOL_NOT_AVAILABLE" },

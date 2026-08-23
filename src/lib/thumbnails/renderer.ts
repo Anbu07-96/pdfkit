@@ -192,6 +192,41 @@ export async function renderEachPdfPage(
 }
 
 /**
+ * Extract the text of every page, in order, one page at a time.
+ *
+ * Text counterpart of the full-page rendering API: same single-instance WASM
+ * discipline, same serialised queue, same guaranteed document destruction.
+ * Returns one string per page (possibly empty — image-only pages carry no
+ * text). Nothing is written to disk, and no layout reconstruction happens:
+ * what pdfium reads as lines is returned as-is.
+ */
+export async function extractPdfPageTexts(
+  bytes: Uint8Array,
+  options: { maxPages: number },
+): Promise<{ pageCount: number; texts: string[] }> {
+  return runWithPdfiumDocument(bytes, async (document) => {
+    const pageCount = document.getPageCount();
+    if (!Number.isInteger(pageCount) || pageCount < 1) {
+      throw new ProcessingError("INVALID_PDF", "This PDF contains no pages.");
+    }
+    if (pageCount > options.maxPages) {
+      throw new ProcessingError(
+        "TOO_MANY_OUTPUTS",
+        `This PDF has ${pageCount} pages; the limit for Word export is ${options.maxPages}.`,
+      );
+    }
+
+    const texts: string[] = [];
+    for (let index = 0; index < pageCount; index += 1) {
+      // Page objects are single-use in pdfium: fetch a fresh one per call.
+      texts.push(document.getPage(index).getText());
+    }
+
+    return { pageCount, texts };
+  });
+}
+
+/**
  * Render the requested pages of a PDF as PNG thumbnails.
  *
  * `pages` are 1-based and are returned in the order given. The caller is

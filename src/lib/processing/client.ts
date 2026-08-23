@@ -43,6 +43,15 @@ export interface ProcessedDocument {
   compression?: CompressionSummary;
   /** Removal outcome measured by the server (Remove Metadata only). */
   removal?: RemovalSummary;
+  /** Text extraction outcome measured by the server (PDF to Word only). */
+  extraction?: ExtractionSummary;
+}
+
+/** Server-measured text extraction outcome. */
+export interface ExtractionSummary {
+  characters: number;
+  paragraphs: number;
+  mode: string;
 }
 
 /** Server-verified outcome of a metadata removal. */
@@ -65,6 +74,23 @@ export interface CompressionSummary {
   compressionLevel: CompressionLevel;
   strategy: CompressionStrategy;
   rasterSkipped?: RasterSkipReason;
+}
+
+function extractionFromHeaders(response: Response): ExtractionSummary | undefined {
+  const characters = Number.parseInt(
+    response.headers.get("x-pdfkit-characters") ?? "",
+    10,
+  );
+  if (!Number.isFinite(characters)) return undefined;
+  const paragraphs = Number.parseInt(
+    response.headers.get("x-pdfkit-paragraphs") ?? "",
+    10,
+  );
+  return {
+    characters,
+    paragraphs: Number.isFinite(paragraphs) ? paragraphs : 0,
+    mode: response.headers.get("x-pdfkit-mode") ?? "",
+  };
 }
 
 function removalFromHeaders(response: Response): RemovalSummary | undefined {
@@ -205,12 +231,14 @@ async function toProcessedDocument(
   const contentType = response.headers.get("content-type") ?? "";
   const compression = compressionFromHeaders(response);
   const removal = removalFromHeaders(response);
+  const extraction = extractionFromHeaders(response);
 
   return {
     blob,
     url: URL.createObjectURL(blob),
     ...(compression ? { compression } : {}),
     ...(removal ? { removal } : {}),
+    ...(extraction ? { extraction } : {}),
     fileName: fileNameFromDisposition(
       response.headers.get("content-disposition"),
       fallbackName,
@@ -495,6 +523,26 @@ export async function runRemoveMetadata({
 
   const response = await postForm("/api/tools/remove-metadata", form, signal);
   return toProcessedDocument(response, "metadata-removed.pdf");
+}
+
+export interface RunPdfToWordOptions {
+  file: File;
+  signal?: AbortSignal;
+}
+
+/**
+ * Extract the text of one PDF into a Word document on the server. Text only —
+ * the response headers report how much text was actually found.
+ */
+export async function runPdfToWord({
+  file,
+  signal,
+}: RunPdfToWordOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+
+  const response = await postForm("/api/tools/pdf-to-word", form, signal);
+  return toProcessedDocument(response, "document.docx");
 }
 
 export interface PageThumbnailData {

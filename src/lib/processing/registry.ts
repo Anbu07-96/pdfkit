@@ -7,6 +7,7 @@ import { editPdfMetadataProcessor } from "@/lib/processing/processors/edit-pdf-m
 import { imagesToPdfProcessor } from "@/lib/processing/processors/images-to-pdf";
 import { removeMetadataProcessor } from "@/lib/processing/processors/remove-metadata";
 import { pdfToJpgProcessor, pdfToPngProcessor } from "@/lib/processing/processors/pdf-to-image";
+import { pdfToWordProcessor } from "@/lib/processing/processors/pdf-to-word";
 import { deletePdfPagesProcessor } from "@/lib/processing/processors/delete-pdf-pages";
 import { extractPdfPagesProcessor } from "@/lib/processing/processors/extract-pdf-pages";
 import { mergePdfProcessor } from "@/lib/processing/processors/merge-pdf";
@@ -40,6 +41,7 @@ const PROCESSORS = new Map<string, ToolProcessor<never>>([
   [removeMetadataProcessor.toolId, removeMetadataProcessor as ToolProcessor<never>],
   [pdfToJpgProcessor.toolId, pdfToJpgProcessor as ToolProcessor<never>],
   [pdfToPngProcessor.toolId, pdfToPngProcessor as ToolProcessor<never>],
+  [pdfToWordProcessor.toolId, pdfToWordProcessor as ToolProcessor<never>],
 ]);
 
 /** Tool ids with a working implementation. */

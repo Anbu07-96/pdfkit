@@ -286,6 +286,18 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
     metaHeaders["x-pdfkit-verification"] = String(result.meta.verification);
   }
 
+  // Text extraction facts (PDF to Word): the interface reports how much text
+  // the server actually found, never a guess.
+  if (result.meta?.characters !== undefined) {
+    metaHeaders["x-pdfkit-characters"] = String(result.meta.characters);
+  }
+  if (result.meta?.paragraphs !== undefined) {
+    metaHeaders["x-pdfkit-paragraphs"] = String(result.meta.paragraphs);
+  }
+  if (result.meta?.mode !== undefined) {
+    metaHeaders["x-pdfkit-mode"] = String(result.meta.mode);
+  }
+
   // A single document is streamed as-is; several are bundled into a ZIP.
   if (result.artifacts.length === 1) {
     const artifact = result.artifacts[0];

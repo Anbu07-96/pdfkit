@@ -18,6 +18,7 @@ const SERVER_ONLY_IMPORTS = [
   "pdf-lib",
   "@hyzyla/pdfium",
   "jpeg-js",
+  "docx",
   "fflate",
   "@/lib/processing/processors/",
   "@/lib/processing/optimize/",

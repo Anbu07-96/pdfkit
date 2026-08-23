@@ -13,8 +13,8 @@ import type { Tool } from "./types";
  *
  * Implemented today: Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages,
  * Reorder PDF Pages, Rotate PDF, Compress PDF, Images to PDF, PDF to JPG,
- * PDF to PNG, Edit PDF Metadata and Remove Metadata. Everything else is
- * `COMING_SOON`.
+ * PDF to PNG, PDF to Word, Edit PDF Metadata and Remove Metadata. Everything
+ * else is `COMING_SOON`.
  */
 
 const PDF_EXT = [".pdf"];
@@ -227,15 +227,21 @@ export const TOOLS: readonly Tool[] = [
   pdfTool({
     id: "pdf-to-word",
     name: "PDF to Word",
-    description: "Convert a PDF into an editable Word document.",
+    description:
+      "Extract the text of a PDF into an editable Word document.",
     category: "convert",
     icon: "word",
+    // Implemented in Phase 15: text-only conversion. The text is extracted
+    // with the existing pdfium rasteriser and written with the MIT-licensed
+    // docx generator; formatting, images, tables and exact layout are not
+    // preserved — the tool says so everywhere.
+    status: "AVAILABLE",
     plannedTier: "free",
-    keywords: ["docx", "editable", "microsoft word"],
+    keywords: ["docx", "editable", "microsoft word", "text"],
     howItWorks: [
-      "Upload the PDF you want to edit as text.",
-      "PDFKit rebuilds the layout as a Word document.",
-      "Download the .docx file.",
+      "Upload the PDF whose text you need in Word.",
+      "Every page's text is extracted in order, one paragraph per line.",
+      "Download a .docx file. Text only — formatting, images, tables and exact layout are not preserved.",
     ],
   }),
   pdfTool({

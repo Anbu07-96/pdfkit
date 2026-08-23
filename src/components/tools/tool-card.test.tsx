@@ -5,7 +5,7 @@ import { ToolStatusBadge } from "@/components/tools/tool-status-badge";
 import { getTool } from "@/lib/tools";
 
 const mergeTool = getTool("merge-pdf")!;
-const plannedTool = getTool("pdf-to-word")!;
+const plannedTool = getTool("word-to-pdf")!;
 const aiTool = getTool("summarize-pdf")!;
 
 describe("ToolCard", () => {
