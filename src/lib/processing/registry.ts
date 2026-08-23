@@ -4,7 +4,10 @@ import type { ToolProcessor } from "@/lib/processing/contract";
 import { ProcessingError } from "@/lib/processing/errors";
 import { compressPdfProcessor } from "@/lib/processing/processors/compress-pdf";
 import { editPdfMetadataProcessor } from "@/lib/processing/processors/edit-pdf-metadata";
-import { imagesToPdfProcessor } from "@/lib/processing/processors/images-to-pdf";
+import {
+  imagesToPdfProcessor,
+  pngToPdfProcessor,
+} from "@/lib/processing/processors/images-to-pdf";
 import { removeMetadataProcessor } from "@/lib/processing/processors/remove-metadata";
 import { pdfToJpgProcessor, pdfToPngProcessor } from "@/lib/processing/processors/pdf-to-image";
 import { pdfToWordProcessor } from "@/lib/processing/processors/pdf-to-word";
@@ -37,6 +40,7 @@ const PROCESSORS = new Map<string, ToolProcessor<never>>([
   [rotatePdfProcessor.toolId, rotatePdfProcessor as ToolProcessor<never>],
   [compressPdfProcessor.toolId, compressPdfProcessor as ToolProcessor<never>],
   [imagesToPdfProcessor.toolId, imagesToPdfProcessor as ToolProcessor<never>],
+  [pngToPdfProcessor.toolId, pngToPdfProcessor as ToolProcessor<never>],
   [editPdfMetadataProcessor.toolId, editPdfMetadataProcessor as ToolProcessor<never>],
   [removeMetadataProcessor.toolId, removeMetadataProcessor as ToolProcessor<never>],
   [pdfToJpgProcessor.toolId, pdfToJpgProcessor as ToolProcessor<never>],

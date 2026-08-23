@@ -436,6 +436,27 @@ export async function runImagesToPdf({
   return toProcessedDocument(response, "images-to-pdf.pdf");
 }
 
+export interface RunPngToPdfOptions {
+  /** PNG images in the exact order the pages should follow. */
+  files: File[];
+  signal?: AbortSignal;
+}
+
+/**
+ * Convert PNG images into one PDF on the server. The order of `files` is the
+ * page order sent to the server; non-PNG payloads are rejected there.
+ */
+export async function runPngToPdf({
+  files,
+  signal,
+}: RunPngToPdfOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  for (const file of files) form.append("files", file, file.name);
+
+  const response = await postForm("/api/tools/png-to-pdf", form, signal);
+  return toProcessedDocument(response, "png-to-pdf.pdf");
+}
+
 export interface RunPdfToImageOptions {
   file: File;
   signal?: AbortSignal;

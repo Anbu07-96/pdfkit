@@ -17,6 +17,31 @@ import {
   runImagesToPdf,
   type ProcessedDocument,
 } from "@/lib/processing/client";
+
+/** What a variant of the images→PDF workspace accepts and calls. */
+export interface ImagesToPdfVariant {
+  extensions: string[];
+  mimeTypes: string[];
+  zoneLabel: string;
+  zoneHint: string;
+  emptyHint: string;
+  fileWord: string;
+  run: (options: {
+    files: File[];
+    signal?: AbortSignal;
+  }) => Promise<ProcessedDocument>;
+}
+
+/** The mixed JPG/PNG tool this workspace was built for. */
+const MIXED_VARIANT: ImagesToPdfVariant = {
+  extensions: [".jpg", ".jpeg", ".png"],
+  mimeTypes: ["image/jpeg", "image/png"],
+  zoneLabel: "Upload images",
+  zoneHint: "Drag and drop JPG or PNG images here, or browse from your device.",
+  emptyHint: "Upload one or more JPG or PNG images to get started.",
+  fileWord: "image",
+  run: runImagesToPdf,
+};
 import { formatBytes } from "@/lib/utils/format";
 
 export interface ImagesToPdfWorkspaceProps {
@@ -25,6 +50,8 @@ export interface ImagesToPdfWorkspaceProps {
     maxFiles: number;
     maxFileSize: number;
   };
+  /** Upload acceptance and conversion call; defaults to the mixed tool. */
+  variant?: ImagesToPdfVariant;
 }
 
 type Status = "idle" | "processing" | "success" | "error";
@@ -48,7 +75,10 @@ function toFailure(error: unknown, fallback: string): FailureState {
  * remove) — the same one Merge PDF uses; this workspace only owns the
  * conversion call and result. Order is sent to the server exactly as shown.
  */
-export function ImagesToPdfWorkspace({ limits }: ImagesToPdfWorkspaceProps) {
+export function ImagesToPdfWorkspace({
+  limits,
+  variant = MIXED_VARIANT,
+}: ImagesToPdfWorkspaceProps) {
   const [files, setFiles] = React.useState<SelectedFile[]>([]);
   const [status, setStatus] = React.useState<Status>("idle");
   const [result, setResult] = React.useState<ProcessedDocument | null>(null);
@@ -87,7 +117,7 @@ export function ImagesToPdfWorkspace({ limits }: ImagesToPdfWorkspaceProps) {
     abortRef.current = controller;
 
     try {
-      const document = await runImagesToPdf({
+      const document = await variant.run({
         files: files.map((file) => file.file),
         signal: controller.signal,
       });
@@ -96,7 +126,7 @@ export function ImagesToPdfWorkspace({ limits }: ImagesToPdfWorkspaceProps) {
       showToast({
         tone: "success",
         title: "PDF ready",
-        description: `${files.length} ${files.length === 1 ? "image" : "images"} became a ${document.pages ?? files.length}-page PDF.`,
+        description: `${files.length} ${variant.fileWord}${files.length === 1 ? "" : "s"} became a ${document.pages ?? files.length}-page PDF.`,
       });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
@@ -121,15 +151,15 @@ export function ImagesToPdfWorkspace({ limits }: ImagesToPdfWorkspaceProps) {
   return (
     <div className="flex flex-col gap-5">
       <UploadZone
-        label="Upload images"
-        hint="Drag and drop JPG or PNG images here, or browse from your device."
+        label={variant.zoneLabel}
+        hint={variant.zoneHint}
         files={files}
         onFilesChange={handleFilesChange}
         multiple
         orderable
         busy={busy}
-        extensions={[".jpg", ".jpeg", ".png"]}
-        mimeTypes={["image/jpeg", "image/png"]}
+        extensions={variant.extensions}
+        mimeTypes={variant.mimeTypes}
         maxFiles={limits.maxFiles}
         maxFileSize={limits.maxFileSize}
       />
@@ -137,14 +167,13 @@ export function ImagesToPdfWorkspace({ limits }: ImagesToPdfWorkspaceProps) {
       {files.length > 0 ? (
         <p className="text-sm text-muted">
           <span className="font-medium text-foreground">
-            {files.length} {files.length === 1 ? "image" : "images"}
+            {files.length} {variant.fileWord}
+            {files.length === 1 ? "" : "s"}
           </span>{" "}
           will become a {files.length}-page PDF, in the order shown above.
         </p>
       ) : (
-        <p className="text-sm text-muted">
-          Upload one or more JPG or PNG images to get started.
-        </p>
+        <p className="text-sm text-muted">{variant.emptyHint}</p>
       )}
 
       {status === "error" && failure ? (
@@ -187,7 +216,7 @@ export function ImagesToPdfWorkspace({ limits }: ImagesToPdfWorkspaceProps) {
 
         {files.length > 0 && !busy ? (
           <Button variant="ghost" size="lg" onClick={handleStartOver}>
-            Clear images
+            Clear {variant.fileWord}s
           </Button>
         ) : null}
       </div>

@@ -3,7 +3,10 @@ import { PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import type { ProcessingInputFile } from "@/lib/processing/contract";
 import { ProcessingError } from "@/lib/processing/errors";
-import { imagesToPdfProcessor } from "@/lib/processing/processors/images-to-pdf";
+import {
+  imagesToPdfProcessor,
+  pngToPdfProcessor,
+} from "@/lib/processing/processors/images-to-pdf";
 import { DEFAULT_PROCESSING_LIMITS } from "@/lib/processing/limits";
 import { runProcessingJob } from "@/lib/processing/service";
 import {
@@ -329,4 +332,139 @@ describe("ImagesToPdfProcessor", () => {
     expect([...bytes]).toEqual([...snapshot]);
   });
 
+});
+
+describe("PngToPdfProcessor (png-to-pdf)", () => {
+  it("declares the tool id and PNG-only input rules", () => {
+    expect(pngToPdfProcessor.toolId).toBe("png-to-pdf");
+    expect(pngToPdfProcessor.input.minFiles).toBe(1);
+    expect(pngToPdfProcessor.input.extensions).toEqual([".png"]);
+    expect(pngToPdfProcessor.input.mimeTypes).toEqual(["image/png"]);
+    expect(pngToPdfProcessor.input.contentKind).toBe("image");
+  });
+
+  it("converts PNGs, preserves order, transparency and 96-DPI sizing", async () => {
+    const result = await pngToPdfProcessor.process({
+      toolId: "png-to-pdf",
+      files: [
+        await imageFile("one.png", await makePng(400, 200, 1), "image/png"),
+        await imageFile("two.png", await makePng(200, 400, 2), "image/png"),
+      ],
+      options: {},
+    });
+
+    const artifact = result.artifacts[0];
+    expect(artifact.name).toBe("png-to-pdf.pdf");
+    expect(new TextDecoder().decode(artifact.bytes.slice(0, 5))).toBe("%PDF-");
+
+    const document = await PDFDocument.load(artifact.bytes);
+    expect(document.getPageCount()).toBe(2);
+    const sizes = document.getPages().map((page) => page.getSize());
+    // 96 DPI: 400×200 → 300×150; 200×400 → 150×300. Aspect exact.
+    expect(sizes[0].width).toBe(300);
+    expect(sizes[0].height).toBe(150);
+    expect(sizes[1].width).toBe(150);
+    expect(sizes[1].height).toBe(300);
+    expect(result.meta).toMatchObject({ pages: 2, images: 2 });
+  });
+
+  it("keeps transparency as a soft mask over the white background", async () => {
+    const result = await pngToPdfProcessor.process({
+      toolId: "png-to-pdf",
+      files: [await imageFile("logo.png", await makePng(100, 50, 3, 0), "image/png")],
+      options: {},
+    });
+
+    const document = await PDFDocument.load(result.artifacts[0].bytes);
+    let hasSoftMask = false;
+    for (const [, object] of document.context.enumerateIndirectObjects()) {
+      if (!(object instanceof PDFRawStream)) continue;
+      if (object.dict.lookup(PDFName.of("SMask"))) hasSoftMask = true;
+    }
+    expect(hasSoftMask).toBe(true);
+  });
+
+  it("rejects a JPEG renamed to .png by its real signature", async () => {
+    const result = await runProcessingJob({
+      toolId: "png-to-pdf",
+      files: [await imageFile("sneaky.png", await makeJpeg(50, 50), "image/png")],
+      options: {},
+    });
+    // The shared validator accepts any image signature, but the processor's
+    // exact-kind check must reject the JPEG payload.
+    expect(result.status === "failed" && result.error.code).toBe("INVALID_IMAGE");
+  });
+
+  it("rejects a non-image with a .png name via the shared validation", async () => {
+    const result = await runProcessingJob({
+      toolId: "png-to-pdf",
+      files: [await imageFile("fake.png", makeNonImage(), "image/png")],
+      options: {},
+    });
+    expect(result.status === "failed" && result.error.code).toBe("INVALID_IMAGE");
+  });
+
+  it("rejects wrong extensions and unsupported MIME types", async () => {
+    const jpg = await runProcessingJob({
+      toolId: "png-to-pdf",
+      files: [await imageFile("photo.jpg", await makeJpeg(20, 20), "image/jpeg")],
+      options: {},
+    });
+    expect(jpg.status === "failed" && jpg.error.code).toBe("UNSUPPORTED_FILE");
+
+    const webp = await runProcessingJob({
+      toolId: "png-to-pdf",
+      files: [await imageFile("photo.png", await makePng(20, 20), "image/webp")],
+      options: {},
+    });
+    expect(webp.status === "failed" && webp.error.code).toBe("UNSUPPORTED_FILE");
+  });
+
+  it("rejects oversized pixel dimensions before embedding", async () => {
+    const base = await makePng(64, 64);
+    const bytes = new Uint8Array(base);
+    const view = new DataView(bytes.buffer);
+    view.setUint32(16, 12001); // IHDR width above the per-side cap
+    view.setUint32(20, 8);
+
+    // The header caps are enforced before any embedding happens.
+    await expectFailure(
+      pngToPdfProcessor.process({
+        toolId: "png-to-pdf",
+        files: [await imageFile("huge.png", bytes, "image/png")],
+        options: {},
+      }),
+      "INVALID_IMAGE",
+    );
+  });
+
+  it("rejects too many files via the global limit", async () => {
+    const files: ProcessingInputFile[] = [];
+    for (let index = 0; index < 21; index += 1) {
+      files.push(await imageFile(`p${index}.png`, await makePng(10, 10, index), "image/png"));
+    }
+    const result = await runProcessingJob({ toolId: "png-to-pdf", files, options: {} });
+    expect(result.status === "failed" && result.error.code).toBe("TOO_MANY_FILES");
+  });
+
+  it("keeps hostile names out of the fixed artifact name", async () => {
+    const result = await pngToPdfProcessor.process({
+      toolId: "png-to-pdf",
+      files: [await imageFile("../../etc/passwd.png", await makePng(10, 10), "image/png")],
+      options: {},
+    });
+    expect(result.artifacts[0].name).toBe("png-to-pdf.pdf");
+    expect(JSON.stringify(result.meta)).not.toContain("passwd");
+  });
+
+  it("does not mutate the input bytes", async () => {
+    const bytes = await makePng(30, 20);
+    const snapshot = new Uint8Array(bytes);
+    await pngToPdfProcessor.process({
+      toolId: "png-to-pdf",
+      files: [await imageFile("a.png", bytes, "image/png")],
+      options: {},
+    });
+    expect([...bytes]).toEqual([...snapshot]);
+  });
 });

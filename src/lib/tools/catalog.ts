@@ -12,9 +12,9 @@ import type { Tool } from "./types";
  * `src/lib/processing/registry.ts`; a test enforces that both sides agree.
  *
  * Implemented today: Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages,
- * Reorder PDF Pages, Rotate PDF, Compress PDF, Images to PDF, PDF to JPG,
- * PDF to PNG, PDF to Word, Edit PDF Metadata and Remove Metadata. Everything
- * else is `COMING_SOON`.
+ * Reorder PDF Pages, Rotate PDF, Compress PDF, Images to PDF, PNG to PDF,
+ * PDF to JPG, PDF to PNG, PDF to Word, Edit PDF Metadata and Remove Metadata.
+ * Everything else is `COMING_SOON`.
  */
 
 const PDF_EXT = [".pdf"];
@@ -180,14 +180,18 @@ export const TOOLS: readonly Tool[] = [
     description: "Turn PNG images into a single PDF document.",
     category: "convert",
     icon: "image",
+    // Implemented in Phase 17: the shared image-to-PDF pipeline in PNG-only
+    // form — transparency is preserved as a soft mask over a white page
+    // background, and non-PNG payloads are rejected by signature.
+    status: "AVAILABLE",
     plannedTier: "free",
     supportedFileTypes: [".png"],
     acceptedMimeTypes: ["image/png"],
     keywords: ["screenshot", "picture", "image to pdf", "transparent"],
     howItWorks: [
       "Add the PNG images you want to include.",
-      "Order them and choose page size and margins.",
-      "Download the images as one PDF.",
+      "Arrange them in the order the pages should follow.",
+      "Download one PDF with exactly one page per image.",
     ],
   }),
   pdfTool({

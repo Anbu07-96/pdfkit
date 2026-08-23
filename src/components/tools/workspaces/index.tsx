@@ -4,6 +4,7 @@ import { RemoveMetadataWorkspace } from "@/components/tools/workspaces/remove-me
 import { ImagesToPdfWorkspace } from "@/components/tools/workspaces/images-to-pdf-workspace";
 import { PdfToImageWorkspace } from "@/components/tools/workspaces/pdf-to-image-workspace";
 import { PdfToWordWorkspace } from "@/components/tools/workspaces/pdf-to-word-workspace";
+import { PngToPdfWorkspace } from "@/components/tools/workspaces/png-to-pdf-workspace";
 import { DeletePdfPagesWorkspace } from "@/components/tools/workspaces/delete-pdf-pages-workspace";
 import { ExtractPdfPagesWorkspace } from "@/components/tools/workspaces/extract-pdf-pages-workspace";
 import { MergePdfWorkspace } from "@/components/tools/workspaces/merge-pdf-workspace";
@@ -65,6 +66,17 @@ export function getToolWorkspace(toolId: string): React.ReactNode | null {
     case "remove-metadata": {
       const limits = getProcessingLimits();
       return <RemoveMetadataWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
+    }
+    case "png-to-pdf": {
+      const limits = getProcessingLimits();
+      return (
+        <PngToPdfWorkspace
+          limits={{
+            maxFiles: limits.maxFiles,
+            maxFileSize: limits.maxFileSize,
+          }}
+        />
+      );
     }
     case "pdf-to-word": {
       const limits = getProcessingLimits();

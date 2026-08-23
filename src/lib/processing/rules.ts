@@ -55,6 +55,14 @@ export const IMAGES_TO_PDF_INPUT_RULES: ProcessorInputRules = {
   contentKind: "image",
 };
 
+/** PNG → PDF accepts PNG images only, in upload order. */
+export const PNG_TO_PDF_INPUT_RULES: ProcessorInputRules = {
+  minFiles: 1,
+  extensions: [".png"],
+  mimeTypes: ["image/png"],
+  contentKind: "image",
+};
+
 /** PDF → image export works on exactly one document at a time. */
 export const SINGLE_PDF_TO_IMAGE_RULES: ProcessorInputRules = {
   minFiles: 1,
@@ -125,6 +133,7 @@ export const INPUT_RULES_BY_TOOL: Record<string, ProcessorInputRules> = {
   "edit-pdf-metadata": EDIT_PDF_METADATA_INPUT_RULES,
   "remove-metadata": REMOVE_METADATA_INPUT_RULES,
   "pdf-to-word": PDF_TO_WORD_INPUT_RULES,
+  "png-to-pdf": PNG_TO_PDF_INPUT_RULES,
 };
 
 export function getInputRules(toolId: string): ProcessorInputRules | undefined {

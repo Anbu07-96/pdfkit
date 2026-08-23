@@ -26,6 +26,7 @@ describe("processor registry", () => {
       "pdf-to-jpg",
       "pdf-to-png",
       "pdf-to-word",
+      "png-to-pdf",
       "remove-metadata",
       "reorder-pdf-pages",
       "rotate-pdf",
@@ -42,6 +43,7 @@ describe("processor registry", () => {
     expect(hasProcessor("edit-pdf-metadata")).toBe(true);
     expect(hasProcessor("remove-metadata")).toBe(true);
     expect(hasProcessor("pdf-to-word")).toBe(true);
+    expect(hasProcessor("png-to-pdf")).toBe(true);
     expect(hasProcessor("pdf-to-jpg")).toBe(true);
     expect(hasProcessor("pdf-to-png")).toBe(true);
   });
@@ -69,6 +71,7 @@ describe("processor registry", () => {
       "pdf-to-jpg",
       "pdf-to-png",
       "pdf-to-word",
+      "png-to-pdf",
       "remove-metadata",
       "reorder-pdf-pages",
       "rotate-pdf",
