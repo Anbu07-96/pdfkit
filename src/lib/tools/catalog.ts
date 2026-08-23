@@ -14,7 +14,8 @@ import type { Tool } from "./types";
  * Implemented today: Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages,
  * Reorder PDF Pages, Rotate PDF, Compress PDF, Images to PDF, PNG to PDF,
  * PDF to JPG, PDF to PNG, PDF to Word, Edit PDF Metadata, Remove Metadata
- * and Watermark. Everything else is `COMING_SOON`.
+ * and Watermark. Page Numbers, too, is implemented (Phase 22). Everything
+ * else is `COMING_SOON`.
  */
 
 const PDF_EXT = [".pdf"];
@@ -414,15 +415,18 @@ export const TOOLS: readonly Tool[] = [
   pdfTool({
     id: "page-numbers",
     name: "Page Numbers",
-    description: "Add page numbers with the position and format you choose.",
+    description: "Add page numbers to the pages of a PDF.",
     category: "edit",
     icon: "page-numbers",
+    // Implemented in Phase 22: vector text stamps with pdf-lib — pages are
+    // never rasterised. "Page X of Y" always reports the real page count.
+    status: "AVAILABLE",
     plannedTier: "free",
-    keywords: ["pagination", "numbering", "footer", "header"],
+    keywords: ["numbering", "footer", "index", "pagination"],
     howItWorks: [
-      "Upload your PDF.",
-      "Pick the position, starting number and format.",
-      "Download the numbered PDF.",
+      "Upload the PDF you want to number.",
+      "Pick position, starting number, font size, format and pages.",
+      "Download the numbered PDF. The numbers are ordinary visible text.",
     ],
   }),
   pdfTool({

@@ -55,6 +55,14 @@ export const IMAGES_TO_PDF_INPUT_RULES: ProcessorInputRules = {
   contentKind: "image",
 };
 
+/** Page Numbers stamps one document. */
+export const PAGE_NUMBERS_INPUT_RULES: ProcessorInputRules = {
+  minFiles: 1,
+  maxFiles: 1,
+  extensions: [".pdf"],
+  mimeTypes: ["application/pdf"],
+};
+
 /** Watermark stamps one document. */
 export const WATERMARK_INPUT_RULES: ProcessorInputRules = {
   minFiles: 1,
@@ -143,6 +151,7 @@ export const INPUT_RULES_BY_TOOL: Record<string, ProcessorInputRules> = {
   "pdf-to-word": PDF_TO_WORD_INPUT_RULES,
   "png-to-pdf": PNG_TO_PDF_INPUT_RULES,
   "watermark": WATERMARK_INPUT_RULES,
+  "page-numbers": PAGE_NUMBERS_INPUT_RULES,
 };
 
 export function getInputRules(toolId: string): ProcessorInputRules | undefined {

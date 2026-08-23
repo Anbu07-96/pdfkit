@@ -23,6 +23,7 @@ describe("processor registry", () => {
       "extract-pdf-pages",
       "images-to-pdf",
       "merge-pdf",
+      "page-numbers",
       "pdf-to-jpg",
       "pdf-to-png",
       "pdf-to-word",
@@ -46,6 +47,7 @@ describe("processor registry", () => {
     expect(hasProcessor("pdf-to-word")).toBe(true);
     expect(hasProcessor("png-to-pdf")).toBe(true);
     expect(hasProcessor("watermark")).toBe(true);
+    expect(hasProcessor("page-numbers")).toBe(true);
     expect(hasProcessor("pdf-to-jpg")).toBe(true);
     expect(hasProcessor("pdf-to-png")).toBe(true);
   });
@@ -70,6 +72,7 @@ describe("processor registry", () => {
       "extract-pdf-pages",
       "images-to-pdf",
       "merge-pdf",
+      "page-numbers",
       "pdf-to-jpg",
       "pdf-to-png",
       "pdf-to-word",

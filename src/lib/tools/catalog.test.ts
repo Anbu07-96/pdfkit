@@ -67,6 +67,7 @@ describe("tool catalog", () => {
       "edit-pdf-metadata",
       "remove-metadata",
       "watermark",
+      "page-numbers",
     ];
 
     for (const tool of TOOLS) {

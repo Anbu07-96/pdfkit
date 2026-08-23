@@ -305,6 +305,11 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
     );
   }
 
+  // Page-number facts: how many pages received a number.
+  if (result.meta?.numberedPages !== undefined) {
+    metaHeaders["x-pdfkit-numbered-pages"] = String(result.meta.numberedPages);
+  }
+
   // A single document is streamed as-is; several are bundled into a ZIP.
   if (result.artifacts.length === 1) {
     const artifact = result.artifacts[0];

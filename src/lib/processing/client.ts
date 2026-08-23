@@ -47,6 +47,8 @@ export interface ProcessedDocument {
   extraction?: ExtractionSummary;
   /** How many pages the server stamped (Watermark only). */
   watermarkedPages?: number;
+  /** How many pages the server numbered (Page Numbers only). */
+  numberedPages?: number;
 }
 
 /** Server-measured text extraction outcome. */
@@ -238,6 +240,10 @@ async function toProcessedDocument(
     response.headers.get("x-pdfkit-watermarked-pages") ?? "",
     10,
   );
+  const numberedPages = Number.parseInt(
+    response.headers.get("x-pdfkit-numbered-pages") ?? "",
+    10,
+  );
 
   return {
     blob,
@@ -246,6 +252,7 @@ async function toProcessedDocument(
     ...(removal ? { removal } : {}),
     ...(extraction ? { extraction } : {}),
     ...(Number.isFinite(watermarkedPages) ? { watermarkedPages } : {}),
+    ...(Number.isFinite(numberedPages) ? { numberedPages } : {}),
     fileName: fileNameFromDisposition(
       response.headers.get("content-disposition"),
       fallbackName,
@@ -606,6 +613,41 @@ export async function runWatermark({
 
   const response = await postForm("/api/tools/watermark", form, signal);
   return toProcessedDocument(response, "watermarked.pdf");
+}
+
+export interface RunPageNumbersOptions {
+  file: File;
+  position: string;
+  start: number;
+  fontSize: number;
+  format: string;
+  pages: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Add page numbers to one PDF on the server. Every option is re-validated
+ * there; the response reports how many pages were numbered.
+ */
+export async function runPageNumbers({
+  file,
+  position,
+  start,
+  fontSize,
+  format,
+  pages,
+  signal,
+}: RunPageNumbersOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("position", position);
+  form.append("start", String(start));
+  form.append("size", String(fontSize));
+  form.append("format", format);
+  form.append("pages", pages);
+
+  const response = await postForm("/api/tools/page-numbers", form, signal);
+  return toProcessedDocument(response, "numbered.pdf");
 }
 
 export interface PageThumbnailData {

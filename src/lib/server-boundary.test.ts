@@ -82,6 +82,7 @@ describe("server-only boundary", () => {
         !path.endsWith("pages.ts") &&
         !path.endsWith("compression.ts") &&
         !path.endsWith("watermark.ts") &&
+        !path.endsWith("page-numbers.ts") &&
         !path.endsWith("metadata.ts") &&
         !path.endsWith("errors.ts") &&
         !path.endsWith("rules.ts") &&
