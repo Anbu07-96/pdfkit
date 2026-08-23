@@ -55,6 +55,14 @@ export const IMAGES_TO_PDF_INPUT_RULES: ProcessorInputRules = {
   contentKind: "image",
 };
 
+/** Watermark stamps one document. */
+export const WATERMARK_INPUT_RULES: ProcessorInputRules = {
+  minFiles: 1,
+  maxFiles: 1,
+  extensions: [".pdf"],
+  mimeTypes: ["application/pdf"],
+};
+
 /** PNG → PDF accepts PNG images only, in upload order. */
 export const PNG_TO_PDF_INPUT_RULES: ProcessorInputRules = {
   minFiles: 1,
@@ -134,6 +142,7 @@ export const INPUT_RULES_BY_TOOL: Record<string, ProcessorInputRules> = {
   "remove-metadata": REMOVE_METADATA_INPUT_RULES,
   "pdf-to-word": PDF_TO_WORD_INPUT_RULES,
   "png-to-pdf": PNG_TO_PDF_INPUT_RULES,
+  "watermark": WATERMARK_INPUT_RULES,
 };
 
 export function getInputRules(toolId: string): ProcessorInputRules | undefined {

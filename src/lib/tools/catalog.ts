@@ -13,8 +13,8 @@ import type { Tool } from "./types";
  *
  * Implemented today: Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages,
  * Reorder PDF Pages, Rotate PDF, Compress PDF, Images to PDF, PNG to PDF,
- * PDF to JPG, PDF to PNG, PDF to Word, Edit PDF Metadata and Remove Metadata.
- * Everything else is `COMING_SOON`.
+ * PDF to JPG, PDF to PNG, PDF to Word, Edit PDF Metadata, Remove Metadata
+ * and Watermark. Everything else is `COMING_SOON`.
  */
 
 const PDF_EXT = [".pdf"];
@@ -396,15 +396,19 @@ export const TOOLS: readonly Tool[] = [
   pdfTool({
     id: "watermark",
     name: "Watermark",
-    description: "Stamp text or an image across the pages of a PDF.",
+    description: "Stamp a text watermark across the pages of a PDF.",
     category: "edit",
     icon: "watermark",
+    // Implemented in Phase 21: vector text stamps with pdf-lib — pages are
+    // never rasterised. Text-only, standard Latin fonts; a visible watermark
+    // is a deterrent, not protection.
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["stamp", "draft", "confidential", "branding"],
     howItWorks: [
-      "Upload your PDF.",
-      "Choose the watermark text or image, position and opacity.",
-      "Download the watermarked PDF.",
+      "Upload the PDF you want to stamp.",
+      "Type the watermark text and pick opacity, angle, placement and pages.",
+      "Download the watermarked PDF. A visible watermark is a deterrent, not protection.",
     ],
   }),
   pdfTool({

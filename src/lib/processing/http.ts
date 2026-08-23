@@ -298,6 +298,13 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
     metaHeaders["x-pdfkit-mode"] = String(result.meta.mode);
   }
 
+  // Watermark facts: the interface reports how many pages the server stamped.
+  if (result.meta?.watermarkedPages !== undefined) {
+    metaHeaders["x-pdfkit-watermarked-pages"] = String(
+      result.meta.watermarkedPages,
+    );
+  }
+
   // A single document is streamed as-is; several are bundled into a ZIP.
   if (result.artifacts.length === 1) {
     const artifact = result.artifacts[0];

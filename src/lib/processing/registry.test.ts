@@ -31,6 +31,7 @@ describe("processor registry", () => {
       "reorder-pdf-pages",
       "rotate-pdf",
       "split-pdf",
+      "watermark",
     ]);
     expect(hasProcessor("merge-pdf")).toBe(true);
     expect(hasProcessor("reorder-pdf-pages")).toBe(true);
@@ -44,6 +45,7 @@ describe("processor registry", () => {
     expect(hasProcessor("remove-metadata")).toBe(true);
     expect(hasProcessor("pdf-to-word")).toBe(true);
     expect(hasProcessor("png-to-pdf")).toBe(true);
+    expect(hasProcessor("watermark")).toBe(true);
     expect(hasProcessor("pdf-to-jpg")).toBe(true);
     expect(hasProcessor("pdf-to-png")).toBe(true);
   });
@@ -76,6 +78,7 @@ describe("processor registry", () => {
       "reorder-pdf-pages",
       "rotate-pdf",
       "split-pdf",
+      "watermark",
     ]);
 
     // A tool may only claim to be usable if it really has an implementation…

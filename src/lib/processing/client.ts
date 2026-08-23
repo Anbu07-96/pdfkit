@@ -45,6 +45,8 @@ export interface ProcessedDocument {
   removal?: RemovalSummary;
   /** Text extraction outcome measured by the server (PDF to Word only). */
   extraction?: ExtractionSummary;
+  /** How many pages the server stamped (Watermark only). */
+  watermarkedPages?: number;
 }
 
 /** Server-measured text extraction outcome. */
@@ -232,6 +234,10 @@ async function toProcessedDocument(
   const compression = compressionFromHeaders(response);
   const removal = removalFromHeaders(response);
   const extraction = extractionFromHeaders(response);
+  const watermarkedPages = Number.parseInt(
+    response.headers.get("x-pdfkit-watermarked-pages") ?? "",
+    10,
+  );
 
   return {
     blob,
@@ -239,6 +245,7 @@ async function toProcessedDocument(
     ...(compression ? { compression } : {}),
     ...(removal ? { removal } : {}),
     ...(extraction ? { extraction } : {}),
+    ...(Number.isFinite(watermarkedPages) ? { watermarkedPages } : {}),
     fileName: fileNameFromDisposition(
       response.headers.get("content-disposition"),
       fallbackName,
@@ -564,6 +571,41 @@ export async function runPdfToWord({
 
   const response = await postForm("/api/tools/pdf-to-word", form, signal);
   return toProcessedDocument(response, "document.docx");
+}
+
+export interface RunWatermarkOptions {
+  file: File;
+  text: string;
+  opacityPercent: number;
+  rotationDegrees: number;
+  placement: string;
+  pages: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Add a text watermark to one PDF on the server. Every option is re-validated
+ * there; the response reports how many pages were stamped.
+ */
+export async function runWatermark({
+  file,
+  text,
+  opacityPercent,
+  rotationDegrees,
+  placement,
+  pages,
+  signal,
+}: RunWatermarkOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("text", text);
+  form.append("opacity", String(opacityPercent));
+  form.append("rotation", String(rotationDegrees));
+  form.append("placement", placement);
+  form.append("pages", pages);
+
+  const response = await postForm("/api/tools/watermark", form, signal);
+  return toProcessedDocument(response, "watermarked.pdf");
 }
 
 export interface PageThumbnailData {

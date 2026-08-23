@@ -9,6 +9,7 @@ import {
   pngToPdfProcessor,
 } from "@/lib/processing/processors/images-to-pdf";
 import { removeMetadataProcessor } from "@/lib/processing/processors/remove-metadata";
+import { watermarkProcessor } from "@/lib/processing/processors/watermark";
 import { pdfToJpgProcessor, pdfToPngProcessor } from "@/lib/processing/processors/pdf-to-image";
 import { pdfToWordProcessor } from "@/lib/processing/processors/pdf-to-word";
 import { deletePdfPagesProcessor } from "@/lib/processing/processors/delete-pdf-pages";
@@ -46,6 +47,7 @@ const PROCESSORS = new Map<string, ToolProcessor<never>>([
   [pdfToJpgProcessor.toolId, pdfToJpgProcessor as ToolProcessor<never>],
   [pdfToPngProcessor.toolId, pdfToPngProcessor as ToolProcessor<never>],
   [pdfToWordProcessor.toolId, pdfToWordProcessor as ToolProcessor<never>],
+  [watermarkProcessor.toolId, watermarkProcessor as ToolProcessor<never>],
 ]);
 
 /** Tool ids with a working implementation. */
