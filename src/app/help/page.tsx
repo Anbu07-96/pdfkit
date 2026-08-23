@@ -63,6 +63,11 @@ export default function HelpPage() {
             visible watermark is a deterrent, not protection.
           </li>
           <li>
+            <strong>Page Numbers</strong> — add sequential page numbers as
+            ordinary visible text, with position, starting number, size and
+            format.
+          </li>
+          <li>
             <strong>PDF to JPG / PDF to PNG</strong> — export every page as an
             image at 150 DPI. One page gives a single image; longer documents
             download as a ZIP.
@@ -91,7 +96,7 @@ export default function HelpPage() {
         <h2>What does not work yet</h2>
         <ul>
           <li>
-            Every tool other than the fifteen above. Their upload areas are
+            Every tool other than the sixteen above. Their upload areas are
             intentionally disabled and labelled <strong>Coming soon</strong>.
           </li>
           <li>There are no accounts, no cloud storage, no API keys and no billing.</li>

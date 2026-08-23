@@ -101,6 +101,16 @@ const PHASES = [
     ],
   },
   {
+    title: "Phase 22 — Page Numbers",
+    status: "Completed" as const,
+    items: [
+      "Sequential numbers as visible vector text — no rasterising",
+      "Position, starting number, font size, format and page choice",
+      "Page X of Y always reports the real page count",
+      "Server-validated options; numbered count reported honestly",
+    ],
+  },
+  {
     title: "Phase 21 — Watermark",
     status: "Completed" as const,
     items: [

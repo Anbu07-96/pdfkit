@@ -713,6 +713,23 @@ character set only (pdf-lib's WinAnsi fonts; other characters are rejected
 with a clear message), and a visible watermark is a **deterrent, not
 protection**.
 
+## 5m. Page Numbers (Phase 22)
+
+The watermark pipeline's sibling, implemented on the same principle: vector
+`drawText` on existing pages, no rasterising, no rebuilding. The option model
+(`lib/processing/page-numbers.ts`, browser-safe) mirrors `watermark.ts`'s
+exactness — position bottom-left/center/right, start 1-9999, font size 8-24,
+format `1` / `Page 1` / `Page 1 of 10`, pages all/first/last; anything outside
+the sets is `INVALID_PAGE_NUMBER_CONFIGURATION` (400), never repaired.
+
+Two semantics are deliberate and tested: page **N** prints `start + N - 1`
+(sequential across the document; first/last modes stamp only their page but
+keep its sequential number), and `Page X of Y` always uses the document's
+**real** page count — so a start above 1 is an explicit front-matter offset
+that can print X above Y, stated in the workspace before conversion rather
+than silently clamped. Presence is proven by decoding produced content
+streams (hex text operators at the requested `Nn Tf` size).
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:

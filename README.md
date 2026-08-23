@@ -8,7 +8,7 @@ later OCR and AI document intelligence.
 
 > ## Current status: Phase 6 — rotation and visual page selection
 >
-> **Fifteen tools genuinely work:**
+> **Sixteen tools genuinely work:**
 >
 > - **Merge PDF** — combine several PDFs in the order you choose.
 > - **Split PDF** — split every page into its own file, or split by page ranges;
@@ -38,6 +38,9 @@ later OCR and AI document intelligence.
 > - **Watermark** — real vector text stamps (opacity, angle, placement, page
 >   choice) without rasterising pages. Stated plainly: a visible watermark is
 >   a deterrent, not protection.
+> - **Page Numbers** — sequential numbers as visible text (position, start,
+>   size, format, page choice). `Page X of Y` always reports the real page
+>   count; a start above 1 is a front-matter offset.
 >
 > **Every other tool is still unimplemented** and honestly marked
 > **Coming soon**, with its upload area disabled. There is no simulated
@@ -86,7 +89,7 @@ The catalog describes **42 tools** in six categories — Organize, Convert, Edit
 Security, OCR and AI — of which **6 are implemented** today: Merge PDF, Split
 PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF Pages, Rotate PDF,
 Compress PDF, Images to PDF, PNG to PDF, PDF to JPG, PDF to PNG, PDF to Word,
-Edit PDF Metadata, Remove Metadata and Watermark.
+Edit PDF Metadata, Remove Metadata, Watermark and Page Numbers.
 
 ---
 
@@ -587,6 +590,31 @@ ceiling 200) rejected with `TOO_MANY_OUTPUTS` (413) **before** rendering, and
 each produced image is capped by `PDFKIT_CONVERSION_MAX_IMAGE_BYTES`
 (default 6 MB) → `OUTPUT_TOO_LARGE` (413). ZIP entry names are sanitised.
 
+## Page Numbers
+
+```bash
+curl -X POST http://localhost:3000/api/tools/page-numbers \
+  -F "files=@document.pdf;type=application/pdf" \
+  -F "position=bottom-center" -F "start=1" -F "size=11" \
+  -F "format=page-of" -F "pages=all" \
+  -o document-numbered.pdf
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `files` | yes | Exactly one PDF |
+| `position` | yes | `bottom-left`, `bottom-center` or `bottom-right` |
+| `start` | yes | Whole number 1-9999 (front-matter offset) |
+| `size` | yes | Whole number 8-24 (font size in points) |
+| `format` | yes | `number` ("1"), `page` ("Page 1") or `page-of` ("Page 1 of 10") |
+| `pages` | yes | `all`, `first` or `last` |
+
+Invalid options give `INVALID_PAGE_NUMBER_CONFIGURATION` (400) — values are
+never repaired. The numbers are vector text; `Page X of Y` uses the real page
+count, so a start above 1 can print an X above Y (documented front-matter
+behaviour). The response reports the numbered count in
+`X-PDFKit-Numbered-Pages`.
+
 ## Watermark
 
 ```bash
@@ -775,8 +803,8 @@ background workers and job queues are **not** implemented. There is no simulated
 progress bars, no fake results, no fake downloads, no placeholder page images.
 Only Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF
 Pages, Rotate PDF, Compress PDF, Images to PDF, PNG to PDF, PDF to JPG, PDF to
-PNG, PDF to Word (text only), Edit PDF Metadata, Remove Metadata and Watermark
-are real.
+PNG, PDF to Word (text only), Edit PDF Metadata, Remove Metadata, Watermark
+and Page Numbers are real.
 
 ---
 
@@ -855,7 +883,21 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (67 files, 950 tests):
+Covered today (71 files, 991 tests):
+
+- **Page-number model** — exact option sets and ranges, never-repair
+  validation, page-mode resolution, label rendering including the
+  front-matter offset behaviour
+- **Page-number processor** — sequential labels proven present in the decoded
+  content streams on exactly the selected pages, start offset with the real
+  total kept (`Page 6 of 2`), every position and format, font size visible in
+  the operators, rotation/content preservation, malformed/encrypted/
+  multi-file rejections, hostile names, input immutability
+- **Page-number API** — standard headers, numbered-count header, every error
+  mode, GET 405
+- **Page-number workspace** — defaults, option switching, numeric inputs with
+  aria-invalid and inline errors, payload, honest indeterminate processing,
+  cancel, server-confirmed counts, reset, announcements
 
 - **Watermark model** — exact option sets, text trimming and length limits,
   never-repair validation for opacity/rotation/placement/pages, page-mode
@@ -1005,9 +1047,9 @@ Covered today (67 files, 950 tests):
 
 ## Future phases
 
-Phase 21 stops here on purpose. The planned order (see also `/roadmap`):
+Phase 22 stops here on purpose. The planned order (see also `/roadmap`):
 
-1. Page numbers and headers/footers on the proven watermark primitives.
+1. Headers/footers on the proven numbering primitives.
 2. Crop (CropBox) and flatten via the pdfium pipeline.
 3. DOCX → PDF (requires the sandboxed LibreOffice worker decided against in
    the Phase 14 feasibility study — a platform decision, not a code change);
