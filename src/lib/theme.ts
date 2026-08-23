@@ -55,7 +55,7 @@ export function subscribeToTheme(listener: () => void): () => void {
   };
 }
 
-/** Clears the cached snapshot. Used by storage events and by tests. */
+/** Clears the cached snapshot. Used by the test setup to isolate suites. */
 export function resetThemeCache(): void {
   cachedTheme = null;
 }

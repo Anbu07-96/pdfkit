@@ -14,7 +14,7 @@ import {
   readPageCount,
   savePdfDocument,
 } from "@/lib/processing/pdf-document";
-import { SINGLE_PDF_INPUT_RULES } from "@/lib/processing/rules";
+import { REMOVE_METADATA_INPUT_RULES } from "@/lib/processing/rules";
 
 /**
  * Remove Metadata.
@@ -41,7 +41,7 @@ import { SINGLE_PDF_INPUT_RULES } from "@/lib/processing/rules";
  */
 export class RemoveMetadataProcessor implements ToolProcessor {
   readonly toolId = "remove-metadata";
-  readonly input = SINGLE_PDF_INPUT_RULES;
+  readonly input = REMOVE_METADATA_INPUT_RULES;
 
   async process(
     request: ProcessingRequest,

@@ -19,7 +19,7 @@ import {
   readPageCount,
   savePdfDocument,
 } from "@/lib/processing/pdf-document";
-import { SINGLE_PDF_INPUT_RULES } from "@/lib/processing/rules";
+import { EDIT_PDF_METADATA_INPUT_RULES } from "@/lib/processing/rules";
 
 /**
  * Options accepted by the Edit Metadata API.
@@ -61,7 +61,7 @@ const INFO_KEYS: Record<EditableMetadataField, string> = {
  */
 export class EditPdfMetadataProcessor implements ToolProcessor<EditPdfMetadataOptions> {
   readonly toolId = "edit-pdf-metadata";
-  readonly input = SINGLE_PDF_INPUT_RULES;
+  readonly input = EDIT_PDF_METADATA_INPUT_RULES;
 
   async process(
     request: ProcessingRequest<EditPdfMetadataOptions>,

@@ -47,9 +47,3 @@ export function getCategoriesWithTools(): CategoryWithTools[] {
     tools: getToolsByCategory(category.id),
   }));
 }
-
-export function getCategoryOrThrow(id: string) {
-  const category = getCategory(id);
-  if (!category) throw new Error(`Unknown tool category "${id}".`);
-  return category;
-}
