@@ -101,6 +101,16 @@ const PHASES = [
     ],
   },
   {
+    title: "Phase 24 — Crop",
+    status: "Completed" as const,
+    items: [
+      "CropBox only — MediaBox, content, rotation and order untouched",
+      "Rectangle or margins, in points from a bottom-left origin",
+      "Reject-never-clamp validation; per-page margins for mixed sizes",
+      "Stated and proven: cropping hides content, it does not remove it",
+    ],
+  },
+  {
     title: "Phase 22 — Page Numbers",
     status: "Completed" as const,
     items: [

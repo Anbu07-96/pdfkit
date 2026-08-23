@@ -18,7 +18,7 @@ export default function PrivacyPage() {
         <h2>What the current version does</h2>
         <ul>
           <li>
-            The sixteen working tools — <strong>Merge PDF</strong>,{" "}
+            The seventeen working tools — <strong>Merge PDF</strong>,{" "}
             <strong>Split PDF</strong>, <strong>Extract PDF Pages</strong>,{" "}
             <strong>Delete PDF Pages</strong>, <strong>Reorder PDF Pages</strong> and{" "}
             <strong>Rotate PDF</strong>, <strong>Compress PDF</strong>,{" "}

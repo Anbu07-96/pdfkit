@@ -730,6 +730,34 @@ that can print X above Y, stated in the workspace before conversion rather
 than silently clamped. Presence is proven by decoding produced content
 streams (hex text operators at the requested `Nn Tf` size).
 
+## 5n. Crop PDF (Phase 24)
+
+The Phase 23 audit's plan, implemented exactly: **CropBox only** via pdf-lib's
+`setCropBox` — the visible window of a page changes and nothing else. The
+MediaBox, content streams, page order, rotation, annotations, links and forms
+are untouched (probes and tests verify each), and unselected pages keep their
+original boxes. No rasterising, no page rebuilding, no new dependency.
+
+The model (`lib/processing/crop.ts`, browser-safe) offers two modes with
+PDF-native coordinates only: an absolute **rectangle** (points, bottom-left
+origin, unrotated space) validated against **every** selected page's MediaBox
+— one misfit rejects the whole request, naming the page — or **margins**
+computed from each page's own MediaBox, so heterogeneous sizes crop correctly
+per page. Validation **rejects, never clamps**: finite values only (pdf-lib
+itself would accept Infinity and degenerate boxes), sides ≥ 10 pt, rectangle
+fully inside the MediaBox, margins ≥ 0 leaving ≥ 10 pt. Geometry for all
+selected pages is computed **before the first mutation** — no partial crops.
+
+**The critical honesty rule, proven in tests and over HTTP:** cropping is
+*not* redaction. Cropped-out content remains in the file and remains
+recoverable — a processor test extracts the "hidden" text back from the output
+with pdfium, and the E2E suite repeats the proof against the production
+server. The workspace warns before converting and again in the success state;
+the docs and catalog say the same. (The Phase 23 probes showed MediaBox
+shrinking adds no security either, so the least destructive CropBox-only
+choice is also the honest one.) The output uses the fixed name `crop.pdf`, so
+hostile source filenames never travel into the response.
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:

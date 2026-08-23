@@ -8,7 +8,7 @@ later OCR and AI document intelligence.
 
 > ## Current status: Phase 6 — rotation and visual page selection
 >
-> **Sixteen tools genuinely work:**
+> **Seventeen tools genuinely work:**
 >
 > - **Merge PDF** — combine several PDFs in the order you choose.
 > - **Split PDF** — split every page into its own file, or split by page ranges;
@@ -41,6 +41,10 @@ later OCR and AI document intelligence.
 > - **Page Numbers** — sequential numbers as visible text (position, start,
 >   size, format, page choice). `Page X of Y` always reports the real page
 >   count; a start above 1 is a front-matter offset.
+> - **Crop** — set the visible area of selected pages by rectangle or margins
+>   (points, bottom-left origin). CropBox only: size, rotation and content are
+>   untouched, and the tool says plainly that cropping **is not redaction** —
+>   cropped-out content stays in the file and remains recoverable.
 >
 > **Every other tool is still unimplemented** and honestly marked
 > **Coming soon**, with its upload area disabled. There is no simulated
@@ -89,7 +93,7 @@ The catalog describes **42 tools** in six categories — Organize, Convert, Edit
 Security, OCR and AI — of which **6 are implemented** today: Merge PDF, Split
 PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF Pages, Rotate PDF,
 Compress PDF, Images to PDF, PNG to PDF, PDF to JPG, PDF to PNG, PDF to Word,
-Edit PDF Metadata, Remove Metadata, Watermark and Page Numbers.
+Edit PDF Metadata, Remove Metadata, Watermark, Page Numbers and Crop.
 
 ---
 
@@ -590,6 +594,33 @@ ceiling 200) rejected with `TOO_MANY_OUTPUTS` (413) **before** rendering, and
 each produced image is capped by `PDFKIT_CONVERSION_MAX_IMAGE_BYTES`
 (default 6 MB) → `OUTPUT_TOO_LARGE` (413). ZIP entry names are sanitised.
 
+## Crop
+
+```bash
+curl -X POST http://localhost:3000/api/tools/crop \
+  -F "files=@document.pdf;type=application/pdf" \
+  -F "mode=margins" -F "top=20" -F "right=10" -F "bottom=5" -F "left=15" \
+  -F "ranges=1-3, 5" \
+  -o crop.pdf
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `files` | yes | Exactly one PDF |
+| `mode` | yes | `rectangle` or `margins` |
+| `x`,`y`,`width`,`height` | rectangle mode | Points, bottom-left origin, unrotated space; sides ≥ 10 pt; fully inside each selected page's MediaBox |
+| `top`,`right`,`bottom`,`left` | margins mode | Points trimmed from each page's own edges, ≥ 0; must leave ≥ 10 pt each way |
+| `ranges` | no | Existing range syntax; omitted means every page |
+
+Invalid geometry gives `INVALID_CROP_CONFIGURATION` (400) — nothing is ever
+clamped or silently resized. Rectangle mode validates one rectangle against
+**every** selected page; margins mode computes per page. The output keeps the
+fixed name `crop.pdf`, and the cropped count is reported in
+`X-PDFKit-Cropped-Pages`. **Privacy:** cropping hides content from view — it
+does not remove it. Cropped-out content remains in the PDF and may be
+recovered with any PDF editor or text extractor (including PDFKit's own
+PDF → Word). Never use Crop as a security or redaction tool.
+
 ## Page Numbers
 
 ```bash
@@ -803,8 +834,8 @@ background workers and job queues are **not** implemented. There is no simulated
 progress bars, no fake results, no fake downloads, no placeholder page images.
 Only Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF
 Pages, Rotate PDF, Compress PDF, Images to PDF, PNG to PDF, PDF to JPG, PDF to
-PNG, PDF to Word (text only), Edit PDF Metadata, Remove Metadata, Watermark
-and Page Numbers are real.
+PNG, PDF to Word (text only), Edit PDF Metadata, Remove Metadata, Watermark,
+Page Numbers and Crop are real.
 
 ---
 
@@ -883,7 +914,22 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (71 files, 991 tests):
+Covered today (75 files, 1041 tests):
+
+- **Crop model** — modes, rectangle/margins parsing, finiteness, 10 pt
+  minimum, negative rejection, MediaBox fit (reject-never-clamp), per-page
+  margin computation
+- **Crop processor** — CropBox set on exactly the selected pages (verified on
+  reopen), MediaBox/order/rotation/content preserved, heterogeneous sizes,
+  rectangle-fit rejection naming the failing page, unicode, the privacy proof
+  (cropped-out text extracted back from the output), malformed/encrypted/
+  multi-file rejections, fixed output name, input immutability
+- **Crop API** — standard headers, cropped-count header, every error mode,
+  GET 405
+- **Crop workspace** — mode switching, numeric fields with aria-invalid and
+  inline errors, units and coordinate explanation, the prominent
+  not-redaction warning, ranges, cancel, server-confirmed counts, reset,
+  announcements
 
 - **Page-number model** — exact option sets and ranges, never-repair
   validation, page-mode resolution, label rendering including the
@@ -1047,11 +1093,11 @@ Covered today (71 files, 991 tests):
 
 ## Future phases
 
-Phase 22 stops here on purpose. The planned order (see also `/roadmap`):
+Phase 24 stops here on purpose. The planned order (see also `/roadmap`):
 
-1. Headers/footers on the proven numbering primitives.
-2. Crop (CropBox) and flatten via the pdfium pipeline.
-3. DOCX → PDF (requires the sandboxed LibreOffice worker decided against in
+1. Headers/footers on the proven numbering primitives; flatten via the pdfium
+   pipeline.
+2. DOCX → PDF (the sandboxed-LibreOffice platform decision). (requires the sandboxed LibreOffice worker decided against in
    the Phase 14 feasibility study — a platform decision, not a code change);
    OCR (native engine or external service, both a platform decision).
 4. AI document intelligence.
