@@ -310,6 +310,11 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
     metaHeaders["x-pdfkit-numbered-pages"] = String(result.meta.numberedPages);
   }
 
+  // Crop facts: how many pages were cropped (CropBox set).
+  if (result.meta?.croppedPages !== undefined) {
+    metaHeaders["x-pdfkit-cropped-pages"] = String(result.meta.croppedPages);
+  }
+
   // A single document is streamed as-is; several are bundled into a ZIP.
   if (result.artifacts.length === 1) {
     const artifact = result.artifacts[0];

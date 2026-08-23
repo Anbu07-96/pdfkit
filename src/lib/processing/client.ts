@@ -49,6 +49,8 @@ export interface ProcessedDocument {
   watermarkedPages?: number;
   /** How many pages the server numbered (Page Numbers only). */
   numberedPages?: number;
+  /** How many pages the server cropped (Crop only). */
+  croppedPages?: number;
 }
 
 /** Server-measured text extraction outcome. */
@@ -244,6 +246,10 @@ async function toProcessedDocument(
     response.headers.get("x-pdfkit-numbered-pages") ?? "",
     10,
   );
+  const croppedPages = Number.parseInt(
+    response.headers.get("x-pdfkit-cropped-pages") ?? "",
+    10,
+  );
 
   return {
     blob,
@@ -253,6 +259,7 @@ async function toProcessedDocument(
     ...(extraction ? { extraction } : {}),
     ...(Number.isFinite(watermarkedPages) ? { watermarkedPages } : {}),
     ...(Number.isFinite(numberedPages) ? { numberedPages } : {}),
+    ...(Number.isFinite(croppedPages) ? { croppedPages } : {}),
     fileName: fileNameFromDisposition(
       response.headers.get("content-disposition"),
       fallbackName,
@@ -648,6 +655,64 @@ export async function runPageNumbers({
 
   const response = await postForm("/api/tools/page-numbers", form, signal);
   return toProcessedDocument(response, "numbered.pdf");
+}
+
+export interface RunCropOptions {
+  file: File;
+  mode: string;
+  /** Rectangle mode fields (points). */
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  /** Margins mode fields (points). */
+  top?: number;
+  right?: number;
+  bottom?: number;
+  left?: number;
+  /** Raw ranges, e.g. "1-3, 5". Omitted means every page. */
+  ranges?: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Crop one PDF on the server (CropBox only). Every value is re-validated
+ * there; the response reports how many pages were cropped.
+ */
+export async function runCrop({
+  file,
+  mode,
+  x,
+  y,
+  width,
+  height,
+  top,
+  right,
+  bottom,
+  left,
+  ranges,
+  signal,
+}: RunCropOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("mode", mode);
+  if (mode === "rectangle") {
+    form.append("x", String(x ?? 0));
+    form.append("y", String(y ?? 0));
+    form.append("width", String(width ?? 0));
+    form.append("height", String(height ?? 0));
+  } else {
+    form.append("top", String(top ?? 0));
+    form.append("right", String(right ?? 0));
+    form.append("bottom", String(bottom ?? 0));
+    form.append("left", String(left ?? 0));
+  }
+  if (ranges !== undefined && ranges.trim() !== "") {
+    form.append("ranges", ranges);
+  }
+
+  const response = await postForm("/api/tools/crop", form, signal);
+  return toProcessedDocument(response, "cropped.pdf");
 }
 
 export interface PageThumbnailData {

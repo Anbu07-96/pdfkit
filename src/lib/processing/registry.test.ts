@@ -18,6 +18,7 @@ describe("processor registry", () => {
   it("exposes the implemented tools", () => {
     expect(getImplementedToolIds()).toEqual([
       "compress-pdf",
+      "crop",
       "delete-pdf-pages",
       "edit-pdf-metadata",
       "extract-pdf-pages",
@@ -48,6 +49,7 @@ describe("processor registry", () => {
     expect(hasProcessor("png-to-pdf")).toBe(true);
     expect(hasProcessor("watermark")).toBe(true);
     expect(hasProcessor("page-numbers")).toBe(true);
+    expect(hasProcessor("crop")).toBe(true);
     expect(hasProcessor("pdf-to-jpg")).toBe(true);
     expect(hasProcessor("pdf-to-png")).toBe(true);
   });
@@ -67,6 +69,7 @@ describe("processor registry", () => {
     // Phase 8 adds the image conversions; nothing else may claim to work.
     expect(getImplementedToolIds()).toEqual([
       "compress-pdf",
+      "crop",
       "delete-pdf-pages",
       "edit-pdf-metadata",
       "extract-pdf-pages",

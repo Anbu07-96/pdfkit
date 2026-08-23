@@ -14,8 +14,8 @@ import type { Tool } from "./types";
  * Implemented today: Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages,
  * Reorder PDF Pages, Rotate PDF, Compress PDF, Images to PDF, PNG to PDF,
  * PDF to JPG, PDF to PNG, PDF to Word, Edit PDF Metadata, Remove Metadata
- * and Watermark. Page Numbers, too, is implemented (Phase 22). Everything
- * else is `COMING_SOON`.
+ * and Watermark. Page Numbers (Phase 22) and Crop (Phase 24), too, are
+ * implemented. Everything else is `COMING_SOON`.
  */
 
 const PDF_EXT = [".pdf"];
@@ -432,15 +432,20 @@ export const TOOLS: readonly Tool[] = [
   pdfTool({
     id: "crop",
     name: "Crop",
-    description: "Trim margins and crop pages to a new size.",
+    description:
+      "Trim margins or crop selected pages by area. Cropping changes what is visible, but does not remove hidden content.",
     category: "edit",
     icon: "crop",
+    // Implemented in Phase 24: CropBox only — MediaBox, content, rotation and
+    // page order are untouched. Cropped-out content stays in the file and
+    // remains recoverable; this is not redaction.
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["trim", "margins", "resize page", "cut edges"],
     howItWorks: [
-      "Upload your PDF.",
-      "Drag the crop area over the pages.",
-      "Download the cropped PDF.",
+      "Upload the PDF and choose pages.",
+      "Crop by rectangle or by margins, in points from a bottom-left origin.",
+      "Download the cropped PDF. Cropping hides content from view — it does not remove it.",
     ],
   }),
   pdfTool({
