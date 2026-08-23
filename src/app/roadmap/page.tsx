@@ -101,6 +101,17 @@ const PHASES = [
     ],
   },
   {
+    title: "Phase 26 — Flatten PDF",
+    status: "Completed" as const,
+    items: [
+      "Vector form flattening with pdf-lib — pages never rasterised",
+      "Field values become permanent, selectable page content; links survive",
+      "Signed PDFs rejected before any change — signatures are never destroyed",
+      "pdf-lib's dangling widget references cleaned up; empty AcroForm removed",
+      "Stated plainly: irreversible, and document scripts are NOT removed",
+    ],
+  },
+  {
     title: "Phase 24 — Crop",
     status: "Completed" as const,
     items: [

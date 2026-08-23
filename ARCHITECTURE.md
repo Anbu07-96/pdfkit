@@ -758,6 +758,45 @@ shrinking adds no security either, so the least destructive CropBox-only
 choice is also the honest one.) The output uses the fixed name `crop.pdf`, so
 hostile source filenames never travel into the response.
 
+## 5o. Flatten PDF (Phase 26)
+
+The Phase 25 audit's plan, implemented exactly: **vector flattening only**,
+via pdf-lib's `PDFForm.flatten()` — field appearance streams are drawn into
+the page content and the interactive fields are removed. Pages are never
+rasterised or rebuilt as images, so flattened values remain selectable,
+extractable text; links and other ordinary annotations survive; and page
+count, order and rotation are untouched. No new dependency.
+
+**Signed PDFs are rejected before any mutation** with a structured
+`SIGNED_PDF` (422). Detection is belt-and-braces and runs first: pdf-lib's
+typed field model (`PDFSignature`), the raw `/FT /Sig` entry on each field
+dictionary, and the AcroForm `SigFlags` "signatures exist" bit. Flattening
+rewrites the file and would invalidate a signature — refusing is the only
+honest behaviour; a signature is never silently destroyed.
+
+**The known pdf-lib 1.17.1 issue is handled explicitly.** `flatten()` empties
+the AcroForm `/Fields` but leaves the deleted widget references dangling in
+each page's `/Annots` array. A cleanup pass removes exactly the references
+that no longer resolve to any object — annotations that still resolve (links,
+notes) are preserved untouched, never blindly removed — then drops an
+`/Annots` array left empty and the now-empty AcroForm dictionary. Documents
+without any AcroForm pass through with zero flattened fields; `getForm()` is
+never called on them, so no form structure is ever fabricated.
+
+**Self-verification on every run:** the output is re-opened and checked —
+page count, per-page MediaBox size (order) and rotation equal to the input,
+no AcroForm remaining, and every remaining `/Annots` entry resolving. The
+extractability of flattened values is proven with pdfium in the processor
+tests and again over real HTTP in E2E.
+
+**Honesty rules, stated everywhere the tool appears:** flattening is
+irreversible (fields become permanent page content); document-level
+JavaScript and OpenActions are **not** removed (a test pins that they
+survive); and the tool is never presented as a security or sanitisation
+feature. The number of flattened fields is measured server-side and reported
+in `X-PDFKit-Flattened-Fields`. The output uses the fixed name
+`flattened.pdf`, so hostile source filenames never travel into the response.
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:
