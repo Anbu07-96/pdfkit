@@ -642,6 +642,26 @@ reports what was found (`X-PDFKit-Removed-Fields`, `-Xmp-Removed`,
 `-Verification`) and the interface states plainly that the document is not
 completely metadata-free.
 
+## 5j. PDF to Word, text only (Phase 15)
+
+The Phase 14 feasibility study concluded that full-fidelity Office conversion
+is not viable inside this architecture (AGPL-licensed Python stacks; LibreOffice
+needs child processes, temp files and sandbox isolation). What **is** honest
+and safe is text extraction — and the building blocks already existed:
+pdfium's `getText()` (exposed through a new `extractPdfPageTexts` in the
+renderer, with the usual single-instance WASM discipline and page-count guard)
+plus the MIT-licensed `docx` generator, the one new dependency.
+
+The processor writes one paragraph per extracted line and a page break between
+pages — no layout, image or table reconstruction, and every surface (catalog,
+UI, docs, `X-PDFKit-Mode: text-only` header) states that. Pages without
+extractable text get an italic marker instead of silently vanishing; an
+image-only PDF succeeds with `characters: 0` and the interface explains why.
+The output is validated **in memory** as a real Office ZIP
+(`[Content_Types].xml` + `word/document.xml`) before the job may succeed —
+the same self-verifying pattern as metadata removal. Page limits are shared
+with image export (`PDFKIT_CONVERSION_MAX_PAGES`).
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:

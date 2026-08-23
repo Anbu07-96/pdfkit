@@ -8,7 +8,7 @@ later OCR and AI document intelligence.
 
 > ## Current status: Phase 6 — rotation and visual page selection
 >
-> **Twelve tools genuinely work:**
+> **Thirteen tools genuinely work:**
 >
 > - **Merge PDF** — combine several PDFs in the order you choose.
 > - **Split PDF** — split every page into its own file, or split by page ranges;
@@ -30,6 +30,9 @@ later OCR and AI document intelligence.
 > - **Remove Metadata** — delete title, author, subject, keywords, creator and
 >   the XMP stream, verified by re-reading the output; the honest limits
 >   (creator emptied, producer/timestamps re-stamped) are stated in the tool.
+> - **PDF to Word** — text-only extraction into a real .docx (one paragraph per
+>   line, page breaks preserved). The tool says plainly that formatting,
+>   images, tables and exact layout are **not** preserved.
 >
 > **Every other tool is still unimplemented** and honestly marked
 > **Coming soon**, with its upload area disabled. There is no simulated
@@ -77,8 +80,8 @@ A single web app for common document tasks, built around three product rules:
 The catalog describes **42 tools** in six categories — Organize, Convert, Edit,
 Security, OCR and AI — of which **6 are implemented** today: Merge PDF, Split
 PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF Pages, Rotate PDF,
-Compress PDF, Images to PDF, PDF to JPG, PDF to PNG, Edit PDF Metadata and
-Remove Metadata.
+Compress PDF, Images to PDF, PDF to JPG, PDF to PNG, PDF to Word, Edit PDF
+Metadata and Remove Metadata.
 
 ---
 
@@ -151,6 +154,19 @@ npm start
 ---
 
 ## What is implemented today
+
+**PDF to Word (real, end to end, text only)**
+
+- Every page's text is extracted with the existing pdfium rasteriser and
+  written into a real .docx — one paragraph per line, a page break between
+  pages, pages without text marked as such
+- The tool is honest everywhere: catalog, interface and docs all say text
+  only — formatting, images, tables and exact layout are not preserved, and
+  there is no fake reconstruction
+- The server reports what it measured (`X-PDFKit-Characters`, `-Paragraphs`,
+  `-Mode: text-only`); an image-only PDF honestly reports zero characters
+- Page limit shared with image export (`PDFKIT_CONVERSION_MAX_PAGES`); the
+  output is validated in memory as a real Office ZIP before it is returned
 
 **Remove Metadata (real, end to end)**
 
@@ -609,6 +625,29 @@ added for XMP: pdf-lib deletes the catalog `/Metadata` entry and the underlying
 object, the same primitive the compress pass has used since Phase 7 — plus the
 object-graph removal the privacy guarantee requires.
 
+## PDF to Word
+
+```bash
+curl -X POST http://localhost:3000/api/tools/pdf-to-word \
+  -F "files=@document.pdf;type=application/pdf" \
+  -o document.docx
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `files` | yes | Exactly one PDF |
+
+Text-only conversion: `application/vnd…wordprocessingml.document` output with
+the page texts in order, one paragraph per extracted line and a page break
+between pages. Response headers carry the measured extraction
+(`X-PDFKit-Characters`, `X-PDFKit-Paragraphs`, `X-PDFKit-Mode: text-only`).
+Built on the existing pdfium text pipeline plus the MIT-licensed `docx`
+generator — no LibreOffice, no Python, no child processes, no temp files.
+Full-fidelity PDF→Word (layout, images, tables) is **not** available; the
+Phase 14 feasibility study documents why (AGPL-licensed alternatives, or a
+sandboxed LibreOffice worker the current architecture deliberately does not
+have).
+
 ## Page previews
 
 ```bash
@@ -683,8 +722,8 @@ cloud storage, databases, payments, API keys, a public developer API,
 background workers and job queues are **not** implemented. There is no simulated processing anywhere: no fake
 progress bars, no fake results, no fake downloads, no placeholder page images.
 Only Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF
-Pages, Rotate PDF, Compress PDF, Images to PDF, PDF to JPG, PDF to PNG, Edit
-PDF Metadata and Remove Metadata are real.
+Pages, Rotate PDF, Compress PDF, Images to PDF, PDF to JPG, PDF to PNG, PDF to
+Word (text only), Edit PDF Metadata and Remove Metadata are real.
 
 ---
 
@@ -763,7 +802,17 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (58 files, 842 tests):
+Covered today (61 files, 876 tests):
+
+- **PDF to Word processor** — page/text order, one-paragraph-per-line,
+  page breaks, unicode, no-text pages marked, in-memory DOCX validated as a
+  real Office ZIP, page limits, malformed/encrypted/multi-file rejections,
+  hostile names sanitised, input immutability
+- **PDF to Word API** — standard headers, measured extraction facts,
+  zero-character honesty, every error mode, GET 405
+- **PDF to Word workspace** — the text-only warning before and after
+  conversion, server-measured result facts, no-text state, cancel, reset,
+  announcements
 
 - **Metadata removal** — all five Info fields plus XMP gone (proven at the
   byte level, not just unreferenced), unicode metadata, empty/no-Info/XMP-free
@@ -885,7 +934,8 @@ Covered today (58 files, 842 tests):
 
 Phase 8 stops here on purpose. The planned order (see also `/roadmap`):
 
-1. Office ↔ PDF conversion.
+1. DOCX → PDF (requires the sandboxed LibreOffice worker decided against in
+   the Phase 14 feasibility study — a platform decision, not a code change).
 2. Editing and security tools.
 3. OCR.
 4. AI document intelligence.

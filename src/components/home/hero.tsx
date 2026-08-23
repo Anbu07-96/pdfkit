@@ -23,8 +23,8 @@ export function Hero() {
             PDFKit is building the everyday PDF and document tools — organise, convert,
             edit, secure — into one fast, privacy-conscious web app.{" "}
             <strong className="font-medium text-foreground">
-              Merge, split, extract, delete, reorder, rotate, compress, image-convert and
-metadata-edit PDFs work today.
+              Merge, split, extract, delete, reorder, rotate, compress, image-convert,
+metadata-edit and text-to-Word PDFs work today.
             </strong>{" "}
             The rest of the {TOOLS.length} tools in the catalog go live only once they
             genuinely work.

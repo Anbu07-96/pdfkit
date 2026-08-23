@@ -101,6 +101,16 @@ const PHASES = [
     ],
   },
   {
+    title: "Phase 15 — PDF to Word (text only)",
+    status: "Completed" as const,
+    items: [
+      "Every page's text extracted with the existing pdfium pipeline",
+      "Real .docx output via the MIT-licensed docx generator, validated in memory",
+      "Text-only semantics stated everywhere — no fake layout reconstruction",
+      "Image-only PDFs honestly report zero extractable text",
+    ],
+  },
+  {
     title: "Phase 12 — Metadata removal",
     status: "Completed" as const,
     items: [

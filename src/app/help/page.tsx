@@ -67,6 +67,11 @@ export default function HelpPage() {
             keywords, creator and XMP data in one verified step, with the
             limits of the saving library stated up front.
           </li>
+          <li>
+            <strong>PDF to Word</strong> — extract the text of a PDF into an
+            editable Word document. Text only: formatting, images, tables and
+            exact layout are not preserved.
+          </li>
           <li>Browsing the tool catalog by category.</li>
           <li>Searching tools by name, description or category.</li>
           <li>Opening any tool page to see what the tool will do and what it accepts.</li>
@@ -76,7 +81,7 @@ export default function HelpPage() {
         <h2>What does not work yet</h2>
         <ul>
           <li>
-            Every tool other than the twelve above. Their upload areas are
+            Every tool other than the thirteen above. Their upload areas are
             intentionally disabled and labelled <strong>Coming soon</strong>.
           </li>
           <li>There are no accounts, no cloud storage, no API keys and no billing.</li>
