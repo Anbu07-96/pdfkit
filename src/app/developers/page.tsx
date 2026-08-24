@@ -59,7 +59,8 @@ export default function DevelopersPage() {
             <code>POST /api/tools/pdf-to-word</code> and{" "}
             <code>POST /api/tools/watermark</code> and{" "}
             <code>POST /api/tools/page-numbers</code> and{" "}
-            <code>POST /api/tools/crop</code>,{" "}
+            <code>POST /api/tools/crop</code> and{" "}
+            <code>POST /api/tools/flatten-pdf</code>,{" "}
             <code>POST /api/documents/inspect</code> and{" "}
             <code>POST /api/documents/thumbnails</code>) already share the same validation,
             limits, multi-artifact delivery and structured error model a public API

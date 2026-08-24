@@ -73,6 +73,14 @@ export default function HelpPage() {
             remove it, so never rely on it for confidential material.
           </li>
           <li>
+            <strong>Flatten PDF</strong> — turn filled form fields into
+            permanent page content. Values stay selectable as ordinary text
+            and links keep working, but flattening is irreversible. Signed
+            PDFs are rejected (flattening would invalidate the signature), and
+            document scripts are <em>not</em> removed — it is not a security
+            or sanitisation feature.
+          </li>
+          <li>
             <strong>PDF to JPG / PDF to PNG</strong> — export every page as an
             image at 150 DPI. One page gives a single image; longer documents
             download as a ZIP.
@@ -101,7 +109,7 @@ export default function HelpPage() {
         <h2>What does not work yet</h2>
         <ul>
           <li>
-            Every tool other than the seventeen above. Their upload areas are
+            Every tool other than the eighteen above. Their upload areas are
             intentionally disabled and labelled <strong>Coming soon</strong>.
           </li>
           <li>There are no accounts, no cloud storage, no API keys and no billing.</li>

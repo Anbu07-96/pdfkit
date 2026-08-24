@@ -6,9 +6,9 @@ PDFKit is a fast, privacy-conscious web application for everyday PDF and
 document work — organising pages, converting formats, editing, securing, and
 later OCR and AI document intelligence.
 
-> ## Current status: Phase 6 — rotation and visual page selection
+> ## Current status: Phase 26 — Flatten PDF
 >
-> **Seventeen tools genuinely work:**
+> **Eighteen tools genuinely work:**
 >
 > - **Merge PDF** — combine several PDFs in the order you choose.
 > - **Split PDF** — split every page into its own file, or split by page ranges;
@@ -45,6 +45,12 @@ later OCR and AI document intelligence.
 >   (points, bottom-left origin). CropBox only: size, rotation and content are
 >   untouched, and the tool says plainly that cropping **is not redaction** —
 >   cropped-out content stays in the file and remains recoverable.
+> - **Flatten PDF** — turn interactive form fields into permanent page content
+>   with vector flattening (pdf-lib's `PDFForm.flatten()`); pages are never
+>   rasterised, so values stay selectable and links keep working. Signed PDFs
+>   are rejected before any change (flattening would invalidate the
+>   signature), and the tool says plainly that **document scripts are NOT
+>   removed** and that **flattening is irreversible**.
 >
 > **Every other tool is still unimplemented** and honestly marked
 > **Coming soon**, with its upload area disabled. There is no simulated
@@ -90,10 +96,11 @@ A single web app for common document tasks, built around three product rules:
    desktop screens, keyboard-accessible throughout.
 
 The catalog describes **42 tools** in six categories — Organize, Convert, Edit,
-Security, OCR and AI — of which **6 are implemented** today: Merge PDF, Split
+Security, OCR and AI — of which **18 are implemented** today: Merge PDF, Split
 PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF Pages, Rotate PDF,
 Compress PDF, Images to PDF, PNG to PDF, PDF to JPG, PDF to PNG, PDF to Word,
-Edit PDF Metadata, Remove Metadata, Watermark, Page Numbers and Crop.
+Edit PDF Metadata, Remove Metadata, Watermark, Page Numbers, Crop and
+Flatten PDF.
 
 ---
 
@@ -621,6 +628,46 @@ does not remove it. Cropped-out content remains in the PDF and may be
 recovered with any PDF editor or text extractor (including PDFKit's own
 PDF → Word). Never use Crop as a security or redaction tool.
 
+## Flatten PDF
+
+```bash
+curl -X POST http://localhost:3000/api/tools/flatten-pdf \
+  -F "files=@form.pdf;type=application/pdf" \
+  -o flattened.pdf
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `files` | yes | Exactly one PDF |
+
+Vector flattening with pdf-lib's `PDFForm.flatten()` — pages are **never**
+rasterised. Every interactive form field's current value is drawn into the
+page as ordinary vector content and the field is removed, so the values stay
+selectable and extractable, links and other ordinary annotations keep
+working, and page count, order and rotation are unchanged. The output keeps
+the fixed name `flattened.pdf`, and the number of flattened fields is
+reported in `X-PDFKit-Flattened-Fields`.
+
+Three honest limits, stated in the tool and enforced by the processor:
+
+- **Signed PDFs are rejected** with `SIGNED_PDF` (422) *before* anything is
+  mutated. Flattening rewrites the file, which would invalidate a digital
+  signature — the tool refuses rather than silently destroying it. Signature
+  fields are detected via pdf-lib's field model, the raw `/FT /Sig` entries
+  and the AcroForm `SigFlags` bit.
+- **Document scripts are NOT removed.** Document-level JavaScript and
+  OpenActions survive flattening untouched. Flatten PDF is not a
+  sanitisation or security feature and is never presented as one.
+- **Flattening is irreversible.** Field values become permanent page
+  content; keep the original if the form may need editing again.
+
+Implementation note: pdf-lib 1.17.1's `flatten()` leaves dangling widget
+references in each page's `/Annots` array. The processor removes exactly
+those non-resolving references (valid annotations such as links are
+preserved as they are), drops the now-empty AcroForm dictionary, then
+re-opens the output and verifies page count, order, rotation, the absence of
+form fields and the absence of dangling references before returning it.
+
 ## Page Numbers
 
 ```bash
@@ -835,7 +882,7 @@ progress bars, no fake results, no fake downloads, no placeholder page images.
 Only Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF
 Pages, Rotate PDF, Compress PDF, Images to PDF, PNG to PDF, PDF to JPG, PDF to
 PNG, PDF to Word (text only), Edit PDF Metadata, Remove Metadata, Watermark,
-Page Numbers and Crop are real.
+Page Numbers, Crop and Flatten PDF are real.
 
 ---
 
@@ -914,7 +961,26 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (75 files, 1041 tests):
+Covered today (78 files, 1081 tests):
+
+- **Flatten processor** — text field, checkbox, radio group, dropdown and
+  option list flattened (field count verified), values proven extractable
+  with pdfium (including Unicode), empty fields, multiple pages, rotated
+  pages, page count/order/rotation preserved on reopen, static text
+  preserved, links preserved while pdf-lib's dangling widget references are
+  removed (the raw bug is reproduced first so the cleanup proof cannot rot),
+  empty-`/Annots` and empty-AcroForm cleanup, signature rejection via field
+  type and via `SigFlags`, the honesty proof that document JavaScript
+  survives, malformed/encrypted/multi-file rejections, fixed output name,
+  input immutability
+- **Flatten API** — standard headers, flattened-count header, exact
+  content-length, zero-field pass-through, `SIGNED_PDF` (422), every error
+  mode, hostile filename sanitised, no internals leaked, GET 405
+- **Flatten workspace** — upload, non-PDF rejection before any request, the
+  prominent irreversibility warning plus the selectable-text / links /
+  scripts-not-removed / signed-rejected statements, indeterminate processing
+  (no fake percentages), cancel via AbortController, server-confirmed field
+  count in the success state, error alerts, reset, polite announcements
 
 - **Crop model** — modes, rectangle/margins parsing, finiteness, 10 pt
   minimum, negative rejection, MediaBox fit (reject-never-clamp), per-page
