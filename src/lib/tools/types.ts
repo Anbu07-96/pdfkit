@@ -48,6 +48,7 @@ export type ToolIconName =
   | "draw"
   | "excel"
   | "extract"
+  | "flatten"
   | "highlight"
   | "image"
   | "key-points"

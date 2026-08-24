@@ -230,6 +230,100 @@ export async function makePdfFile(
   return new File([bytes as BlobPart], name, { type: "application/pdf" });
 }
 
+/**
+ * A valid PDF with a filled AcroForm: a text field, a checked checkbox, a
+ * radio group, a dropdown and an option list — plus static text and a link
+ * annotation on the same page, so flatten tests can prove that ordinary
+ * content and annotations survive while fields are removed.
+ */
+export async function makeFormPdf(
+  options: { textValue?: string; pages?: number } = {},
+): Promise<Uint8Array> {
+  const { textValue = "Filled value", pages = 1 } = options;
+  const { PDFName, PDFArray } = await import("pdf-lib");
+  const document = await PDFDocument.create();
+  const font = await document.embedFont(StandardFonts.Helvetica);
+  const form = document.getForm();
+
+  for (let index = 0; index < pages; index += 1) {
+    const page = document.addPage([400, 600]);
+    page.drawText(`STATIC-${index + 1}`, { x: 20, y: 560, size: 12, font });
+
+    const text = form.createTextField(`name-${index + 1}`);
+    text.setText(textValue);
+    text.addToPage(page, { x: 20, y: 500, width: 200, height: 24, font });
+
+    const checkbox = form.createCheckBox(`agree-${index + 1}`);
+    checkbox.check();
+    checkbox.addToPage(page, { x: 20, y: 460, width: 18, height: 18 });
+
+    const radios = form.createRadioGroup(`color-${index + 1}`);
+    radios.addOptionToPage("red", page, { x: 20, y: 420, width: 18, height: 18 });
+    radios.addOptionToPage("blue", page, { x: 60, y: 420, width: 18, height: 18 });
+    radios.select("blue");
+
+    const dropdown = form.createDropdown(`city-${index + 1}`);
+    dropdown.addOptions(["Berlin", "Paris"]);
+    dropdown.select("Paris");
+    dropdown.addToPage(page, { x: 20, y: 380, width: 120, height: 22, font });
+
+    const optionList = form.createOptionList(`pets-${index + 1}`);
+    optionList.addOptions(["cat", "dog"]);
+    optionList.select("dog");
+    optionList.addToPage(page, { x: 20, y: 280, width: 120, height: 60, font });
+
+    // A link annotation on the same page: it must survive flattening.
+    const link = document.context.register(
+      document.context.obj({
+        Type: "Annot",
+        Subtype: "Link",
+        Rect: [20, 200, 120, 220],
+        Border: [0, 0, 0],
+        A: { Type: "Action", S: "URI", URI: "https://example.com" },
+      }),
+    );
+    const annots = page.node.lookup(PDFName.of("Annots"), PDFArray);
+    annots.push(link);
+  }
+
+  return document.save();
+}
+
+/**
+ * A valid PDF whose AcroForm contains a signature field (raw `/FT /Sig`
+ * widget) next to an ordinary text field. Flatten must reject this document
+ * before mutating anything.
+ */
+export async function makeSignedFormPdf(): Promise<Uint8Array> {
+  const { PDFName, PDFArray, PDFString } = await import("pdf-lib");
+  const document = await PDFDocument.create();
+  const font = await document.embedFont(StandardFonts.Helvetica);
+  const page = document.addPage([300, 300]);
+  const form = document.getForm();
+
+  const text = form.createTextField("name");
+  text.setText("Bob");
+  text.addToPage(page, { x: 20, y: 200, width: 150, height: 20, font });
+
+  const signature = document.context.register(
+    document.context.obj({
+      FT: "Sig",
+      T: PDFString.of("Signature1"),
+      Type: "Annot",
+      Subtype: "Widget",
+      Rect: [20, 50, 180, 100],
+      F: 4,
+      P: page.ref,
+    }),
+  );
+  form.acroForm.addField(signature);
+  const annots = page.node.lookup(PDFName.of("Annots"), PDFArray);
+  annots.push(signature);
+
+  return document.save();
+}
+
+
 /** Deterministic photo-like RGBA pixels (random-walk noise, opaque). */
 export async function makeNoisePixels(
   width: number,

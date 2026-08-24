@@ -51,6 +51,8 @@ export interface ProcessedDocument {
   numberedPages?: number;
   /** How many pages the server cropped (Crop only). */
   croppedPages?: number;
+  /** How many form fields the server flattened (Flatten PDF only). */
+  flattenedFields?: number;
 }
 
 /** Server-measured text extraction outcome. */
@@ -250,6 +252,10 @@ async function toProcessedDocument(
     response.headers.get("x-pdfkit-cropped-pages") ?? "",
     10,
   );
+  const flattenedFields = Number.parseInt(
+    response.headers.get("x-pdfkit-flattened-fields") ?? "",
+    10,
+  );
 
   return {
     blob,
@@ -260,6 +266,7 @@ async function toProcessedDocument(
     ...(Number.isFinite(watermarkedPages) ? { watermarkedPages } : {}),
     ...(Number.isFinite(numberedPages) ? { numberedPages } : {}),
     ...(Number.isFinite(croppedPages) ? { croppedPages } : {}),
+    ...(Number.isFinite(flattenedFields) ? { flattenedFields } : {}),
     fileName: fileNameFromDisposition(
       response.headers.get("content-disposition"),
       fallbackName,
@@ -713,6 +720,28 @@ export async function runCrop({
 
   const response = await postForm("/api/tools/crop", form, signal);
   return toProcessedDocument(response, "cropped.pdf");
+}
+
+export interface RunFlattenPdfOptions {
+  file: File;
+  signal?: AbortSignal;
+}
+
+/**
+ * Flatten one PDF's form fields into permanent page content on the server
+ * (vector flattening — never rasterisation). The response reports the number
+ * of fields the server actually flattened. Signed PDFs are rejected with a
+ * `SIGNED_PDF` error; document-level scripts are not removed.
+ */
+export async function runFlattenPdf({
+  file,
+  signal,
+}: RunFlattenPdfOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+
+  const response = await postForm("/api/tools/flatten-pdf", form, signal);
+  return toProcessedDocument(response, "flattened.pdf");
 }
 
 export interface PageThumbnailData {

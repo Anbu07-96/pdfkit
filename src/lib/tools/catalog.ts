@@ -14,8 +14,8 @@ import type { Tool } from "./types";
  * Implemented today: Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages,
  * Reorder PDF Pages, Rotate PDF, Compress PDF, Images to PDF, PNG to PDF,
  * PDF to JPG, PDF to PNG, PDF to Word, Edit PDF Metadata, Remove Metadata
- * and Watermark. Page Numbers (Phase 22) and Crop (Phase 24), too, are
- * implemented. Everything else is `COMING_SOON`.
+ * and Watermark. Page Numbers (Phase 22), Crop (Phase 24) and Flatten PDF
+ * (Phase 26), too, are implemented. Everything else is `COMING_SOON`.
  */
 
 const PDF_EXT = [".pdf"];
@@ -446,6 +446,28 @@ export const TOOLS: readonly Tool[] = [
       "Upload the PDF and choose pages.",
       "Crop by rectangle or by margins, in points from a bottom-left origin.",
       "Download the cropped PDF. Cropping hides content from view — it does not remove it.",
+    ],
+  }),
+  pdfTool({
+    id: "flatten-pdf",
+    name: "Flatten PDF",
+    description:
+      "Flatten PDF forms into permanent page content. Field values remain selectable; links stay clickable. Signed PDFs are rejected, and document scripts are not removed.",
+    category: "edit",
+    icon: "flatten",
+    // Implemented in Phase 26: vector flattening with pdf-lib's
+    // PDFForm.flatten() — pages are never rasterised. Signed PDFs are
+    // rejected before any mutation (flattening would invalidate the
+    // signature), the dangling widget references pdf-lib leaves behind are
+    // cleaned up, and document-level JavaScript is honestly NOT removed —
+    // this is not a sanitisation feature.
+    status: "AVAILABLE",
+    plannedTier: "free",
+    keywords: ["form", "fields", "acroform", "make read-only", "burn in"],
+    howItWorks: [
+      "Upload the PDF form you want to flatten.",
+      "Review the warning: flattening is permanent — fields stop being editable.",
+      "Download the flattened PDF. Values stay selectable; document scripts are not removed.",
     ],
   }),
   pdfTool({
