@@ -315,6 +315,13 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
     metaHeaders["x-pdfkit-cropped-pages"] = String(result.meta.croppedPages);
   }
 
+  // Flatten facts: how many form fields the server flattened into content.
+  if (result.meta?.flattenedFields !== undefined) {
+    metaHeaders["x-pdfkit-flattened-fields"] = String(
+      result.meta.flattenedFields,
+    );
+  }
+
   // A single document is streamed as-is; several are bundled into a ZIP.
   if (result.artifacts.length === 1) {
     const artifact = result.artifacts[0];

@@ -5,6 +5,7 @@ import { ProcessingError } from "@/lib/processing/errors";
 import { compressPdfProcessor } from "@/lib/processing/processors/compress-pdf";
 import { cropProcessor } from "@/lib/processing/processors/crop";
 import { editPdfMetadataProcessor } from "@/lib/processing/processors/edit-pdf-metadata";
+import { flattenPdfProcessor } from "@/lib/processing/processors/flatten-pdf";
 import {
   imagesToPdfProcessor,
   pngToPdfProcessor,
@@ -52,6 +53,7 @@ const PROCESSORS = new Map<string, ToolProcessor<never>>([
   [watermarkProcessor.toolId, watermarkProcessor as ToolProcessor<never>],
   [pageNumbersProcessor.toolId, pageNumbersProcessor as ToolProcessor<never>],
   [cropProcessor.toolId, cropProcessor as ToolProcessor<never>],
+  [flattenPdfProcessor.toolId, flattenPdfProcessor as ToolProcessor<never>],
 ]);
 
 /** Tool ids with a working implementation. */

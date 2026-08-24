@@ -24,8 +24,8 @@ export function Hero() {
             edit, secure — into one fast, privacy-conscious web app.{" "}
             <strong className="font-medium text-foreground">
               Merge, split, extract, delete, reorder, rotate, compress, image-convert,
-metadata-edit, text-to-Word, watermark, page-number and crop PDFs work
-today.
+metadata-edit, text-to-Word, watermark, page-number, crop and form-flatten
+PDFs work today.
             </strong>{" "}
             The rest of the {TOOLS.length} tools in the catalog go live only once they
             genuinely work.

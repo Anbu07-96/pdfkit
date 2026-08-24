@@ -63,6 +63,14 @@ export const CROP_INPUT_RULES: ProcessorInputRules = {
   mimeTypes: ["application/pdf"],
 };
 
+/** Flatten works on exactly one document. */
+export const FLATTEN_PDF_INPUT_RULES: ProcessorInputRules = {
+  minFiles: 1,
+  maxFiles: 1,
+  extensions: [".pdf"],
+  mimeTypes: ["application/pdf"],
+};
+
 /** Page Numbers stamps one document. */
 export const PAGE_NUMBERS_INPUT_RULES: ProcessorInputRules = {
   minFiles: 1,
@@ -161,6 +169,7 @@ export const INPUT_RULES_BY_TOOL: Record<string, ProcessorInputRules> = {
   "watermark": WATERMARK_INPUT_RULES,
   "page-numbers": PAGE_NUMBERS_INPUT_RULES,
   "crop": CROP_INPUT_RULES,
+  "flatten-pdf": FLATTEN_PDF_INPUT_RULES,
 };
 
 export function getInputRules(toolId: string): ProcessorInputRules | undefined {
