@@ -1,4 +1,4 @@
-import { handleProcessingRequest, methodNotAllowed } from "@/lib/processing/http";
+import { handleProcessingRequest, methodNotAllowed } from "@/lib/hardening/route";
 
 /**
  * PDF to PNG API.

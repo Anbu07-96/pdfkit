@@ -49,11 +49,21 @@ describe("tool catalog", () => {
     // Reorder pages (Phase 5), Rotate (Phase 6), Compress (Phase 7), the
     // image conversions (Phases 8+17), Edit/Remove Metadata (Phases 11-12),
     // PDF to Word (Phase 15), Watermark (Phase 21), Page Numbers (Phase 22),
-    // Crop (Phase 24) and Flatten PDF (Phase 26) are implemented; everything
-    // else must still say so. `registry.test.ts` asserts catalog/registry
-    // parity both ways.
+    // Crop (Phase 24), Flatten PDF (Phase 26), Password Protect (Phase 29),
+    // Unlock PDF (Phase 30) and Add Text (Phase 31) are implemented;
+    // everything else must still say so.
+    // `registry.test.ts` asserts catalog/registry parity both ways.
     const implemented = [
+      "add-images",
+      "add-shapes",
+      "add-text",
+      "annotations",
+      "draw",
+      "extract-images",
+      "highlight",
       "merge-pdf",
+      "organize-pdf",
+      "pdf-to-text",
       "split-pdf",
       "compress-pdf",
       "extract-pdf-pages",
@@ -71,6 +81,8 @@ describe("tool catalog", () => {
       "page-numbers",
       "crop",
       "flatten-pdf",
+      "password-protect",
+      "unlock-pdf",
     ];
 
     for (const tool of TOOLS) {

@@ -12,6 +12,9 @@ import { getProcessingLimits, type ProcessingLimits } from "@/lib/processing/lim
 import { runProcessingJob } from "@/lib/processing/service";
 import { createZipArchive } from "@/lib/processing/zip";
 import { formatBytes } from "@/lib/utils/format";
+import { getUserIdentity } from "@/lib/auth/session";
+import type { UserIdentity } from "@/lib/auth/types";
+import { getUsageService } from "@/lib/usage/service";
 
 /**
  * HTTP adapter for the processing service.
@@ -199,11 +202,13 @@ export interface HandleProcessingRequestOptions<TOptions> {
    * processor validates them server-side.
    */
   readOptions?: (form: FormData) => TOptions;
+  /** Resolved user identity from auth layer (Phase 42/43). */
+  identity?: UserIdentity;
 }
 
 export async function handleProcessingRequest<TOptions = Record<string, unknown>>(
   request: Request,
-  { toolId, fallbackFileName, readOptions }: HandleProcessingRequestOptions<TOptions>,
+  { toolId, fallbackFileName, readOptions, identity }: HandleProcessingRequestOptions<TOptions>,
 ): Promise<Response> {
   const limits = getProcessingLimits();
 
@@ -230,6 +235,15 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
 
   if (result.artifacts.length === 0) {
     return jsonError("PROCESSING_ERROR", "No document was produced.");
+  }
+
+  // Record successful usage metering (Phase 43)
+  const userIdentity = identity || (await getUserIdentity());
+  const totalProcessedBytes = upload.files.reduce((sum, f) => sum + f.size, 0);
+  try {
+    await getUsageService().recordJobSuccess(userIdentity, totalProcessedBytes);
+  } catch (usageError) {
+    console.error("[usage] Failed to record usage after successful job", usageError);
   }
 
   const metaHeaders: Record<string, string> = {
@@ -303,6 +317,11 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
     metaHeaders["x-pdfkit-watermarked-pages"] = String(
       result.meta.watermarkedPages,
     );
+  }
+
+  // Add Text facts: how many pages received the text box.
+  if (result.meta?.textPages !== undefined) {
+    metaHeaders["x-pdfkit-text-pages"] = String(result.meta.textPages);
   }
 
   // Page-number facts: how many pages received a number.

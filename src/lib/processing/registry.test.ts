@@ -17,23 +17,34 @@ import { makePdf } from "@/test/pdf-fixtures";
 describe("processor registry", () => {
   it("exposes the implemented tools", () => {
     expect(getImplementedToolIds()).toEqual([
+      "add-images",
+      "add-shapes",
+      "add-text",
+      "annotations",
       "compress-pdf",
       "crop",
       "delete-pdf-pages",
+      "draw",
       "edit-pdf-metadata",
+      "extract-images",
       "extract-pdf-pages",
       "flatten-pdf",
+      "highlight",
       "images-to-pdf",
       "merge-pdf",
+      "organize-pdf",
       "page-numbers",
+      "password-protect",
       "pdf-to-jpg",
       "pdf-to-png",
+      "pdf-to-text",
       "pdf-to-word",
       "png-to-pdf",
       "remove-metadata",
       "reorder-pdf-pages",
       "rotate-pdf",
       "split-pdf",
+      "unlock-pdf",
       "watermark",
     ]);
     expect(hasProcessor("merge-pdf")).toBe(true);
@@ -52,6 +63,17 @@ describe("processor registry", () => {
     expect(hasProcessor("page-numbers")).toBe(true);
     expect(hasProcessor("crop")).toBe(true);
     expect(hasProcessor("flatten-pdf")).toBe(true);
+    expect(hasProcessor("password-protect")).toBe(true);
+    expect(hasProcessor("unlock-pdf")).toBe(true);
+    expect(hasProcessor("add-text")).toBe(true);
+    expect(hasProcessor("add-shapes")).toBe(true);
+    expect(hasProcessor("add-images")).toBe(true);
+    expect(hasProcessor("annotations")).toBe(true);
+    expect(hasProcessor("organize-pdf")).toBe(true);
+    expect(hasProcessor("highlight")).toBe(true);
+    expect(hasProcessor("draw")).toBe(true);
+    expect(hasProcessor("extract-images")).toBe(true);
+    expect(hasProcessor("pdf-to-text")).toBe(true);
     expect(hasProcessor("pdf-to-jpg")).toBe(true);
     expect(hasProcessor("pdf-to-png")).toBe(true);
   });
@@ -70,23 +92,34 @@ describe("processor registry", () => {
   it("keeps the catalog and the registry in sync", () => {
     // Phase 8 adds the image conversions; nothing else may claim to work.
     expect(getImplementedToolIds()).toEqual([
+      "add-images",
+      "add-shapes",
+      "add-text",
+      "annotations",
       "compress-pdf",
       "crop",
       "delete-pdf-pages",
+      "draw",
       "edit-pdf-metadata",
+      "extract-images",
       "extract-pdf-pages",
       "flatten-pdf",
+      "highlight",
       "images-to-pdf",
       "merge-pdf",
+      "organize-pdf",
       "page-numbers",
+      "password-protect",
       "pdf-to-jpg",
       "pdf-to-png",
+      "pdf-to-text",
       "pdf-to-word",
       "png-to-pdf",
       "remove-metadata",
       "reorder-pdf-pages",
       "rotate-pdf",
       "split-pdf",
+      "unlock-pdf",
       "watermark",
     ]);
 

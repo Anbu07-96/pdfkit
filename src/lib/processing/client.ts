@@ -47,12 +47,28 @@ export interface ProcessedDocument {
   extraction?: ExtractionSummary;
   /** How many pages the server stamped (Watermark only). */
   watermarkedPages?: number;
+  /** How many pages received the text box (Add Text only). */
+  textPages?: number;
+  /** How many pages received shapes (Add Shapes only). */
+  shapePages?: number;
+  /** How many pages received an image (Add Images only). */
+  imagePages?: number;
+  /** How many pages received highlights (Highlight only). */
+  highlightedPages?: number;
+  /** How many pages received drawing marks (Draw only). */
+  drawnPages?: number;
+  /** How many pages received PDF annotations (Annotations only). */
+  annotatedPages?: number;
   /** How many pages the server numbered (Page Numbers only). */
   numberedPages?: number;
   /** How many pages the server cropped (Crop only). */
   croppedPages?: number;
   /** How many form fields the server flattened (Flatten PDF only). */
   flattenedFields?: number;
+  /** How many pages were deleted (Organize PDF only). */
+  deletedPages?: number;
+  /** How many pages were rotated (Organize PDF only). */
+  rotatedPages?: number;
 }
 
 /** Server-measured text extraction outcome. */
@@ -244,6 +260,30 @@ async function toProcessedDocument(
     response.headers.get("x-pdfkit-watermarked-pages") ?? "",
     10,
   );
+  const textPages = Number.parseInt(
+    response.headers.get("x-pdfkit-text-pages") ?? "",
+    10,
+  );
+  const shapePages = Number.parseInt(
+    response.headers.get("x-pdfkit-shape-pages") ?? "",
+    10,
+  );
+  const imagePages = Number.parseInt(
+    response.headers.get("x-pdfkit-image-pages") ?? "",
+    10,
+  );
+  const highlightedPages = Number.parseInt(
+    response.headers.get("x-pdfkit-highlighted-pages") ?? "",
+    10,
+  );
+  const drawnPages = Number.parseInt(
+    response.headers.get("x-pdfkit-drawn-pages") ?? "",
+    10,
+  );
+  const annotatedPages = Number.parseInt(
+    response.headers.get("x-pdfkit-annotated-pages") ?? "",
+    10,
+  );
   const numberedPages = Number.parseInt(
     response.headers.get("x-pdfkit-numbered-pages") ?? "",
     10,
@@ -256,6 +296,14 @@ async function toProcessedDocument(
     response.headers.get("x-pdfkit-flattened-fields") ?? "",
     10,
   );
+  const deletedPages = Number.parseInt(
+    response.headers.get("x-pdfkit-deleted-pages") ?? "",
+    10,
+  );
+  const rotatedPages = Number.parseInt(
+    response.headers.get("x-pdfkit-rotated-pages") ?? "",
+    10,
+  );
 
   return {
     blob,
@@ -264,9 +312,17 @@ async function toProcessedDocument(
     ...(removal ? { removal } : {}),
     ...(extraction ? { extraction } : {}),
     ...(Number.isFinite(watermarkedPages) ? { watermarkedPages } : {}),
+    ...(Number.isFinite(textPages) ? { textPages } : {}),
+    ...(Number.isFinite(shapePages) ? { shapePages } : {}),
+    ...(Number.isFinite(imagePages) ? { imagePages } : {}),
+    ...(Number.isFinite(highlightedPages) ? { highlightedPages } : {}),
+    ...(Number.isFinite(drawnPages) ? { drawnPages } : {}),
+    ...(Number.isFinite(annotatedPages) ? { annotatedPages } : {}),
     ...(Number.isFinite(numberedPages) ? { numberedPages } : {}),
     ...(Number.isFinite(croppedPages) ? { croppedPages } : {}),
     ...(Number.isFinite(flattenedFields) ? { flattenedFields } : {}),
+    ...(Number.isFinite(deletedPages) ? { deletedPages } : {}),
+    ...(Number.isFinite(rotatedPages) ? { rotatedPages } : {}),
     fileName: fileNameFromDisposition(
       response.headers.get("content-disposition"),
       fallbackName,
@@ -396,6 +452,33 @@ export async function runReorderPdfPages({
 
   const response = await postForm("/api/tools/reorder-pdf-pages", form, signal);
   return toProcessedDocument(response, "reordered.pdf");
+}
+
+export interface RunOrganizePdfOptions {
+  file: File;
+  order: number[];
+  rotations?: PageRotationMap;
+  signal?: AbortSignal;
+}
+
+/**
+ * Organize PDF pages on the server (reorder, rotate, delete in one operation).
+ */
+export async function runOrganizePdf({
+  file,
+  order,
+  rotations,
+  signal,
+}: RunOrganizePdfOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("order", order.join(","));
+  if (rotations && Object.keys(rotations).length > 0) {
+    form.append("rotations", formatPageRotations(rotations));
+  }
+
+  const response = await postForm("/api/tools/organize-pdf", form, signal);
+  return toProcessedDocument(response, "organized.pdf");
 }
 
 export interface RunRotatePdfOptions {
@@ -629,6 +712,283 @@ export async function runWatermark({
   return toProcessedDocument(response, "watermarked.pdf");
 }
 
+export interface RunAddTextOptions {
+  file: File;
+  text: string;
+  placement: string;
+  fontSize: number;
+  pages: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Add a text box to one PDF on the server. Every option is re-validated
+ * there; the response reports how many pages received the text.
+ */
+export async function runAddText({
+  file,
+  text,
+  placement,
+  fontSize,
+  pages,
+  signal,
+}: RunAddTextOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("text", text);
+  form.append("placement", placement);
+  form.append("size", String(fontSize));
+  form.append("pages", pages);
+
+  const response = await postForm("/api/tools/add-text", form, signal);
+  return toProcessedDocument(response, "text-added.pdf");
+}
+
+export interface RunAddShapesOptions {
+  file: File;
+  shape: string;
+  placement: string;
+  width: number;
+  height: number;
+  strokeWidth: number;
+  strokeColor: string;
+  fillColor: string;
+  pages: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Add vector shapes to one PDF on the server. Every option is re-validated
+ * there; the response reports how many pages received the shape.
+ */
+export async function runAddShapes({
+  file,
+  shape,
+  placement,
+  width,
+  height,
+  strokeWidth,
+  strokeColor,
+  fillColor,
+  pages,
+  signal,
+}: RunAddShapesOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("shape", shape);
+  form.append("placement", placement);
+  form.append("width", String(width));
+  form.append("height", String(height));
+  form.append("strokeWidth", String(strokeWidth));
+  form.append("strokeColor", strokeColor);
+  form.append("fillColor", fillColor);
+  form.append("pages", pages);
+
+  const response = await postForm("/api/tools/add-shapes", form, signal);
+  return toProcessedDocument(response, "shapes-added.pdf");
+}
+
+export interface RunAddImagesOptions {
+  pdfFile: File;
+  imageFile: File;
+  placement: string;
+  width: number;
+  height: number;
+  preserveAspectRatio: boolean;
+  pages: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Add an image to one PDF on the server.
+ */
+export async function runAddImages({
+  pdfFile,
+  imageFile,
+  placement,
+  width,
+  height,
+  preserveAspectRatio,
+  pages,
+  signal,
+}: RunAddImagesOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", pdfFile, pdfFile.name);
+  form.append("files", imageFile, imageFile.name);
+  form.append("placement", placement);
+  form.append("width", String(width));
+  form.append("height", String(height));
+  form.append("preserveAspectRatio", String(preserveAspectRatio));
+  form.append("pages", pages);
+
+  const response = await postForm("/api/tools/add-images", form, signal);
+  return toProcessedDocument(response, "image-added.pdf");
+}
+
+export interface RunHighlightOptions {
+  file: File;
+  placement: string;
+  width: number;
+  height: number;
+  color: string;
+  opacity: number;
+  pages: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Highlight areas on one PDF on the server.
+ */
+export async function runHighlight({
+  file,
+  placement,
+  width,
+  height,
+  color,
+  opacity,
+  pages,
+  signal,
+}: RunHighlightOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("placement", placement);
+  form.append("width", String(width));
+  form.append("height", String(height));
+  form.append("color", color);
+  form.append("opacity", String(opacity));
+  form.append("pages", pages);
+
+  const response = await postForm("/api/tools/highlight", form, signal);
+  return toProcessedDocument(response, "highlighted.pdf");
+}
+
+export interface RunDrawOptions {
+  file: File;
+  preset: string;
+  placement: string;
+  width: number;
+  height: number;
+  strokeWidth: number;
+  strokeColor: string;
+  pages: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Draw freehand vector strokes on one PDF on the server.
+ */
+export async function runDraw({
+  file,
+  preset,
+  placement,
+  width,
+  height,
+  strokeWidth,
+  strokeColor,
+  pages,
+  signal,
+}: RunDrawOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("preset", preset);
+  form.append("placement", placement);
+  form.append("width", String(width));
+  form.append("height", String(height));
+  form.append("strokeWidth", String(strokeWidth));
+  form.append("strokeColor", strokeColor);
+  form.append("pages", pages);
+
+  const response = await postForm("/api/tools/draw", form, signal);
+  return toProcessedDocument(response, "drawn.pdf");
+}
+
+export interface RunAnnotationsOptions {
+  file: File;
+  type: string;
+  placement: string;
+  text?: string;
+  author?: string;
+  url?: string;
+  width?: number;
+  height?: number;
+  pages: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Add PDF annotations (comments, links) to one PDF on the server.
+ */
+export async function runAnnotations({
+  file,
+  type,
+  placement,
+  text = "",
+  author = "",
+  url = "",
+  width = 30,
+  height = 30,
+  pages,
+  signal,
+}: RunAnnotationsOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("type", type);
+  form.append("placement", placement);
+  if (text) form.append("text", text);
+  if (author) form.append("author", author);
+  if (url) form.append("url", url);
+  form.append("width", String(width));
+  form.append("height", String(height));
+  form.append("pages", pages);
+
+  const response = await postForm("/api/tools/annotations", form, signal);
+  return toProcessedDocument(response, "annotated.pdf");
+}
+
+export interface RunExtractImagesOptions {
+  file: File;
+  pages: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Extract embedded raster images from one PDF on the server.
+ */
+export async function runExtractImages({
+  file,
+  pages,
+  signal,
+}: RunExtractImagesOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("pages", pages);
+
+  const response = await postForm("/api/tools/extract-images", form, signal);
+  return toProcessedDocument(response, "extracted-images.zip");
+}
+
+export interface RunPdfToTextOptions {
+  file: File;
+  pages: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Extract plain searchable text from one PDF on the server.
+ */
+export async function runPdfToText({
+  file,
+  pages,
+  signal,
+}: RunPdfToTextOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("pages", pages);
+
+  const response = await postForm("/api/tools/pdf-to-text", form, signal);
+  return toProcessedDocument(response, "text.txt");
+}
+
 export interface RunPageNumbersOptions {
   file: File;
   position: string;
@@ -742,6 +1102,57 @@ export async function runFlattenPdf({
 
   const response = await postForm("/api/tools/flatten-pdf", form, signal);
   return toProcessedDocument(response, "flattened.pdf");
+}
+
+export interface RunPasswordProtectOptions {
+  file: File;
+  /** The password exactly as typed — never trimmed, never logged. */
+  password: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Protect one PDF with a password on the server. The password travels once,
+ * as a multipart field; the server validates it again, encrypts with RC4
+ * 128-bit (V2/R3) and verifies the encrypted document before returning it.
+ */
+export async function runPasswordProtect({
+  file,
+  password,
+  signal,
+}: RunPasswordProtectOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("password", password);
+
+  const response = await postForm("/api/tools/password-protect", form, signal);
+  return toProcessedDocument(response, "protected.pdf");
+}
+
+export interface RunUnlockPdfOptions {
+  file: File;
+  /** The password exactly as typed; `""` when the file needs none. */
+  password: string;
+  signal?: AbortSignal;
+}
+
+/**
+ * Remove a known password from one PDF on the server. The password travels
+ * once, as a multipart field; the server authenticates it (never recovers
+ * it), decrypts with RC4 support only, and verifies the unlocked document
+ * before returning it.
+ */
+export async function runUnlockPdf({
+  file,
+  password,
+  signal,
+}: RunUnlockPdfOptions): Promise<ProcessedDocument> {
+  const form = new FormData();
+  form.append("files", file, file.name);
+  form.append("password", password);
+
+  const response = await postForm("/api/tools/unlock-pdf", form, signal);
+  return toProcessedDocument(response, "unlocked.pdf");
 }
 
 export interface PageThumbnailData {

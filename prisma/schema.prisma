@@ -1,0 +1,47 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model UserAccount {
+  id                   String       @id @default(cuid())
+  userId               String       @unique
+  email                String?
+  name                 String?
+  tier                 String       @default("free")
+  status               String       @default("active")
+  stripeCustomerId     String?      @unique
+  stripeSubscriptionId String?      @unique
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  dailyUsages          DailyUsage[]
+
+  @@index([userId])
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
+}
+
+model DailyUsage {
+  id             String       @id @default(cuid())
+  userId         String
+  periodDate     String       // ISO Date string: "YYYY-MM-DD"
+  jobCount       Int          @default(0)
+  processedBytes BigInt       @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  user           UserAccount? @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([userId, periodDate])
+  @@index([userId, periodDate])
+  @@index([periodDate])
+}
+
+model StripeWebhookEvent {
+  id        String   @id
+  eventType String
+  createdAt DateTime @default(now())
+}

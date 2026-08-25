@@ -136,6 +136,22 @@ export const TOOLS: readonly Tool[] = [
     ],
   }),
   pdfTool({
+    id: "organize-pdf",
+    name: "Organize PDF",
+    description: "Reorder, rotate and delete pages in a single visual workflow.",
+    category: "organize",
+    icon: "reorder",
+    // Implemented in Phase 37: reorder, rotate and delete pages in one request.
+    status: "AVAILABLE",
+    plannedTier: "free",
+    keywords: ["reorder", "rotate", "delete pages", "rearrange", "organise", "organize"],
+    howItWorks: [
+      "Upload your PDF and see previews of every page.",
+      "Drag or reorder pages, rotate pages, or remove pages you do not need.",
+      "Download the organized PDF.",
+    ],
+  }),
+  pdfTool({
     id: "extract-pdf-pages",
     name: "Extract PDF Pages",
     description: "Pull selected pages out of a PDF into a new file.",
@@ -250,6 +266,36 @@ export const TOOLS: readonly Tool[] = [
     ],
   }),
   pdfTool({
+    id: "extract-images",
+    name: "Extract Images",
+    description: "Extract embedded raster images from PDF pages.",
+    category: "convert",
+    icon: "image",
+    status: "AVAILABLE",
+    plannedTier: "free",
+    keywords: ["extract photos", "pictures", "save images", "embedded images"],
+    howItWorks: [
+      "Upload the PDF document.",
+      "Select pages to extract images from.",
+      "Download extracted JPG/PNG images directly or as a ZIP.",
+    ],
+  }),
+  pdfTool({
+    id: "pdf-to-text",
+    name: "PDF to Text",
+    description: "Extract plain searchable text from PDF pages.",
+    category: "convert",
+    icon: "text",
+    status: "AVAILABLE",
+    plannedTier: "free",
+    keywords: ["txt", "plain text", "extract text", "save text"],
+    howItWorks: [
+      "Upload the PDF document.",
+      "Select pages to extract text from.",
+      "Download a .txt file containing the page text. Scanned pages contain no text — OCR is NOT performed.",
+    ],
+  }),
+  pdfTool({
     id: "word-to-pdf",
     name: "Word to PDF",
     description: "Convert Word documents into shareable PDF files.",
@@ -327,15 +373,19 @@ export const TOOLS: readonly Tool[] = [
   pdfTool({
     id: "add-text",
     name: "Add Text",
-    description: "Place new text boxes anywhere on a PDF page.",
+    description: "Place a text box on any page of a PDF.",
     category: "edit",
     icon: "text",
+    // Implemented in Phase 31: real vector text drawn with pdf-lib's standard
+    // Latin font at nine anchor positions (all/first/last pages), never
+    // rasterised; oversized text is scaled to fit and the interface says so.
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["write", "type", "fill form", "insert text"],
     howItWorks: [
       "Upload the PDF you want to write on.",
-      "Add and position text boxes on any page.",
-      "Download the edited PDF.",
+      "Type the text and pick a position, size and pages.",
+      "Download the PDF with the text added as real, searchable text.",
     ],
   }),
   pdfTool({
@@ -344,11 +394,14 @@ export const TOOLS: readonly Tool[] = [
     description: "Insert logos, photos or stamps into a PDF page.",
     category: "edit",
     icon: "image",
+    status: "AVAILABLE",
     plannedTier: "free",
+    supportedFileTypes: [".pdf", ".jpg", ".jpeg", ".png"],
+    acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png"],
     keywords: ["insert image", "logo", "stamp", "picture"],
     howItWorks: [
-      "Upload the PDF and the images you want to place.",
-      "Position and resize each image.",
+      "Upload the PDF and the image (JPG or PNG) you want to place.",
+      "Position and resize the image.",
       "Download the edited PDF.",
     ],
   }),
@@ -358,11 +411,12 @@ export const TOOLS: readonly Tool[] = [
     description: "Draw freehand lines and marks directly on a document.",
     category: "edit",
     icon: "draw",
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["freehand", "pen", "sketch", "sign by hand"],
     howItWorks: [
       "Upload your PDF.",
-      "Draw on the page with the pen tool.",
+      "Draw vector strokes on the page.",
       "Download the edited PDF.",
     ],
   }),
@@ -372,12 +426,13 @@ export const TOOLS: readonly Tool[] = [
     description: "Mark important passages with a highlighter.",
     category: "edit",
     icon: "highlight",
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["marker", "emphasise", "colour text"],
     howItWorks: [
       "Upload your PDF.",
-      "Select the text or area you want to highlight.",
-      "Download the marked-up PDF.",
+      "Select the area you want to highlight.",
+      "Download the marked-up PDF. Highlighting is a visual overlay — it does NOT remove content.",
     ],
   }),
   pdfTool({
@@ -386,6 +441,9 @@ export const TOOLS: readonly Tool[] = [
     description: "Add rectangles, circles, lines and arrows to a page.",
     category: "edit",
     icon: "shapes",
+    // Implemented in Phase 33: real vector shapes (rectangle, circle, ellipse, line)
+    // drawn with pdf-lib, bounded to page margins.
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["rectangle", "circle", "arrow", "line", "box"],
     howItWorks: [
@@ -476,12 +534,15 @@ export const TOOLS: readonly Tool[] = [
     description: "Add comments and notes for review and feedback.",
     category: "edit",
     icon: "annotate",
+    // Implemented in Phase 36: native PDF sticky note comments (/Text) and
+    // URI hyperlinks (/Link) embedded directly with pdf-lib.
+    status: "AVAILABLE",
     plannedTier: "free",
-    keywords: ["comment", "notes", "review", "feedback", "sticky note"],
+    keywords: ["comment", "notes", "review", "feedback", "sticky note", "hyperlink", "link"],
     howItWorks: [
-      "Upload the PDF you are reviewing.",
-      "Attach comments to specific places on the page.",
-      "Download the annotated PDF.",
+      "Upload the PDF you want to annotate.",
+      "Add sticky note comments or web links.",
+      "Download the annotated PDF with native PDF annotations embedded.",
     ],
   }),
 
@@ -513,12 +574,16 @@ export const TOOLS: readonly Tool[] = [
     description: "Encrypt a PDF so only people with the password can open it.",
     category: "security",
     icon: "lock",
+    // Implemented in Phase 29: real RC4 128-bit encryption (Standard Security
+    // Handler V2/R3) via @pdfsmaller/pdf-encrypt-lite, verified before the
+    // download exists. Not AES-256 — the copy says so everywhere.
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["encrypt", "password", "secure", "protect"],
     howItWorks: [
       "Upload the PDF you want to protect.",
-      "Set a password and the permissions you want to allow.",
-      "Download the encrypted PDF.",
+      "Set the password that will be required to open the document.",
+      "Download the protected PDF — opening it asks for that password.",
     ],
   }),
   pdfTool({
@@ -527,12 +592,16 @@ export const TOOLS: readonly Tool[] = [
     description: "Remove a password you own from a protected PDF.",
     category: "security",
     icon: "unlock",
+    // Implemented in Phase 30: real decryption via @pdfsmaller/pdf-decrypt-lite
+    // (RC4 40-bit V1/R2 and 128-bit V2/R3, the latter matching Password
+    // Protect). AES files are refused honestly; this is not password recovery.
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["decrypt", "remove password", "open protected"],
     howItWorks: [
       "Upload the protected PDF.",
       "Enter the password you already have for the file.",
-      "Download the unlocked PDF.",
+      "Download the unlocked PDF — an ordinary document again.",
     ],
   }),
   pdfTool({
