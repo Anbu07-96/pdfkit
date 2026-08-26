@@ -50,7 +50,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {/* Applies the stored theme before first paint to avoid a flash. */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className="flex min-h-full flex-col">
+      <body suppressHydrationWarning className="flex min-h-full flex-col">
         <SessionProvider>
           <ThemeProvider>
             <ToastProvider>
