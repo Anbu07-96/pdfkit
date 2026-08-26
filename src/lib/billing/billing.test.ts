@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type Stripe from "stripe";
+import { createHmac } from "node:crypto";
 import type { UserIdentity } from "@/lib/auth/types";
-import { getBillingConfig, isStripeConfigured } from "@/lib/billing/config";
+import { getBillingConfig, isBillingConfigured } from "@/lib/billing/config";
+import { resetRazorpayClient } from "@/lib/billing/razorpay";
 import { BillingService } from "@/lib/billing/service";
-import { setStripeClientOverride } from "@/lib/billing/stripe";
 import { ProcessingError } from "@/lib/processing/errors";
 import {
   InMemoryUsageRepository,
@@ -28,7 +28,7 @@ const mockUserIdentity: UserIdentity = {
   tier: "free",
 };
 
-describe("Phase 44 — Stripe Billing & Subscription Architecture", () => {
+describe("Phase 46C — Razorpay Billing & Subscription Architecture", () => {
   let repo: InMemoryUsageRepository;
   let service: BillingService;
 
@@ -40,25 +40,27 @@ describe("Phase 44 — Stripe Billing & Subscription Architecture", () => {
 
   afterEach(() => {
     setUsageRepositoryOverride(null);
-    setStripeClientOverride(null);
+    resetRazorpayClient();
     vi.unstubAllEnvs();
   });
 
   describe("Billing Configuration", () => {
     it("reports unconfigured when environment variables are missing", () => {
-      vi.stubEnv("STRIPE_SECRET_KEY", "");
-      vi.stubEnv("STRIPE_PRO_PRICE_ID", "");
+      vi.stubEnv("RAZORPAY_KEY_ID", "");
+      vi.stubEnv("RAZORPAY_KEY_SECRET", "");
+      vi.stubEnv("RAZORPAY_PRO_PLAN_ID", "");
 
-      expect(isStripeConfigured()).toBe(false);
+      expect(isBillingConfigured()).toBe(false);
       expect(getBillingConfig().isConfigured).toBe(false);
     });
 
-    it("reports configured when secret key and price ID are set", () => {
-      vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_dummy");
-      vi.stubEnv("STRIPE_PRO_PRICE_ID", "price_pro_dummy");
+    it("reports configured when key ID, secret and plan ID are set", () => {
+      vi.stubEnv("RAZORPAY_KEY_ID", "rzp_test_key");
+      vi.stubEnv("RAZORPAY_KEY_SECRET", "rzp_test_secret");
+      vi.stubEnv("RAZORPAY_PRO_PLAN_ID", "plan_pro_123");
 
-      expect(isStripeConfigured()).toBe(true);
-      expect(getBillingConfig().stripeProPriceId).toBe("price_pro_dummy");
+      expect(isBillingConfigured()).toBe(true);
+      expect(getBillingConfig().razorpayProPlanId).toBe("plan_pro_123");
     });
   });
 
@@ -81,9 +83,10 @@ describe("Phase 44 — Stripe Billing & Subscription Architecture", () => {
       ).rejects.toThrow(ProcessingError);
     });
 
-    it("rejects checkout when Stripe environment is unconfigured", async () => {
-      vi.stubEnv("STRIPE_SECRET_KEY", "");
-      vi.stubEnv("STRIPE_PRO_PRICE_ID", "");
+    it("rejects checkout when Razorpay environment is unconfigured", async () => {
+      vi.stubEnv("RAZORPAY_KEY_ID", "");
+      vi.stubEnv("RAZORPAY_KEY_SECRET", "");
+      vi.stubEnv("RAZORPAY_PRO_PLAN_ID", "");
 
       await expect(
         service.createCheckoutSession({
@@ -92,179 +95,143 @@ describe("Phase 44 — Stripe Billing & Subscription Architecture", () => {
         }),
       ).rejects.toThrow(ProcessingError);
     });
+  });
 
-    it("creates customer and checkout session for authenticated user", async () => {
-      vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_123");
-      vi.stubEnv("STRIPE_PRO_PRICE_ID", "price_123");
-
-      const mockStripe = {
-        customers: {
-          create: vi.fn().mockResolvedValue({ id: "cus_mock_123" }),
-        },
-        checkout: {
-          sessions: {
-            create: vi.fn().mockResolvedValue({
-              id: "cs_mock_123",
-              url: "https://checkout.stripe.com/c/pay/cs_mock_123",
-            }),
-          },
-        },
-      } as unknown as Stripe;
-
-      setStripeClientOverride(mockStripe);
-
-      const result = await service.createCheckoutSession({
-        identity: mockUserIdentity,
-        planId: "pro",
-      });
-
-      expect(result.sessionId).toBe("cs_mock_123");
-      expect(result.url).toBe("https://checkout.stripe.com/c/pay/cs_mock_123");
-
-      // Verify customer was created and persisted
-      const acc = await repo.getUserAccount(mockUserIdentity.userId);
-      expect(acc?.stripeCustomerId).toBe("cus_mock_123");
+  describe("Payment Verification", () => {
+    it("rejects unauthenticated users from verifying payments", async () => {
+      await expect(
+        service.verifyPayment({
+          identity: mockAnonIdentity,
+          razorpayPaymentId: "pay_123",
+          razorpaySubscriptionId: "sub_123",
+          razorpaySignature: "sig_123",
+        }),
+      ).rejects.toThrow(ProcessingError);
     });
 
-    it("reuses existing Stripe customer ID on subsequent checkout requests", async () => {
-      vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_123");
-      vi.stubEnv("STRIPE_PRO_PRICE_ID", "price_123");
+    it("rejects payment verification when signature is invalid", async () => {
+      vi.stubEnv("RAZORPAY_KEY_SECRET", "secret_123");
 
-      await repo.upsertUserAccount({
-        userId: mockUserIdentity.userId,
-        stripeCustomerId: "cus_existing_999",
-      });
-
-      const mockStripe = {
-        customers: {
-          create: vi.fn(),
-        },
-        checkout: {
-          sessions: {
-            create: vi.fn().mockResolvedValue({
-              id: "cs_mock_456",
-              url: "https://checkout.stripe.com/pay/cs_mock_456",
-            }),
-          },
-        },
-      } as unknown as Stripe;
-
-      setStripeClientOverride(mockStripe);
-
-      const result = await service.createCheckoutSession({
-        identity: mockUserIdentity,
-        planId: "pro",
-      });
-
-      expect(mockStripe.customers.create).not.toHaveBeenCalled();
-      expect(result.sessionId).toBe("cs_mock_456");
-      expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          customer: "cus_existing_999",
+      await expect(
+        service.verifyPayment({
+          identity: mockUserIdentity,
+          razorpayPaymentId: "pay_123",
+          razorpaySubscriptionId: "sub_123",
+          razorpaySignature: "invalid_sig",
         }),
-      );
+      ).rejects.toThrow("Invalid Razorpay payment signature.");
+    });
+
+    it("verifies payment signature correctly and upgrades user to PRO", async () => {
+      const secret = "secret_123";
+      vi.stubEnv("RAZORPAY_KEY_SECRET", secret);
+
+      const paymentId = "pay_mock_100";
+      const subId = "sub_mock_200";
+      const validSignature = createHmac("sha256", secret)
+        .update(`${paymentId}|${subId}`)
+        .digest("hex");
+
+      const result = await service.verifyPayment({
+        identity: mockUserIdentity,
+        razorpayPaymentId: paymentId,
+        razorpaySubscriptionId: subId,
+        razorpaySignature: validSignature,
+      });
+
+      expect(result.verified).toBe(true);
+      expect(result.tier).toBe("pro");
+
+      const acc = await repo.getUserAccount(mockUserIdentity.userId);
+      expect(acc?.tier).toBe("pro");
+      expect(acc?.razorpaySubscriptionId).toBe(subId);
     });
   });
 
-  describe("Stripe Webhooks & Event Synchronization", () => {
+  describe("Razorpay Webhooks & Event Synchronization", () => {
     it("rejects webhooks with missing signature or secret", async () => {
-      vi.stubEnv("STRIPE_WEBHOOK_SECRET", "");
+      vi.stubEnv("RAZORPAY_WEBHOOK_SECRET", "");
       await expect(
         service.handleWebhookEvent("payload", "sig_header"),
       ).rejects.toThrow(ProcessingError);
     });
 
     it("rejects webhooks when signature verification fails", async () => {
-      vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_123");
-      vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_test");
-
-      const mockStripe = {
-        webhooks: {
-          constructEvent: vi.fn().mockImplementation(() => {
-            throw new Error("Invalid signature");
-          }),
-        },
-      } as unknown as Stripe;
-
-      setStripeClientOverride(mockStripe);
+      vi.stubEnv("RAZORPAY_WEBHOOK_SECRET", "whsec_test");
 
       await expect(
-        service.handleWebhookEvent("invalid payload", "bad_sig"),
-      ).rejects.toThrow("Invalid Stripe webhook signature.");
+        service.handleWebhookEvent('{"event":"subscription.charged"}', "bad_sig"),
+      ).rejects.toThrow("Invalid Razorpay webhook signature.");
     });
 
-    it("handles checkout.session.completed and upgrades account to PRO", async () => {
-      vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_123");
-      vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_test");
+    it("handles subscription.charged and upgrades account to PRO", async () => {
+      const webhookSecret = "whsec_test";
+      vi.stubEnv("RAZORPAY_WEBHOOK_SECRET", webhookSecret);
 
-      // Seed account
       await repo.upsertUserAccount({
         userId: mockUserIdentity.userId,
         tier: "free",
       });
 
-      const mockEvent = {
-        id: "evt_checkout_100",
-        type: "checkout.session.completed",
-        data: {
-          object: {
-            client_reference_id: mockUserIdentity.userId,
-            customer: "cus_123",
-            subscription: "sub_999",
+      const payload = {
+        event_id: "evt_sub_charged_100",
+        event: "subscription.charged",
+        payload: {
+          subscription: {
+            entity: {
+              id: "sub_rzp_999",
+              customer_id: "cust_rzp_888",
+              notes: {
+                userId: mockUserIdentity.userId,
+              },
+            },
           },
         },
       };
 
-      const mockStripe = {
-        webhooks: {
-          constructEvent: vi.fn().mockReturnValue(mockEvent),
-        },
-      } as unknown as Stripe;
+      const rawBody = JSON.stringify(payload);
+      const validSig = createHmac("sha256", webhookSecret)
+        .update(rawBody)
+        .digest("hex");
 
-      setStripeClientOverride(mockStripe);
-
-      const result = await service.handleWebhookEvent("raw_body", "valid_sig");
+      const result = await service.handleWebhookEvent(rawBody, validSig);
       expect(result.status).toBe("success");
-      expect(result.eventType).toBe("checkout.session.completed");
+      expect(result.eventType).toBe("subscription.charged");
 
       const acc = await repo.getUserAccount(mockUserIdentity.userId);
       expect(acc?.tier).toBe("pro");
-      expect(acc?.stripeCustomerId).toBe("cus_123");
-      expect(acc?.stripeSubscriptionId).toBe("sub_999");
+      expect(acc?.razorpaySubscriptionId).toBe("sub_rzp_999");
+      expect(acc?.razorpayCustomerId).toBe("cust_rzp_888");
     });
 
-    it("handles customer.subscription.deleted and downgrades account to FREE", async () => {
-      vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_123");
-      vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_test");
+    it("handles subscription.cancelled and downgrades account to FREE", async () => {
+      const webhookSecret = "whsec_test";
+      vi.stubEnv("RAZORPAY_WEBHOOK_SECRET", webhookSecret);
 
-      // Seed active PRO account
       await repo.upsertUserAccount({
         userId: mockUserIdentity.userId,
         tier: "pro",
-        stripeCustomerId: "cus_123",
-        stripeSubscriptionId: "sub_999",
+        razorpaySubscriptionId: "sub_rzp_999",
       });
 
-      const mockEvent = {
-        id: "evt_sub_deleted_200",
-        type: "customer.subscription.deleted",
-        data: {
-          object: {
-            id: "sub_999",
-            customer: "cus_123",
+      const payload = {
+        event_id: "evt_sub_cancelled_200",
+        event: "subscription.cancelled",
+        payload: {
+          subscription: {
+            entity: {
+              id: "sub_rzp_999",
+            },
           },
         },
       };
 
-      const mockStripe = {
-        webhooks: {
-          constructEvent: vi.fn().mockReturnValue(mockEvent),
-        },
-      } as unknown as Stripe;
+      const rawBody = JSON.stringify(payload);
+      const validSig = createHmac("sha256", webhookSecret)
+        .update(rawBody)
+        .digest("hex");
 
-      setStripeClientOverride(mockStripe);
-
-      const result = await service.handleWebhookEvent("raw_body", "valid_sig");
+      const result = await service.handleWebhookEvent(rawBody, validSig);
       expect(result.status).toBe("success");
 
       const acc = await repo.getUserAccount(mockUserIdentity.userId);
@@ -272,35 +239,33 @@ describe("Phase 44 — Stripe Billing & Subscription Architecture", () => {
     });
 
     it("enforces idempotency on duplicate webhook events", async () => {
-      vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_123");
-      vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_test");
+      const webhookSecret = "whsec_test";
+      vi.stubEnv("RAZORPAY_WEBHOOK_SECRET", webhookSecret);
 
-      const mockEvent = {
-        id: "evt_duplicate_300",
-        type: "checkout.session.completed",
-        data: {
-          object: {
-            client_reference_id: mockUserIdentity.userId,
-            customer: "cus_123",
-            subscription: "sub_999",
+      const payload = {
+        event_id: "evt_duplicate_300",
+        event: "subscription.activated",
+        payload: {
+          subscription: {
+            entity: {
+              id: "sub_rzp_111",
+              notes: { userId: mockUserIdentity.userId },
+            },
           },
         },
       };
 
-      const mockStripe = {
-        webhooks: {
-          constructEvent: vi.fn().mockReturnValue(mockEvent),
-        },
-      } as unknown as Stripe;
+      const rawBody = JSON.stringify(payload);
+      const validSig = createHmac("sha256", webhookSecret)
+        .update(rawBody)
+        .digest("hex");
 
-      setStripeClientOverride(mockStripe);
-
-      // First run succeeds
-      const res1 = await service.handleWebhookEvent("raw_body", "valid_sig");
+      // First run
+      const res1 = await service.handleWebhookEvent(rawBody, validSig);
       expect(res1.status).toBe("success");
 
-      // Second run with same event ID is ignored as duplicate
-      const res2 = await service.handleWebhookEvent("raw_body", "valid_sig");
+      // Second run is ignored
+      const res2 = await service.handleWebhookEvent(rawBody, validSig);
       expect(res2.status).toBe("ignored");
       expect(res2.reason).toBe("duplicate");
     });

@@ -13,14 +13,14 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request): Promise<Response> {
   try {
     const rawBody = await request.text();
-    const signature = request.headers.get("stripe-signature");
+    const signature = request.headers.get("x-razorpay-signature");
 
     if (!signature) {
       return Response.json(
         {
           error: {
             code: "VALIDATION_ERROR",
-            message: "Missing stripe-signature header.",
+            message: "Missing x-razorpay-signature header.",
           },
         },
         { status: 400, headers: JSON_RESPONSE_HEADERS },

@@ -72,8 +72,9 @@ export interface PersistedUserAccount {
   name: string | null;
   tier: UserAccountTier;
   status: string;
-  stripeCustomerId: string | null;
-  stripeSubscriptionId: string | null;
+  billingProvider: string | null;
+  razorpayCustomerId: string | null;
+  razorpaySubscriptionId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -104,14 +105,14 @@ export interface UsageRepository {
   getUserAccount(userId: string): Promise<PersistedUserAccount | null>;
 
   /**
-   * Get account metadata by Stripe Customer ID.
+   * Get account metadata by Razorpay Customer ID.
    */
-  getUserAccountByStripeCustomerId(customerId: string): Promise<PersistedUserAccount | null>;
+  getUserAccountByRazorpayCustomerId(customerId: string): Promise<PersistedUserAccount | null>;
 
   /**
-   * Get account metadata by Stripe Subscription ID.
+   * Get account metadata by Razorpay Subscription ID.
    */
-  getUserAccountByStripeSubscriptionId(subscriptionId: string): Promise<PersistedUserAccount | null>;
+  getUserAccountByRazorpaySubscriptionId(subscriptionId: string): Promise<PersistedUserAccount | null>;
 
   /**
    * Save or update account metadata for a user.
@@ -122,19 +123,20 @@ export interface UsageRepository {
     name?: string | null;
     tier?: UserAccountTier;
     status?: string;
-    stripeCustomerId?: string | null;
-    stripeSubscriptionId?: string | null;
+    billingProvider?: string | null;
+    razorpayCustomerId?: string | null;
+    razorpaySubscriptionId?: string | null;
   }): Promise<PersistedUserAccount>;
 
   /**
-   * Check whether a Stripe webhook event ID has already been processed (idempotency).
+   * Check whether a Razorpay webhook event ID has already been processed (idempotency).
    */
-  hasProcessedStripeEvent(eventId: string): Promise<boolean>;
+  hasProcessedRazorpayEvent(eventId: string): Promise<boolean>;
 
   /**
-   * Record a processed Stripe webhook event ID for idempotency tracking.
+   * Record a processed Razorpay webhook event ID for idempotency tracking.
    */
-  recordStripeEvent(eventId: string, eventType: string): Promise<void>;
+  recordRazorpayEvent(eventId: string, eventType: string): Promise<void>;
 
   /**
    * Reset repository state (used for testing).

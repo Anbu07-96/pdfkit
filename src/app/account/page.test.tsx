@@ -13,6 +13,7 @@ vi.mock("@/lib/auth/session", async (importOriginal) => {
 
 vi.mock("next/navigation", () => ({
   redirect: vi.fn(),
+  useRouter: vi.fn().mockReturnValue({ push: vi.fn() }),
 }));
 
 import { redirect } from "next/navigation";

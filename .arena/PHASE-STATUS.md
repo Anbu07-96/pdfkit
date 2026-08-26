@@ -7,6 +7,7 @@
 - **Phase 45 Status**: **IMPLEMENTED / COMPLETE**
 - **Phase 46A Status**: **IMPLEMENTED / COMPLETE**
 - **Phase 46B Status**: **IMPLEMENTED / COMPLETE**
+- **Phase 46C Status**: **IMPLEMENTED / COMPLETE**
 
 ---
 
@@ -24,26 +25,27 @@
 | **41** | Distributed Protection & Rate Limiting | Implemented / Config Required | Redis-backed via `ioredis` when `REDIS_URL` / `PDFKIT_REDIS_URL` is set. Falls back to in-memory guard in dev/test. |
 | **42** | Authentication & Account Architecture | Implemented | NextAuth JWT session strategy. Provider-neutral `getUserIdentity()`. Unauthenticated fallback to anonymous (`userId: "anon"`). `/login` and `/account` pages live. |
 | **43** | Database Usage Metering & Plan Quotas | Implemented / Config Required | Prisma ORM PostgreSQL schema. `UsageService` preflight quota gate in `handleProcessingRequest`. Falls back to `InMemoryUsageRepository` when `DATABASE_URL` is unset. |
-| **44** | Stripe Billing Architecture | Implemented / Config Required | Provider-isolated `BillingService`. `POST /api/billing/checkout` & `POST /api/billing/webhook`. `<UpgradeButton />` on `/account`. Requires `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRO_PRICE_ID` in production. |
+| **44** | Billing Architecture Audit | Complete | Evaluated billing infrastructure & payment requirements. |
 | **45** | Production Hardening, Authentication Security & E2E Verification | Implemented | Strict credentials validation in `authorize()` (valid email format, min password length, missing field rejection). Comprehensive negative auth tests (`auth-validation.test.ts`). |
 | **46A** | Local Tool Expansion | Implemented | 4 local tools implemented (`redact-information`, `extract-tables`, `pdf-to-excel`, `compare-documents`). Catalog: 33 AVAILABLE, 13 COMING_SOON, 1 BLOCKED. |
-| **46B** | Staging Deployment Preparation & Pre-Deployment Verification | Complete | Staging readiness verified across build, Node compatibility, env vars, Prisma migrations, Redis, Auth, Stripe Test Mode, limits & health routes. |
+| **46B** | Staging Deployment Preparation & Pre-Deployment Verification | Complete | Staging readiness verified across build, Node compatibility, env vars, Prisma migrations, Redis, Auth, limits & health routes. |
+| **46C** | Staging Deployment & Razorpay Payment Gateway Migration | Complete | Replaced Stripe with Razorpay as primary billing gateway for Indian users. HMAC signature verification, `/api/billing/verify`, `/api/billing/webhook`, test coverage complete. |
 
 ---
 
 ## 3. Deployment & Environment Modes
 
 ### A. Development / Test Mode (Zero External Infrastructure Required)
-When `DATABASE_URL`, `REDIS_URL`, and `STRIPE_SECRET_KEY` are unset:
-- **Authentication**: All 29 PDF tools work 100% for anonymous visitors (`userId: "anon"`). Credentials provider enforces strict email formatting and password validation.
+When `DATABASE_URL`, `REDIS_URL`, and `RAZORPAY_KEY_ID` are unset:
+- **Authentication**: All 33 PDF tools work 100% for anonymous visitors (`userId: "anon"`). Credentials provider enforces strict email formatting and password validation.
 - **Quota Metering**: `InMemoryUsageRepository` tracks daily job and byte budgets in memory.
 - **Distributed Protection**: In-memory rate limiting and concurrency guard manage request flow.
-- **Billing**: `<UpgradeButton />` surfaces clear informational status that Stripe billing is unconfigured.
+- **Billing**: `<UpgradeButton />` surfaces clear informational status that Razorpay billing is unconfigured.
 
-### B. Production Mode (Requires External Infrastructure Setup)
-For full production deployment, the following must be configured in environment variables:
-1. `DATABASE_URL`: PostgreSQL connection string for Prisma schema (`UserAccount`, `DailyUsage`, `StripeWebhookEvent`).
+### B. Staging / Production Mode (Requires External Infrastructure Setup)
+For full staging/production deployment, the following must be configured in environment variables:
+1. `DATABASE_URL`: PostgreSQL connection string for Prisma schema (`UserAccount`, `DailyUsage`, `RazorpayWebhookEvent`).
 2. `PDFKIT_REDIS_URL` / `REDIS_URL`: Redis connection string for distributed rate limiting & concurrency locks.
-3. `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRO_PRICE_ID`: Stripe production API keys and subscription price ID.
+3. `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_PRO_PLAN_ID`: Razorpay TEST MODE API credentials and subscription plan ID.
 4. `NEXTAUTH_SECRET`, `NEXTAUTH_URL`: NextAuth secret key and canonical site domain.
 5. `SENTRY_DSN`: Sentry project DSN for exception reporting.

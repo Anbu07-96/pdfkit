@@ -33,7 +33,7 @@ class PrismaClient {
     create: async () => ({}),
     update: async () => ({}),
   };
-  stripeWebhookEvent = {
+  razorpayWebhookEvent = {
     findUnique: async () => null,
     create: async () => ({}),
   };
@@ -52,8 +52,9 @@ const indexDts = `export interface UserAccount {
   name: string | null;
   tier: string;
   status: string;
-  stripeCustomerId: string | null;
-  stripeSubscriptionId: string | null;
+  billingProvider: string | null;
+  razorpayCustomerId: string | null;
+  razorpaySubscriptionId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -68,7 +69,7 @@ export interface DailyUsage {
   updatedAt: Date;
 }
 
-export interface StripeWebhookEvent {
+export interface RazorpayWebhookEvent {
   id: string;
   eventType: string;
   createdAt: Date;
@@ -77,8 +78,8 @@ export interface StripeWebhookEvent {
 export interface UserAccountWhereUniqueInput {
   id?: string;
   userId?: string;
-  stripeCustomerId?: string;
-  stripeSubscriptionId?: string;
+  razorpayCustomerId?: string;
+  razorpaySubscriptionId?: string;
 }
 
 export interface UserAccountCreateInput {
@@ -88,8 +89,9 @@ export interface UserAccountCreateInput {
   name?: string | null;
   tier?: string;
   status?: string;
-  stripeCustomerId?: string | null;
-  stripeSubscriptionId?: string | null;
+  billingProvider?: string | null;
+  razorpayCustomerId?: string | null;
+  razorpaySubscriptionId?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -99,8 +101,9 @@ export interface UserAccountUpdateInput {
   name?: string | null;
   tier?: string;
   status?: string;
-  stripeCustomerId?: string | null;
-  stripeSubscriptionId?: string | null;
+  billingProvider?: string | null;
+  razorpayCustomerId?: string | null;
+  razorpaySubscriptionId?: string | null;
 }
 
 export interface DailyUsageWhereUniqueInput {
@@ -152,9 +155,9 @@ export declare class PrismaClient {
     create(args: { data: DailyUsageCreateInput }): Promise<DailyUsage>;
     update(args: { where: DailyUsageWhereUniqueInput; data: DailyUsageUpdateInput }): Promise<DailyUsage>;
   };
-  stripeWebhookEvent: {
-    findUnique(args: { where: { id: string } }): Promise<StripeWebhookEvent | null>;
-    create(args: { data: { id: string; eventType: string } }): Promise<StripeWebhookEvent>;
+  razorpayWebhookEvent: {
+    findUnique(args: { where: { id: string } }): Promise<RazorpayWebhookEvent | null>;
+    create(args: { data: { id: string; eventType: string } }): Promise<RazorpayWebhookEvent>;
   };
 }
 

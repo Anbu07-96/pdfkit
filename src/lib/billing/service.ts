@@ -1,10 +1,13 @@
 import "server-only";
 
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { getBillingConfig } from "@/lib/billing/config";
-import { getStripeClient } from "@/lib/billing/stripe";
+import { getRazorpayClient } from "@/lib/billing/razorpay";
 import type {
   CheckoutSessionOptions,
   CheckoutSessionResult,
+  VerifyPaymentOptions,
+  VerifyPaymentResult,
   WebhookResult,
 } from "@/lib/billing/types";
 import { ProcessingError } from "@/lib/processing/errors";
@@ -12,10 +15,10 @@ import { getUsageRepository } from "@/lib/usage/repository";
 import type { UsageRepository } from "@/lib/usage/types";
 
 /**
- * Server-only Stripe Billing Service for PDFKit.
+ * Server-only Razorpay Billing Service for PDFKit.
  *
  * Provides provider-isolated billing management for checkout sessions,
- * Stripe customer lifecycle, and webhook event synchronization.
+ * payment signature verification, and Razorpay webhook synchronization.
  */
 export class BillingService {
   private repo: UsageRepository;
@@ -25,12 +28,12 @@ export class BillingService {
   }
 
   /**
-   * Create a Stripe Checkout session for upgrading an authenticated user to PRO.
+   * Create a Razorpay subscription checkout session for upgrading an authenticated user to PRO.
    */
   async createCheckoutSession(
     options: CheckoutSessionOptions,
   ): Promise<CheckoutSessionResult> {
-    const { identity, planId, successUrl, cancelUrl } = options;
+    const { identity, planId } = options;
 
     if (!identity.isAuthenticated || identity.userId === "anon") {
       throw new ProcessingError(
@@ -47,193 +50,232 @@ export class BillingService {
     }
 
     const config = getBillingConfig();
-    if (!config.isConfigured || !config.stripeProPriceId) {
+    if (!config.isConfigured || !config.razorpayProPlanId || !config.razorpayKeyId) {
       throw new ProcessingError(
         "VALIDATION_ERROR",
-        "Stripe billing is not configured on this deployment.",
+        "Razorpay billing is not configured on this deployment.",
       );
     }
 
-    const stripe = getStripeClient();
+    const razorpay = getRazorpayClient();
 
-    // 1. Resolve or create Stripe Customer
-    let account = await this.repo.getUserAccount(identity.userId);
-    let stripeCustomerId = account?.stripeCustomerId ?? null;
-
-    if (!stripeCustomerId) {
-      const customer = await stripe.customers.create({
-        email: identity.email || undefined,
-        name: identity.name || undefined,
-        metadata: {
-          userId: identity.userId,
-        },
-      });
-
-      stripeCustomerId = customer.id;
-
-      account = await this.repo.upsertUserAccount({
+    // 1. Create Razorpay Subscription
+    const subscription = await razorpay.subscriptions.create({
+      plan_id: config.razorpayProPlanId,
+      total_count: 12,
+      quantity: 1,
+      customer_notify: 1,
+      notes: {
         userId: identity.userId,
-        email: identity.email,
-        name: identity.name,
-        tier: identity.tier,
-        stripeCustomerId,
-      });
-    }
-
-    // 2. Derive Return URLs
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-    const defaultSuccess = `${siteUrl}/account?checkout=success`;
-    const defaultCancel = `${siteUrl}/account?checkout=canceled`;
-
-    // 3. Create Checkout Session
-    const session = await stripe.checkout.sessions.create({
-      customer: stripeCustomerId,
-      mode: "subscription",
-      line_items: [
-        {
-          price: config.stripeProPriceId,
-          quantity: 1,
-        },
-      ],
-      client_reference_id: identity.userId,
-      success_url: successUrl || defaultSuccess,
-      cancel_url: cancelUrl || defaultCancel,
-      metadata: {
-        userId: identity.userId,
-        planId: "pro",
+        email: identity.email || "",
       },
     });
 
-    if (!session.url) {
+    if (!subscription || !subscription.id) {
       throw new ProcessingError(
         "INTERNAL_ERROR",
-        "Failed to create checkout session URL.",
+        "Failed to create Razorpay subscription session.",
       );
     }
 
+    // 2. Persist subscription ID on user account record
+    await this.repo.upsertUserAccount({
+      userId: identity.userId,
+      email: identity.email,
+      name: identity.name,
+      tier: identity.tier,
+      billingProvider: "razorpay",
+      razorpaySubscriptionId: subscription.id,
+    });
+
     return {
-      sessionId: session.id,
-      url: session.url,
+      subscriptionId: subscription.id,
+      keyId: config.razorpayKeyId,
+      amount: 49900, // ₹499/month in paise
+      currency: "INR",
+      planName: "PDFKit Pro Plan",
     };
   }
 
   /**
-   * Process and synchronize incoming Stripe webhook events.
+   * Verify a completed client-side Razorpay payment signature and upgrade account to PRO.
+   */
+  async verifyPayment(
+    options: VerifyPaymentOptions,
+  ): Promise<VerifyPaymentResult> {
+    const { identity, razorpayPaymentId, razorpaySubscriptionId, razorpaySignature } = options;
+
+    if (!identity.isAuthenticated || identity.userId === "anon") {
+      throw new ProcessingError(
+        "VALIDATION_ERROR",
+        "You must be signed in to verify payment.",
+      );
+    }
+
+    const config = getBillingConfig();
+    if (!config.razorpayKeySecret) {
+      throw new ProcessingError(
+        "VALIDATION_ERROR",
+        "Razorpay secret key is not configured.",
+      );
+    }
+
+    if (!razorpayPaymentId || !razorpaySubscriptionId || !razorpaySignature) {
+      throw new ProcessingError(
+        "VALIDATION_ERROR",
+        "Missing required Razorpay payment signature parameters.",
+      );
+    }
+
+    const generatedSignature = createHmac("sha256", config.razorpayKeySecret)
+      .update(`${razorpayPaymentId}|${razorpaySubscriptionId}`)
+      .digest("hex");
+
+    const isSignatureValid =
+      generatedSignature.length === razorpaySignature.length &&
+      timingSafeEqual(
+        Buffer.from(generatedSignature, "utf-8"),
+        Buffer.from(razorpaySignature, "utf-8"),
+      );
+
+    if (!isSignatureValid) {
+      console.error("[billing] Razorpay payment signature verification failed");
+      throw new ProcessingError(
+        "VALIDATION_ERROR",
+        "Invalid Razorpay payment signature.",
+      );
+    }
+
+    // Upgrade user account to PRO
+    await this.repo.upsertUserAccount({
+      userId: identity.userId,
+      tier: "pro",
+      status: "active",
+      billingProvider: "razorpay",
+      razorpaySubscriptionId,
+    });
+
+    return {
+      verified: true,
+      tier: "pro",
+    };
+  }
+
+  /**
+   * Process and synchronize incoming Razorpay webhook events.
    */
   async handleWebhookEvent(
-    rawBody: string | Buffer,
+    rawBody: string,
     signature: string | null,
   ): Promise<WebhookResult> {
     const config = getBillingConfig();
 
-    if (!config.stripeWebhookSecret) {
+    if (!config.razorpayWebhookSecret) {
       throw new ProcessingError(
         "VALIDATION_ERROR",
-        "Stripe webhook secret is not configured.",
+        "Razorpay webhook secret is not configured.",
       );
     }
 
     if (!signature) {
       throw new ProcessingError(
         "VALIDATION_ERROR",
-        "Missing Stripe signature header.",
+        "Missing Razorpay signature header.",
       );
     }
 
-    const stripe = getStripeClient();
-    let event: import("stripe").Stripe.Event;
+    const expectedSignature = createHmac("sha256", config.razorpayWebhookSecret)
+      .update(rawBody)
+      .digest("hex");
 
-    try {
-      event = stripe.webhooks.constructEvent(
-        rawBody,
-        signature,
-        config.stripeWebhookSecret,
+    const isSignatureValid =
+      expectedSignature.length === signature.length &&
+      timingSafeEqual(
+        Buffer.from(expectedSignature, "utf-8"),
+        Buffer.from(signature, "utf-8"),
       );
-    } catch (err) {
-      console.error("[billing] Webhook signature verification failed", err);
+
+    if (!isSignatureValid) {
+      console.error("[billing] Webhook signature verification failed");
       throw new ProcessingError(
         "VALIDATION_ERROR",
-        "Invalid Stripe webhook signature.",
-        { cause: err },
+        "Invalid Razorpay webhook signature.",
       );
     }
 
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      throw new ProcessingError(
+        "VALIDATION_ERROR",
+        "Invalid JSON webhook payload.",
+      );
+    }
+
+    const eventType = (payload.event as string) || "unknown";
+    const eventId =
+      (payload.event_id as string) ||
+      (payload.id as string) ||
+      `evt_${Date.now()}`;
+
     // Idempotency check
-    const alreadyProcessed = await this.repo.hasProcessedStripeEvent(event.id);
+    const alreadyProcessed = await this.repo.hasProcessedRazorpayEvent(eventId);
     if (alreadyProcessed) {
       return {
         status: "ignored",
-        eventType: event.type,
+        eventType,
         reason: "duplicate",
       };
     }
 
     // Handle Subscription Lifecycle Events
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object as import("stripe").Stripe.Checkout.Session;
-        const userId = session.client_reference_id || session.metadata?.userId;
-        const customerId =
-          typeof session.customer === "string"
-            ? session.customer
-            : session.customer?.id;
-        const subscriptionId =
-          typeof session.subscription === "string"
-            ? session.subscription
-            : session.subscription?.id;
+    const payloadObject = (payload.payload as Record<string, unknown>) || {};
+    const subEntity =
+      (payloadObject.subscription as { entity?: Record<string, unknown> })?.entity ||
+      (payloadObject.payment as { entity?: Record<string, unknown> })?.entity;
 
-        if (userId) {
-          await this.repo.upsertUserAccount({
-            userId,
-            tier: "pro",
-            status: "active",
-            stripeCustomerId: customerId || undefined,
-            stripeSubscriptionId: subscriptionId || undefined,
-          });
-        }
-        break;
-      }
+    const subscriptionId = subEntity?.id ? String(subEntity.id) : null;
+    const customerId = subEntity?.customer_id ? String(subEntity.customer_id) : null;
+    const notes = (subEntity?.notes as Record<string, unknown>) || {};
+    const userId = notes.userId ? String(notes.userId) : null;
 
-      case "customer.subscription.created":
-      case "customer.subscription.updated": {
-        const sub = event.data.object as import("stripe").Stripe.Subscription;
-        const subscriptionId = sub.id;
-        const customerId =
-          typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
-        const userId = sub.metadata?.userId;
-
+    switch (eventType) {
+      case "subscription.authenticated":
+      case "subscription.activated":
+      case "subscription.charged": {
         const account =
           (userId ? await this.repo.getUserAccount(userId) : null) ||
-          (await this.repo.getUserAccountByStripeSubscriptionId(subscriptionId)) ||
+          (subscriptionId
+            ? await this.repo.getUserAccountByRazorpaySubscriptionId(subscriptionId)
+            : null) ||
           (customerId
-            ? await this.repo.getUserAccountByStripeCustomerId(customerId)
+            ? await this.repo.getUserAccountByRazorpayCustomerId(customerId)
             : null);
 
-        if (account) {
-          const isPro = sub.status === "active" || sub.status === "trialing";
-          const newTier = isPro ? "pro" : "free";
-
+        if (account || userId) {
+          const targetUserId = account?.userId || userId!;
           await this.repo.upsertUserAccount({
-            userId: account.userId,
-            tier: newTier,
+            userId: targetUserId,
+            tier: "pro",
             status: "active",
-            stripeCustomerId: customerId || account.stripeCustomerId,
-            stripeSubscriptionId: subscriptionId,
+            billingProvider: "razorpay",
+            razorpayCustomerId: customerId || account?.razorpayCustomerId,
+            razorpaySubscriptionId: subscriptionId || account?.razorpaySubscriptionId,
           });
         }
         break;
       }
 
-      case "customer.subscription.deleted": {
-        const sub = event.data.object as import("stripe").Stripe.Subscription;
-        const subscriptionId = sub.id;
-        const customerId =
-          typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
-
+      case "subscription.halted":
+      case "subscription.cancelled":
+      case "subscription.completed": {
         const account =
-          (await this.repo.getUserAccountByStripeSubscriptionId(subscriptionId)) ||
+          (subscriptionId
+            ? await this.repo.getUserAccountByRazorpaySubscriptionId(subscriptionId)
+            : null) ||
           (customerId
-            ? await this.repo.getUserAccountByStripeCustomerId(customerId)
+            ? await this.repo.getUserAccountByRazorpayCustomerId(customerId)
             : null);
 
         if (account) {
@@ -241,7 +283,7 @@ export class BillingService {
             userId: account.userId,
             tier: "free",
             status: "active",
-            stripeSubscriptionId: undefined,
+            billingProvider: "razorpay",
           });
         }
         break;
@@ -253,11 +295,11 @@ export class BillingService {
     }
 
     // Record processed event ID for idempotency
-    await this.repo.recordStripeEvent(event.id, event.type);
+    await this.repo.recordRazorpayEvent(eventId, eventType);
 
     return {
       status: "success",
-      eventType: event.type,
+      eventType,
     };
   }
 }

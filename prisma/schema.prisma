@@ -8,21 +8,22 @@ generator client {
 }
 
 model UserAccount {
-  id                   String       @id @default(cuid())
-  userId               String       @unique
-  email                String?
-  name                 String?
-  tier                 String       @default("free")
-  status               String       @default("active")
-  stripeCustomerId     String?      @unique
-  stripeSubscriptionId String?      @unique
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
-  dailyUsages          DailyUsage[]
+  id                     String       @id @default(cuid())
+  userId                 String       @unique
+  email                  String?
+  name                   String?
+  tier                   String       @default("free")
+  status                 String       @default("active")
+  billingProvider        String?      @default("razorpay")
+  razorpayCustomerId     String?      @unique
+  razorpaySubscriptionId String?      @unique
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+  dailyUsages            DailyUsage[]
 
   @@index([userId])
-  @@index([stripeCustomerId])
-  @@index([stripeSubscriptionId])
+  @@index([razorpayCustomerId])
+  @@index([razorpaySubscriptionId])
 }
 
 model DailyUsage {
@@ -40,7 +41,7 @@ model DailyUsage {
   @@index([periodDate])
 }
 
-model StripeWebhookEvent {
+model RazorpayWebhookEvent {
   id        String   @id
   eventType String
   createdAt DateTime @default(now())

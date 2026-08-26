@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type Stripe from "stripe";
+import { createHmac } from "node:crypto";
 import { POST as checkoutPOST } from "@/app/api/billing/checkout/route";
+import { POST as verifyPOST } from "@/app/api/billing/verify/route";
 import { POST as webhookPOST } from "@/app/api/billing/webhook/route";
 import * as sessionModule from "@/lib/auth/session";
-import { setStripeClientOverride } from "@/lib/billing/stripe";
+import { resetRazorpayClient } from "@/lib/billing/razorpay";
 import {
   InMemoryUsageRepository,
   setUsageRepositoryOverride,
@@ -19,20 +20,21 @@ vi.mock("@/lib/auth/session", async (importOriginal) => {
 
 const mockedGetIdentity = vi.mocked(sessionModule.getUserIdentity);
 
-describe("Phase 44 — Stripe Billing API Routes", () => {
+describe("Phase 46C — Razorpay Billing API Routes", () => {
   let repo: InMemoryUsageRepository;
 
   beforeEach(() => {
     repo = new InMemoryUsageRepository();
     setUsageRepositoryOverride(repo);
-    vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_123");
-    vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_123");
-    vi.stubEnv("STRIPE_PRO_PRICE_ID", "price_123");
+    vi.stubEnv("RAZORPAY_KEY_ID", "rzp_test_key");
+    vi.stubEnv("RAZORPAY_KEY_SECRET", "rzp_test_secret");
+    vi.stubEnv("RAZORPAY_WEBHOOK_SECRET", "whsec_test_secret");
+    vi.stubEnv("RAZORPAY_PRO_PLAN_ID", "plan_pro_123");
   });
 
   afterEach(() => {
     setUsageRepositoryOverride(null);
-    setStripeClientOverride(null);
+    resetRazorpayClient();
     vi.unstubAllEnvs();
   });
 
@@ -75,8 +77,27 @@ describe("Phase 44 — Stripe Billing API Routes", () => {
       const body = (await response.json()) as { error: { message: string } };
       expect(body.error.message).toContain("Only the PRO plan is currently available");
     });
+  });
 
-    it("creates checkout session and returns 200 with checkout URL for authenticated user", async () => {
+  describe("POST /api/billing/verify", () => {
+    it("returns 401 Unauthorized for anonymous users", async () => {
+      mockedGetIdentity.mockResolvedValueOnce(sessionModule.ANONYMOUS_USER_IDENTITY);
+
+      const request = new Request("http://localhost:3000/api/billing/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          razorpayPaymentId: "pay_123",
+          razorpaySubscriptionId: "sub_123",
+          razorpaySignature: "sig_123",
+        }),
+      });
+
+      const response = await verifyPOST(request);
+      expect(response.status).toBe(401);
+    });
+
+    it("verifies payment signature and returns 200 with verified status", async () => {
       mockedGetIdentity.mockResolvedValueOnce({
         isAuthenticated: true,
         userId: "usr_route_test",
@@ -86,39 +107,34 @@ describe("Phase 44 — Stripe Billing API Routes", () => {
         tier: "free",
       });
 
-      const mockStripe = {
-        customers: {
-          create: vi.fn().mockResolvedValue({ id: "cus_route_123" }),
-        },
-        checkout: {
-          sessions: {
-            create: vi.fn().mockResolvedValue({
-              id: "cs_route_123",
-              url: "https://checkout.stripe.com/pay/cs_route_123",
-            }),
-          },
-        },
-      } as unknown as Stripe;
+      const secret = "rzp_test_secret";
+      const paymentId = "pay_route_123";
+      const subId = "sub_route_123";
+      const signature = createHmac("sha256", secret)
+        .update(`${paymentId}|${subId}`)
+        .digest("hex");
 
-      setStripeClientOverride(mockStripe);
-
-      const request = new Request("http://localhost:3000/api/billing/checkout", {
+      const request = new Request("http://localhost:3000/api/billing/verify", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ planId: "pro" }),
+        body: JSON.stringify({
+          razorpayPaymentId: paymentId,
+          razorpaySubscriptionId: subId,
+          razorpaySignature: signature,
+        }),
       });
 
-      const response = await checkoutPOST(request);
+      const response = await verifyPOST(request);
       expect(response.status).toBe(200);
 
-      const body = (await response.json()) as { sessionId: string; url: string };
-      expect(body.sessionId).toBe("cs_route_123");
-      expect(body.url).toBe("https://checkout.stripe.com/pay/cs_route_123");
+      const body = (await response.json()) as { verified: boolean; tier: string };
+      expect(body.verified).toBe(true);
+      expect(body.tier).toBe("pro");
     });
   });
 
   describe("POST /api/billing/webhook", () => {
-    it("returns 400 when stripe-signature header is missing", async () => {
+    it("returns 400 when x-razorpay-signature header is missing", async () => {
       const request = new Request("http://localhost:3000/api/billing/webhook", {
         method: "POST",
         body: "payload",
@@ -128,34 +144,33 @@ describe("Phase 44 — Stripe Billing API Routes", () => {
       expect(response.status).toBe(400);
 
       const body = (await response.json()) as { error: { message: string } };
-      expect(body.error.message).toContain("stripe-signature");
+      expect(body.error.message).toContain("x-razorpay-signature");
     });
 
     it("returns 200 and processes valid signed webhook event", async () => {
-      const mockEvent = {
-        id: "evt_route_1",
-        type: "checkout.session.completed",
-        data: {
-          object: {
-            client_reference_id: "usr_route_test",
-            customer: "cus_route_123",
-            subscription: "sub_route_123",
+      const webhookSecret = "whsec_test_secret";
+      const payload = {
+        event_id: "evt_route_1",
+        event: "subscription.charged",
+        payload: {
+          subscription: {
+            entity: {
+              id: "sub_route_999",
+              notes: { userId: "usr_route_test" },
+            },
           },
         },
       };
 
-      const mockStripe = {
-        webhooks: {
-          constructEvent: vi.fn().mockReturnValue(mockEvent),
-        },
-      } as unknown as Stripe;
-
-      setStripeClientOverride(mockStripe);
+      const rawBody = JSON.stringify(payload);
+      const signature = createHmac("sha256", webhookSecret)
+        .update(rawBody)
+        .digest("hex");
 
       const request = new Request("http://localhost:3000/api/billing/webhook", {
         method: "POST",
-        headers: { "stripe-signature": "t=123,v1=valid_sig" },
-        body: "payload_bytes",
+        headers: { "x-razorpay-signature": signature },
+        body: rawBody,
       });
 
       const response = await webhookPOST(request);

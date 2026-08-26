@@ -25,7 +25,7 @@ function getPrismaClient(): PrismaClient {
 export class InMemoryUsageRepository implements UsageRepository {
   private usages = new Map<string, UsageRecord>();
   private accounts = new Map<string, PersistedUserAccount>();
-  private stripeEvents = new Map<string, string>();
+  private razorpayEvents = new Map<string, string>();
 
   private usageKey(userId: string, periodDate: string): string {
     return `${userId}:${periodDate}`;
@@ -68,18 +68,18 @@ export class InMemoryUsageRepository implements UsageRepository {
     return account ? { ...account } : null;
   }
 
-  async getUserAccountByStripeCustomerId(customerId: string): Promise<PersistedUserAccount | null> {
+  async getUserAccountByRazorpayCustomerId(customerId: string): Promise<PersistedUserAccount | null> {
     for (const account of this.accounts.values()) {
-      if (account.stripeCustomerId === customerId) {
+      if (account.razorpayCustomerId === customerId) {
         return { ...account };
       }
     }
     return null;
   }
 
-  async getUserAccountByStripeSubscriptionId(subscriptionId: string): Promise<PersistedUserAccount | null> {
+  async getUserAccountByRazorpaySubscriptionId(subscriptionId: string): Promise<PersistedUserAccount | null> {
     for (const account of this.accounts.values()) {
-      if (account.stripeSubscriptionId === subscriptionId) {
+      if (account.razorpaySubscriptionId === subscriptionId) {
         return { ...account };
       }
     }
@@ -92,8 +92,9 @@ export class InMemoryUsageRepository implements UsageRepository {
     name?: string | null;
     tier?: UserAccountTier;
     status?: string;
-    stripeCustomerId?: string | null;
-    stripeSubscriptionId?: string | null;
+    billingProvider?: string | null;
+    razorpayCustomerId?: string | null;
+    razorpaySubscriptionId?: string | null;
   }): Promise<PersistedUserAccount> {
     const existing = this.accounts.get(account.userId);
     const now = new Date();
@@ -105,14 +106,18 @@ export class InMemoryUsageRepository implements UsageRepository {
       name: account.name !== undefined ? account.name : existing?.name || null,
       tier: account.tier || existing?.tier || "free",
       status: account.status || existing?.status || "active",
-      stripeCustomerId:
-        account.stripeCustomerId !== undefined
-          ? account.stripeCustomerId
-          : existing?.stripeCustomerId || null,
-      stripeSubscriptionId:
-        account.stripeSubscriptionId !== undefined
-          ? account.stripeSubscriptionId
-          : existing?.stripeSubscriptionId || null,
+      billingProvider:
+        account.billingProvider !== undefined
+          ? account.billingProvider
+          : existing?.billingProvider || "razorpay",
+      razorpayCustomerId:
+        account.razorpayCustomerId !== undefined
+          ? account.razorpayCustomerId
+          : existing?.razorpayCustomerId || null,
+      razorpaySubscriptionId:
+        account.razorpaySubscriptionId !== undefined
+          ? account.razorpaySubscriptionId
+          : existing?.razorpaySubscriptionId || null,
       createdAt: existing?.createdAt || now,
       updatedAt: now,
     };
@@ -121,18 +126,18 @@ export class InMemoryUsageRepository implements UsageRepository {
     return { ...updated };
   }
 
-  async hasProcessedStripeEvent(eventId: string): Promise<boolean> {
-    return this.stripeEvents.has(eventId);
+  async hasProcessedRazorpayEvent(eventId: string): Promise<boolean> {
+    return this.razorpayEvents.has(eventId);
   }
 
-  async recordStripeEvent(eventId: string, eventType: string): Promise<void> {
-    this.stripeEvents.set(eventId, eventType);
+  async recordRazorpayEvent(eventId: string, eventType: string): Promise<void> {
+    this.razorpayEvents.set(eventId, eventType);
   }
 
   async reset(): Promise<void> {
     this.usages.clear();
     this.accounts.clear();
-    this.stripeEvents.clear();
+    this.razorpayEvents.clear();
   }
 }
 
@@ -236,8 +241,9 @@ export class PrismaUsageRepository implements UsageRepository {
         name: acc.name,
         tier: acc.tier as UserAccountTier,
         status: acc.status,
-        stripeCustomerId: acc.stripeCustomerId,
-        stripeSubscriptionId: acc.stripeSubscriptionId,
+        billingProvider: acc.billingProvider,
+        razorpayCustomerId: acc.razorpayCustomerId,
+        razorpaySubscriptionId: acc.razorpaySubscriptionId,
         createdAt: acc.createdAt,
         updatedAt: acc.updatedAt,
       };
@@ -246,10 +252,10 @@ export class PrismaUsageRepository implements UsageRepository {
     }
   }
 
-  async getUserAccountByStripeCustomerId(customerId: string): Promise<PersistedUserAccount | null> {
+  async getUserAccountByRazorpayCustomerId(customerId: string): Promise<PersistedUserAccount | null> {
     try {
       const acc = await this.prisma.userAccount.findUnique({
-        where: { stripeCustomerId: customerId },
+        where: { razorpayCustomerId: customerId },
       });
 
       if (!acc) return null;
@@ -261,8 +267,9 @@ export class PrismaUsageRepository implements UsageRepository {
         name: acc.name,
         tier: acc.tier as UserAccountTier,
         status: acc.status,
-        stripeCustomerId: acc.stripeCustomerId,
-        stripeSubscriptionId: acc.stripeSubscriptionId,
+        billingProvider: acc.billingProvider,
+        razorpayCustomerId: acc.razorpayCustomerId,
+        razorpaySubscriptionId: acc.razorpaySubscriptionId,
         createdAt: acc.createdAt,
         updatedAt: acc.updatedAt,
       };
@@ -271,10 +278,10 @@ export class PrismaUsageRepository implements UsageRepository {
     }
   }
 
-  async getUserAccountByStripeSubscriptionId(subscriptionId: string): Promise<PersistedUserAccount | null> {
+  async getUserAccountByRazorpaySubscriptionId(subscriptionId: string): Promise<PersistedUserAccount | null> {
     try {
       const acc = await this.prisma.userAccount.findUnique({
-        where: { stripeSubscriptionId: subscriptionId },
+        where: { razorpaySubscriptionId: subscriptionId },
       });
 
       if (!acc) return null;
@@ -286,8 +293,9 @@ export class PrismaUsageRepository implements UsageRepository {
         name: acc.name,
         tier: acc.tier as UserAccountTier,
         status: acc.status,
-        stripeCustomerId: acc.stripeCustomerId,
-        stripeSubscriptionId: acc.stripeSubscriptionId,
+        billingProvider: acc.billingProvider,
+        razorpayCustomerId: acc.razorpayCustomerId,
+        razorpaySubscriptionId: acc.razorpaySubscriptionId,
         createdAt: acc.createdAt,
         updatedAt: acc.updatedAt,
       };
@@ -302,8 +310,9 @@ export class PrismaUsageRepository implements UsageRepository {
     name?: string | null;
     tier?: UserAccountTier;
     status?: string;
-    stripeCustomerId?: string | null;
-    stripeSubscriptionId?: string | null;
+    billingProvider?: string | null;
+    razorpayCustomerId?: string | null;
+    razorpaySubscriptionId?: string | null;
   }): Promise<PersistedUserAccount> {
     try {
       const acc = await this.prisma.userAccount.upsert({
@@ -314,19 +323,21 @@ export class PrismaUsageRepository implements UsageRepository {
           name: account.name ?? null,
           tier: account.tier || "free",
           status: account.status || "active",
-          stripeCustomerId: account.stripeCustomerId ?? null,
-          stripeSubscriptionId: account.stripeSubscriptionId ?? null,
+          billingProvider: account.billingProvider ?? "razorpay",
+          razorpayCustomerId: account.razorpayCustomerId ?? null,
+          razorpaySubscriptionId: account.razorpaySubscriptionId ?? null,
         },
         update: {
           ...(account.email !== undefined ? { email: account.email } : {}),
           ...(account.name !== undefined ? { name: account.name } : {}),
           ...(account.tier !== undefined ? { tier: account.tier } : {}),
           ...(account.status !== undefined ? { status: account.status } : {}),
-          ...(account.stripeCustomerId !== undefined
-            ? { stripeCustomerId: account.stripeCustomerId }
+          ...(account.billingProvider !== undefined ? { billingProvider: account.billingProvider } : {}),
+          ...(account.razorpayCustomerId !== undefined
+            ? { razorpayCustomerId: account.razorpayCustomerId }
             : {}),
-          ...(account.stripeSubscriptionId !== undefined
-            ? { stripeSubscriptionId: account.stripeSubscriptionId }
+          ...(account.razorpaySubscriptionId !== undefined
+            ? { razorpaySubscriptionId: account.razorpaySubscriptionId }
             : {}),
         },
       });
@@ -338,8 +349,9 @@ export class PrismaUsageRepository implements UsageRepository {
         name: acc.name,
         tier: acc.tier as UserAccountTier,
         status: acc.status,
-        stripeCustomerId: acc.stripeCustomerId,
-        stripeSubscriptionId: acc.stripeSubscriptionId,
+        billingProvider: acc.billingProvider,
+        razorpayCustomerId: acc.razorpayCustomerId,
+        razorpaySubscriptionId: acc.razorpaySubscriptionId,
         createdAt: acc.createdAt,
         updatedAt: acc.updatedAt,
       };
@@ -348,9 +360,9 @@ export class PrismaUsageRepository implements UsageRepository {
     }
   }
 
-  async hasProcessedStripeEvent(eventId: string): Promise<boolean> {
+  async hasProcessedRazorpayEvent(eventId: string): Promise<boolean> {
     try {
-      const found = await this.prisma.stripeWebhookEvent.findUnique({
+      const found = await this.prisma.razorpayWebhookEvent.findUnique({
         where: { id: eventId },
       });
       return found !== null;
@@ -359,9 +371,9 @@ export class PrismaUsageRepository implements UsageRepository {
     }
   }
 
-  async recordStripeEvent(eventId: string, eventType: string): Promise<void> {
+  async recordRazorpayEvent(eventId: string, eventType: string): Promise<void> {
     try {
-      await this.prisma.stripeWebhookEvent.create({
+      await this.prisma.razorpayWebhookEvent.create({
         data: { id: eventId, eventType },
       });
     } catch (error) {
@@ -413,11 +425,11 @@ export function getUsageRepository(): UsageRepository {
       getUsage: async () => unconfiguredErr(),
       recordUsage: async () => unconfiguredErr(),
       getUserAccount: async () => unconfiguredErr(),
-      getUserAccountByStripeCustomerId: async () => unconfiguredErr(),
-      getUserAccountByStripeSubscriptionId: async () => unconfiguredErr(),
+      getUserAccountByRazorpayCustomerId: async () => unconfiguredErr(),
+      getUserAccountByRazorpaySubscriptionId: async () => unconfiguredErr(),
       upsertUserAccount: async () => unconfiguredErr(),
-      hasProcessedStripeEvent: async () => unconfiguredErr(),
-      recordStripeEvent: async () => unconfiguredErr(),
+      hasProcessedRazorpayEvent: async () => unconfiguredErr(),
+      recordRazorpayEvent: async () => unconfiguredErr(),
     };
   }
 

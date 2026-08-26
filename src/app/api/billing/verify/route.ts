@@ -20,46 +20,46 @@ export async function POST(request: Request): Promise<Response> {
         {
           error: {
             code: "VALIDATION_ERROR",
-            message: "Sign in to upgrade your account plan.",
+            message: "Sign in to verify payment.",
           },
         },
         { status: 401, headers: JSON_RESPONSE_HEADERS },
       );
     }
 
-    let planId = "pro";
+    const body = (await request.json()) as {
+      razorpayPaymentId?: string;
+      razorpaySubscriptionId?: string;
+      razorpaySignature?: string;
+    };
 
-    try {
-      const contentType = request.headers.get("content-type") || "";
-      if (contentType.includes("application/json")) {
-        const body = (await request.json()) as { planId?: string };
-        if (body.planId) planId = body.planId;
-      }
-    } catch {
-      // Default to planId = "pro"
-    }
-
-    if (planId !== "pro") {
+    if (
+      !body.razorpayPaymentId ||
+      !body.razorpaySubscriptionId ||
+      !body.razorpaySignature
+    ) {
       return Response.json(
         {
           error: {
             code: "VALIDATION_ERROR",
-            message: "Only the PRO plan is currently available for checkout.",
+            message: "Missing Razorpay payment signature parameters.",
           },
         },
         { status: 400, headers: JSON_RESPONSE_HEADERS },
       );
     }
 
-    const sessionResult = await getBillingService().createCheckoutSession({
+    const result = await getBillingService().verifyPayment({
       identity,
-      planId: "pro",
+      razorpayPaymentId: body.razorpayPaymentId,
+      razorpaySubscriptionId: body.razorpaySubscriptionId,
+      razorpaySignature: body.razorpaySignature,
     });
 
-    return Response.json(sessionResult, { status: 200, headers: JSON_RESPONSE_HEADERS });
+    return Response.json(result, { status: 200, headers: JSON_RESPONSE_HEADERS });
   } catch (error) {
     const body = toErrorResponseBody(error);
-    const status = isProcessingError(error) ? error.status : 500;
+    const status = isProcessingError(error) ? error.status : 400;
     return Response.json(body, { status, headers: JSON_RESPONSE_HEADERS });
   }
 }
