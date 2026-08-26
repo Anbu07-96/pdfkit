@@ -2,6 +2,9 @@
   "name": "pdfkit",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "postinstall": "node scripts/generate-prisma-client.js",
     "dev": "next dev",
