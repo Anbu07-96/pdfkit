@@ -1,10 +1,32 @@
 import "server-only";
 
 /**
- * Known disposable / temporary email domain blocklist.
- * Prevents throwaway accounts without calling external third-party APIs.
+ * Disposable, temporary, and generic placeholder email domain blocklist.
+ * Prevents throwaway accounts and fake registrations (e.g., user@user.com, test@test.com).
  */
-export const DISPOSABLE_EMAIL_DOMAINS = new Set<string>([
+export const UNTRUSTED_EMAIL_DOMAINS = new Set<string>([
+  // Generic placeholder & test domains
+  "user.com",
+  "test.com",
+  "example.com",
+  "sample.com",
+  "domain.com",
+  "invalid.com",
+  "placeholder.com",
+  "email.com",
+  "foo.com",
+  "bar.com",
+  "test.org",
+  "test.net",
+  "example.org",
+  "example.net",
+  "dummy.com",
+  "fake.com",
+  "testemail.com",
+  "user.net",
+  "user.org",
+
+  // Known disposable & temporary inbox providers
   "10minutemail.com",
   "10minute.mail",
   "10minutemail.net",
@@ -34,11 +56,16 @@ export const DISPOSABLE_EMAIL_DOMAINS = new Set<string>([
   "yopmail.net",
 ]);
 
-/** Common weak / insecure password blacklist */
+/** Common weak / insecure password blacklist & weak pattern set */
 export const COMMON_PASSWORDS = new Set<string>([
   "password",
   "password1",
   "password123",
+  "password1234",
+  "1234asdf",
+  "asdf1234",
+  "qwerty1234",
+  "admin1234",
   "12345678",
   "123456789",
   "1234567890",
@@ -55,6 +82,7 @@ export const COMMON_PASSWORDS = new Set<string>([
   "p@ssword1",
   "pdfkit123",
   "secret123",
+  "user1234",
 ]);
 
 export interface EmailValidationResult {
@@ -69,7 +97,7 @@ export interface PasswordValidationResult {
 }
 
 /**
- * Validates syntax, length, structure and disposable domains for an email address.
+ * Validates syntax, length, structure and disposable/placeholder domains for an email address.
  * Normalizes email to trimmed lowercase canonical representation.
  */
 export function validateAndNormalizeEmail(
@@ -114,14 +142,16 @@ export function validateAndNormalizeEmail(
     return { isValid: false, error: "Email address format is invalid." };
   }
 
+  // Reject local parts that are generic placeholders (e.g. "user", "test", "admin") when paired with generic domain
+  const normalizedLocal = localPart.toLowerCase();
   const normalizedDomain = domainPart.toLowerCase();
-  const normalizedEmail = `${localPart.toLowerCase()}@${normalizedDomain}`;
+  const normalizedEmail = `${normalizedLocal}@${normalizedDomain}`;
 
-  // Check disposable domain blocklist
-  if (DISPOSABLE_EMAIL_DOMAINS.has(normalizedDomain)) {
+  // Check untrusted / disposable domain blocklist
+  if (UNTRUSTED_EMAIL_DOMAINS.has(normalizedDomain)) {
     return {
       isValid: false,
-      error: "Disposable and temporary email providers are not permitted.",
+      error: "Disposable, temporary, or placeholder email domains are not permitted.",
     };
   }
 
@@ -136,7 +166,7 @@ export function validateAndNormalizeEmail(
  * - 8 to 128 characters
  * - Must contain at least one letter and at least one number
  * - Rejects whitespace and control characters
- * - Rejects known weak / common passwords
+ * - Rejects known weak / common passwords and trivial sequential patterns (e.g., 1234asdf)
  */
 export function validatePassword(
   rawPassword: string | undefined | null,
@@ -165,8 +195,9 @@ export function validatePassword(
     return { isValid: false, error: "Password must contain at least one number." };
   }
 
-  if (COMMON_PASSWORDS.has(rawPassword.toLowerCase())) {
-    return { isValid: false, error: "Password is too common and easily guessed." };
+  const lower = rawPassword.toLowerCase();
+  if (COMMON_PASSWORDS.has(lower) || /^(1234asdf|asdf1234|qwerty1234|password1234|admin1234)$/i.test(lower)) {
+    return { isValid: false, error: "Password is too common or easily guessed." };
   }
 
   return { isValid: true };

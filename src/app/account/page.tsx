@@ -6,10 +6,11 @@ import { formatBytes } from "@/lib/utils/format";
 import { Badge } from "@/components/ui/badge";
 import { ContentPage, Prose } from "@/components/layout/content-page";
 import { UpgradeButton } from "@/components/billing/upgrade-button";
+import { siteConfig } from "@/lib/config/site";
 
 export const metadata: Metadata = {
   title: "Account",
-  description: "View and manage your PDFKit account, plan, billing and usage quotas.",
+  description: "View and manage your account, plan, billing and usage quotas.",
 };
 
 export default async function AccountPage() {
@@ -101,7 +102,7 @@ export default async function AccountPage() {
             </div>
 
             <p className="mt-4 text-xs text-muted">
-              PDFKit keeps all 29 online tools fully accessible to anonymous visitors and free account holders within daily quotas.
+              {siteConfig.name} keeps all 33 online tools fully accessible to anonymous visitors and free account holders within daily quotas.
             </p>
           </div>
         </div>

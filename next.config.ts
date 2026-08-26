@@ -29,9 +29,9 @@ const nextConfig: NextConfig = {
   // Sandboxed/proxied preview hosts used during development.
   allowedDevOrigins: ["*.e2b.app", "*.app.github.dev", "*.gitpod.io"],
   poweredByHeader: false,
-  // The pdfium rasterizer ships as WebAssembly; leave it to Node's resolver
-  // instead of bundling it into the server output.
-  serverExternalPackages: ["@hyzyla/pdfium"],
+  // Leave pdfium (WebAssembly) and exceljs (Node stream/zip engine) to Node's
+  // native resolver instead of bundling them into server output.
+  serverExternalPackages: ["@hyzyla/pdfium", "exceljs"],
   async headers() {
     return [
       {
