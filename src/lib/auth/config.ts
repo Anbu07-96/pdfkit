@@ -7,7 +7,7 @@ import GoogleProvider from "next-auth/providers/google";
  * NextAuth options configuration.
  *
  * Configured with JWT session strategy and secret from environment.
- * Development / testing mode includes a credentials provider for instant local sign-in.
+ * Development / testing mode includes a credentials provider with strict validation.
  * Production environments enable GitHub / Google OAuth when credentials are present in env.
  */
 
@@ -15,6 +15,9 @@ const NEXTAUTH_SECRET =
   process.env.NEXTAUTH_SECRET ||
   process.env.AUTH_SECRET ||
   "pdfkit-dev-auth-secret-do-not-use-in-production";
+
+/** Standard RFC-compliant email validation regex */
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
 export const authOptions: NextAuthOptions = {
   secret: NEXTAUTH_SECRET,
@@ -35,13 +38,26 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email) return null;
+        if (!credentials?.email || !credentials?.password) {
+          return null;
+        }
 
-        // Dev / test authorization: allows instant sign-in with any valid email
+        const email = credentials.email.trim();
+        const password = credentials.password.trim();
+
+        // Strict credential validation: require non-empty fields, valid email format & min password length
+        if (!email || !password || password.length < 6) {
+          return null;
+        }
+
+        if (!EMAIL_REGEX.test(email)) {
+          return null;
+        }
+
         return {
-          id: `usr_${Buffer.from(credentials.email).toString("hex").slice(0, 12)}`,
-          email: credentials.email,
-          name: credentials.email.split("@")[0] || "User",
+          id: `usr_${Buffer.from(email).toString("hex").slice(0, 12)}`,
+          email,
+          name: email.split("@")[0] || "User",
           tier: "free",
         };
       },

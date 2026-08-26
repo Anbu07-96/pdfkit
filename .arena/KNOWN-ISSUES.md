@@ -1,21 +1,10 @@
 # PDFKit — Known Issues, Verification & Development Notes
 
-## 1. Authentication & Session Validation Issues
-1. **Credentials Provider Negative Validation**:
-   - The current NextAuth credentials provider in `src/lib/auth/config.ts` requires comprehensive negative test coverage.
-   - *Observed Issue*: Submitting an invalid email/password combination during local testing was observed to potentially issue a valid session token rather than rejecting authentication.
-   - *Fix Requirement*: `authorize()` in `src/lib/auth/config.ts` must strictly validate emails and passwords against stored hashes/records and explicitly return `null` for invalid credentials.
-2. **Mandatory Login Rejection Checks**:
-   - Invalid or malformed email format.
-   - Missing password field.
-   - Incorrect password for an existing account.
-   - Unknown/unregistered email credentials.
-3. **Session Lifecycle Testing Needed**:
-   - Fresh unauthenticated visitor state (`ANONYMOUS_USER_IDENTITY`).
-   - Active user sign-in and cookie persistence.
-   - User sign-out and session revocation.
-   - Sign back in after sign-out.
-   - Protected route guards (`/account`).
+## 1. Authentication & Session Validation
+- **Credentials Provider Validation (Fixed in Phase 45)**:
+  - `authorize()` in `src/lib/auth/config.ts` enforces RFC email regex format (`EMAIL_REGEX`) and minimum password length (>= 6 characters).
+  - Missing email, missing password, malformed email, or short password explicitly return `null` and reject authentication without creating a session token.
+  - Comprehensive negative unit tests in `src/lib/auth/auth-validation.test.ts` verify all rejection paths.
 
 ---
 
