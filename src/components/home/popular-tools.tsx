@@ -12,11 +12,11 @@ export function PopularTools() {
       <Container className="py-14 sm:py-16">
         <SectionHeader
           id="popular-tools-title"
-          title="Popular Tools"
-          description="The everyday document tasks people reach for most often. All 8 popular tools are fully available and ready to use online."
+          title="Popular tools"
+          description="The document tasks people reach for most often. Four are ready to use today; the others show their real availability and are still being built."
           action={
             <ButtonLink href="/tools" variant="secondary">
-              Browse all 33 tools
+              Browse all tools
             </ButtonLink>
           }
         />

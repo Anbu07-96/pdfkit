@@ -1,4 +1,4 @@
-import { handleProcessingRequest, methodNotAllowed } from "@/lib/hardening/route";
+import { handleProcessingRequest, methodNotAllowed } from "@/lib/processing/http";
 import type { ReorderPdfPagesOptions } from "@/lib/processing/processors/reorder-pdf-pages";
 
 /**

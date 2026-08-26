@@ -8,8 +8,6 @@ import { ProcessingError, toErrorResponseBody } from "@/lib/processing/errors";
 import { getProcessingLimits, type ProcessingLimits } from "@/lib/processing/limits";
 import { getProcessor } from "@/lib/processing/registry";
 import { validateProcessingInput } from "@/lib/processing/validation/pdf-input";
-import { logStructuredJob } from "@/lib/monitoring/logger";
-import { captureServerException } from "@/lib/monitoring/sentry";
 
 /**
  * The processing service: the single entry point between the API layer and the
@@ -28,6 +26,22 @@ import { captureServerException } from "@/lib/monitoring/sentry";
 
 export interface RunProcessingJobOptions {
   limits?: ProcessingLimits;
+}
+
+/** Diagnostics that never include file names, contents or metadata. */
+function logJob(entry: {
+  toolId: string;
+  outcome: "succeeded" | "failed";
+  fileCount: number;
+  totalBytes: number;
+  durationMs: number;
+  code?: string;
+}) {
+  console.info(
+    `[processing] tool=${entry.toolId} outcome=${entry.outcome}` +
+      ` files=${entry.fileCount} bytes=${entry.totalBytes}` +
+      ` ms=${entry.durationMs}${entry.code ? ` code=${entry.code}` : ""}`,
+  );
 }
 
 export async function runProcessingJob<TOptions>(
@@ -49,7 +63,7 @@ export async function runProcessingJob<TOptions>(
 
     const result = await processor.process(request, { limits });
 
-    logStructuredJob({
+    logJob({
       toolId: request.toolId,
       outcome: "succeeded",
       fileCount,
@@ -61,7 +75,7 @@ export async function runProcessingJob<TOptions>(
   } catch (error) {
     const body = toErrorResponseBody(error);
 
-    logStructuredJob({
+    logJob({
       toolId: request.toolId,
       outcome: "failed",
       fileCount,
@@ -73,7 +87,6 @@ export async function runProcessingJob<TOptions>(
     if (!(error instanceof ProcessingError)) {
       // Keep the real cause in server logs only, without document data.
       console.error(`[processing] unexpected failure in ${request.toolId}`, error);
-      captureServerException(error, { toolId: request.toolId, code: body.error.code });
     }
 
     return { status: "failed", error: body.error };

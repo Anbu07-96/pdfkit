@@ -1,28 +1,27 @@
 import { Lock, Smartphone, Sparkles, Zap } from "lucide-react";
 import { Container } from "@/components/layout/container";
 import { SectionHeader } from "@/components/ui/section-header";
-import { siteConfig } from "@/lib/config/site";
 
 const BENEFITS = [
   {
     icon: Zap,
     title: "Fast",
-    description: "Designed for efficient document workflows with a light interface that loads quickly.",
+    description: "Designed for efficient document workflows, with a light interface that loads quickly.",
   },
   {
     icon: Sparkles,
     title: "Simple",
-    description: "Common document operations without unnecessary complexity, steps, or mandatory sign-up walls.",
+    description: "Common document operations without unnecessary complexity, steps or sign-up walls.",
   },
   {
     icon: Lock,
     title: "Private",
-    description: "In-memory processing in Node.js server RAM ensures files are never saved to disk or logged.",
+    description: "Privacy is treated as a core product requirement rather than an afterthought.",
   },
   {
     icon: Smartphone,
     title: "Everywhere",
-    description: "Designed for desktop, tablet, and mobile, from 320px screens upwards.",
+    description: "Designed for desktop, tablet and mobile, from 320px screens upwards.",
   },
 ];
 
@@ -32,8 +31,8 @@ export function WhyPdfkit() {
       <Container>
         <SectionHeader
           id="why-title"
-          title={`Why ${siteConfig.name}`}
-          description="Core principles guiding product security, privacy, and user experience."
+          title="Why PDFKit"
+          description="Four principles the product is being measured against as it is built."
         />
 
         <ul className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

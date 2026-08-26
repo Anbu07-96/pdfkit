@@ -5,7 +5,6 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { ToastProvider } from "@/components/ui/toast";
-import { SessionProvider } from "@/components/auth/session-provider";
 import { siteConfig } from "@/lib/config/site";
 import { themeInitScript } from "@/lib/theme";
 import "./globals.css";
@@ -51,23 +50,21 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="flex min-h-full flex-col">
-        <SessionProvider>
-          <ThemeProvider>
-            <ToastProvider>
-              <a
-                href="#main"
-                className="sr-only focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:z-[70] focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground"
-              >
-                Skip to main content
-              </a>
-              <SiteHeader />
-              <main id="main" className="flex-1">
-                {children}
-              </main>
-              <SiteFooter />
-            </ToastProvider>
-          </ThemeProvider>
-        </SessionProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <a
+              href="#main"
+              className="sr-only focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:z-[70] focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground"
+            >
+              Skip to main content
+            </a>
+            <SiteHeader />
+            <main id="main" className="flex-1">
+              {children}
+            </main>
+            <SiteFooter />
+          </ToastProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

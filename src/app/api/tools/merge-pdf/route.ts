@@ -1,7 +1,7 @@
 import {
   handleProcessingRequest,
   methodNotAllowed,
-} from "@/lib/hardening/route";
+} from "@/lib/processing/http";
 
 /**
  * Merge PDF API.

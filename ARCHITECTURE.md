@@ -20,8 +20,6 @@ Processing client       src/lib/processing/client.ts      — the only fetch cal
       ↓  HTTP multipart
 API route               src/app/api/tools/<tool>/route.ts (thin)
       ↓
-Hardened handler        src/lib/hardening/route.ts        — guards: length gate, cap, timeout
-      ↓
 HTTP adapter            src/lib/processing/http.ts        — parsing, limits, headers
       ↓
 Processing service      src/lib/processing/service.ts     — validate, run, report
@@ -149,10 +147,6 @@ src/
    │  ├─ client.ts            Browser-side API client (the only fetch)
    │  ├─ validation/          PDF signature and limit checks
    │  └─ processors/          merge-pdf.ts
-   ├─ hardening/
-   │  ├─ config.ts            Timeout/concurrency config (env, documented defaults)
-   │  ├─ guards.ts            Numeric Content-Length gate + job slot counter
-   │  └─ route.ts             Hardened handleProcessingRequest for every tool route
    ├─ config/site.ts          Site metadata and navigation
    ├─ theme.ts                Theme store + pre-paint script
    └─ utils/                  cn(), formatting helpers
@@ -255,7 +249,7 @@ synchronous:
 - an empty query returns the catalog, so the same function powers browsing,
   filtering and searching.
 
-With ~44 entries this needs no index, no debounce and no network call, which is
+With ~42 entries this needs no index, no debounce and no network call, which is
 why search feels instant and works without JavaScript-heavy machinery.
 
 ---
@@ -803,151 +797,6 @@ feature. The number of flattened fields is measured server-side and reported
 in `X-PDFKit-Flattened-Fields`. The output uses the fixed name
 `flattened.pdf`, so hostile source filenames never travel into the response.
 
-## 5p. Production hardening (Phase 28)
-
-Wave 1 hardens the edge of every processing route without changing the
-processing core. `src/lib/hardening/route.ts` exports the handler every
-`/api/tools/*` route now calls; it wraps the unchanged HTTP adapter with
-three guards, each cheap and deterministic:
-
-1. **Numeric Content-Length gate** (`guards.ts`). A present-but-malformed
-   `Content-Length` (non-decimal, negative, fractional, exponential, beyond
-   the safe integer range) is a 400 before one byte of the body is parsed.
-   A missing header is allowed — chunked uploads are legitimate, and the
-   adapter's exact byte accounting still applies.
-2. **Optional concurrency cap** — `PDFKIT_MAX_CONCURRENT_JOBS` (default `0`,
-   no cap; ceiling 1024). A module-level slot counter (one Node process = one
-   instance) admits or refuses; a refused request gets `503 SERVER_BUSY`
-   immediately. There is no queue: this is not a multi-tenant SaaS.
-3. **Request timeout** — `PDFKIT_REQUEST_TIMEOUT_MS` (default 120 s, ceiling
-   600 s). The response race honours the budget with `504 REQUEST_TIMEOUT`,
-   but the job is **not** aborted: pdfium WASM work cannot be cancelled
-   mid-render and pdf-lib has no cancellation token, so an "aborted" claim
-   would be a lie. The job finishes privately, its slot is released only
-   when it actually ends (never when the timeout fires), and the watchdog
-   timer is `unref`'d so it cannot pin the process.
-
-`config.ts` reads both values per request so tests and deployments change
-them without a rebuild. Routes keep `runtime = "nodejs"` and
-`dynamic = "force-dynamic"` — nothing runs on the edge. The Guards/timeout
-behaviour is unit-tested with a stubbed adapter (busy path, timeout path,
-slot lifecycle, unexpected-throw path); every pre-existing route test passes
-through the hardened handler unchanged, which pins the retrofit. A GitHub
-Actions workflow (`ci.yml`) runs lint, typecheck, tests and a production
-build on pushes and PRs to `main`.
-
-## 5q. Password Protect (Phase 29)
-
-pdf-lib deliberately cannot write encryption, so protecting for real needs a
-second implementation: `@pdfsmaller/pdf-encrypt-lite` (~9 KB, built on
-pdf-lib), which applies the classic **RC4 128-bit Standard Security Handler
-(V2/R3)** — key derivation, `/O` and `/U` entries, `/Encrypt` dictionary and
-RC4 stream/string encryption of every indirect object. That is the scheme
-copied verbatim into the interface, the catalog, the route docblock and this
-document. It is never called AES-256, "military-grade" or "zero-knowledge",
-anywhere.
-
-The processor (`processors/password-protect.ts`) opens the input with the
-shared loader first — malformed files map to `INVALID_PDF`, and an
-already-encrypted file is refused with a tool-specific `ENCRYPTED_PDF`
-message instead of being silently re-encrypted. Password options are parsed
-by a browser-safe module (`lib/processing/password-protect.ts`): 1–128
-characters, used exactly as typed, never trimmed. Characters the legacy
-handler cannot encode (PDFDocEncoding) surface as the library's
-`PasswordEncodingError` and map to a 400 with clear Latin-character guidance.
-
-Nothing is claimed that was not measured. Before the artifact is returned
-the processor verifies the promise three ways (any mismatch fails the job):
-the trailer's encryption dictionary reports RC4 128-bit (V2/R3); the bytes
-refuse to open without a password (pdf-lib's default refusal); and the exact
-password supplied reopens the document with every original page. Password
-hygiene is structural and tested: the value never appears in logs (the
-service logs tool/outcome/counts only), error messages/details, names, URLs
-or headers — the route test iterates every response header asserting absence.
-
-## 5r. Unlock PDF (Phase 30)
-
-The inverse tool decrypts with `@pdfsmaller/pdf-decrypt-lite` (~8 KB): RC4
-40-bit (V1/R2) and 128-bit (V2/R3) — the latter exactly matching what
-Password Protect writes, so the protect → unlock round trip is a real test
-over both HTTP routes. Only authentication happens: the supplied password is
-checked against the `/O`/`/U` values; there is no guessing, no recovery. The
-decryption strips `/Encrypt` from the trailer, and the processor proves the
-result is an ordinary PDF by re-opening it without a password and counting
-every page before the download exists.
-
-The inspection step is where the honesty lives, because the decrypt library
-communicates through exceptions:
-
-- a readable unprotected document → `PDF_NOT_ENCRYPTED` — but only *after*
-  the file genuinely parses (a damaged file that merely lacks `/Encrypt` is
-  `INVALID_PDF`, not a false "nothing to remove");
-- the reader's "Unsupported encryption" throw (AES-class, V≥4) →
-  `UNSUPPORTED_ENCRYPTION`, with the supported schemes named in the message;
-- "Incorrect password" → `WRONG_PASSWORD`, and the entry is never echoed;
-- a damaged `/O`/`/U` dictionary → `INVALID_PDF`.
-
-Files that open without a prompt yet carry owner restrictions (empty user
-password) unlock with an empty entry — the workspace says so and a test
-covers it. Known gaps, owned openly: RC4-40 is library-supported but not
-fixture-tested, and the AES reject path is tested with a hand-declared V4/R4
-dictionary (a valid PDF whose trailer declares AES-class parameters), not a
-genuinely AES-encrypted fixture.
-
-## 5s. Add Text (Phase 31)
-
-The third edit-pipeline tool, built exactly on the watermark/page-numbers
-pattern: a browser-safe options module (`lib/processing/add-text.ts`), a
-thin route on the hardened handler, a server processor, and a workspace
-reading options straight from the shared module. Scope is one honest text
-box: up to 500 characters on 20 lines, nine anchor positions, four font
-sizes (12/16/24/36 pt), and the all/first/last page choice.
-
-The processor draws with pdf-lib's WinAnsi Helvetica — real vector text, no
-rasterising — and the tests prove it by re-extracting the output text with
-pdfium (added lines present, original content intact). Two failure modes are
-handled the honest way: characters the standard font cannot encode become a
-400 with clear guidance (never silent replacement), and oversized text is
-scaled down to fit the page (width and height both bounded; the workspace
-discloses the behaviour). The stamped-page count travels in
-`X-PDFKit-Text-Pages`, parsed by the client into the result like the other
-measured headers.
-
-## 5t. Database Usage Metering & Plan Quotas (Phase 43)
-
-**Provider-Neutral Persistence Abstraction (`src/lib/usage/`).**
-The processing layer connects to usage metering through a provider-neutral abstraction (`UsageRepository` & `UsageService`) rather than depending directly on PostgreSQL or Prisma internals:
-
-- `types.ts` — `UsageRecord`, `TierQuotaConfig`, `QuotaPreflightResult`, `UsageRepository`, `PersistedUserAccount`.
-- `config.ts` — Centralized quota limits per tier (`anonymous`: 10 jobs/50MB, `free`: 50 jobs/250MB, `pro`: 500 jobs/2GB, `business`: 5000 jobs/20GB) with environment variable override support.
-- `repository.ts` — `PrismaUsageRepository` (PostgreSQL + Prisma) for production with atomic `increment` updates, `InMemoryUsageRepository` for local development/tests, and `getUsageRepository()` resolver.
-- `quota.ts` — Date period formatting ("YYYY-MM-DD" UTC), preflight quota check calculations, remaining job/byte budget evaluation, and profile summary snapshot.
-- `service.ts` — Server-only high-level usage service (`evaluatePreflight`, `recordJobSuccess`, `getUserSummary`).
-
-**Centralized Gate Integration.**
-Quota preflight checks run in `src/lib/hardening/route.ts` right after Content-Length validation and identity resolution, *before* reading request bodies or acquiring concurrency slots. Requests exceeding job count or byte budgets are rejected with `429 QUOTA_EXCEEDED` without consuming quota or executing PDF operations. Successful jobs record usage metrics upon completion.
-
----
-
-## 5u. Production Stripe Billing & Subscription Architecture (Phase 44)
-
-**Provider-Isolated Stripe Billing Layer (`src/lib/billing/`).**
-The Stripe integration is isolated behind a server-only service boundary (`BillingService`) to decouple checkout and webhook logic from application components and PDF processing routes:
-
-- `types.ts` — `BillingConfig`, `CheckoutSessionOptions`, `CheckoutSessionResult`, `WebhookResult`.
-- `config.ts` — Reads `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRO_PRICE_ID`. Safe fallback (`isConfigured: false`) when credentials are unset.
-- `stripe.ts` — Lazy Stripe SDK client initializer (`getStripeClient()`).
-- `service.ts` — High-level `BillingService`:
-  - `createCheckoutSession`: Authenticates user, reuses or creates Stripe Customer ID (`UserAccount.stripeCustomerId`), generates Stripe Checkout session for `"pro"` plan.
-  - `handleWebhookEvent`: Verifies Stripe webhook signature (`STRIPE_WEBHOOK_SECRET`), checks idempotency via `StripeWebhookEvent` model, and processes subscription lifecycle events (`checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`) to synchronize `UserAccount.tier` (`pro` vs `free`).
-
-**Endpoints & Account UI Integration.**
-- `POST /api/billing/checkout` — Authenticated checkout creation endpoint. Rejects unauthenticated users (401) and arbitrary price/tier requests (400).
-- `POST /api/billing/webhook` — Webhook ingestion endpoint. Verifies raw body signature (400 on bad signature), executes idempotent account state sync.
-- `/account` & `<UpgradeButton />` — Displays subscription status, PRO plan availability, and checkout redirect button while clearly reinforcing that PDF processing remains 100% available to anonymous and free users within daily quotas.
-
----
-
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:
@@ -969,10 +818,8 @@ tool is now a fixed, four-step recipe:
 1. implement a `ToolProcessor` under `src/lib/processing/processors/`
    (reusing `pages.ts` for page selection and `pdf-document.ts` for pdf-lib);
 2. register it in `registry.ts` and add its input rules to `rules.ts`;
-3. add a ~15-line route handler that calls the hardened
-   `handleProcessingRequest` (`src/lib/hardening/route.ts`, keeping
-   `runtime = "nodejs"` and `dynamic = "force-dynamic"`), with a `readOptions`
-   callback if the tool takes options;
+3. add a ~15-line route handler that calls `handleProcessingRequest`, with a
+   `readOptions` callback if the tool takes options;
 4. add a workspace component, map it in `components/tools/workspaces`, and flip
    the catalog status to `AVAILABLE`.
 

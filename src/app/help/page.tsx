@@ -40,9 +40,6 @@ export default function HelpPage() {
             then drag them or use the arrow buttons to put them in a new order.
           </li>
           <li>
-            <strong>Organize PDF</strong> — reorder, rotate and delete pages in a single visual workflow.
-          </li>
-          <li>
             <strong>Rotate PDF</strong> — turn individual pages, or every page at
             once, and watch the previews update before you save.
           </li>
@@ -103,37 +100,6 @@ export default function HelpPage() {
             editable Word document. Text only: formatting, images, tables and
             exact layout are not preserved.
           </li>
-          <li>
-            <strong>Add Text</strong> — add a multi-line text box as real,
-            searchable text: nine positions, four sizes, all/first/last pages.
-            Oversized text is scaled down to fit instead of being clipped.
-          </li>
-          <li>
-            <strong>Add Shapes</strong> — add vector rectangles, circles,
-            ellipses and lines with customizable colors, stroke widths and page selection.
-          </li>
-          <li>
-            <strong>Add Images</strong> — insert logos, photos or stamps (JPG or PNG) into a PDF page.
-          </li>
-          <li>
-            <strong>Highlight</strong> — add semi-transparent visual color overlays. Highlighting is a visual marker, not redaction.
-          </li>
-          <li>
-            <strong>Draw</strong> — draw freehand vector strokes and shapes directly on PDF pages.
-          </li>
-          <li>
-            <strong>Annotations</strong> — embed native PDF sticky note comments (/Text) and URI hyperlinks (/Link).
-          </li>
-          <li>
-            <strong>Password Protect</strong> — encrypt a PDF so opening it
-            requires your password. Real RC4 128-bit encryption, verified
-            before download — honestly labelled, not AES-256.
-          </li>
-          <li>
-            <strong>Unlock PDF</strong> — remove a password you already have
-            from your own file (RC4-protected files only; AES files are
-            refused with a clear message). Not password recovery.
-          </li>
           <li>Browsing the tool catalog by category.</li>
           <li>Searching tools by name, description or category.</li>
           <li>Opening any tool page to see what the tool will do and what it accepts.</li>
@@ -143,7 +109,7 @@ export default function HelpPage() {
         <h2>What does not work yet</h2>
         <ul>
           <li>
-            Every tool other than the twenty-seven above. Their upload areas are
+            Every tool other than the eighteen above. Their upload areas are
             intentionally disabled and labelled <strong>Coming soon</strong>.
           </li>
           <li>There are no accounts, no cloud storage, no API keys and no billing.</li>

@@ -1,4 +1,4 @@
-import { handleProcessingRequest, methodNotAllowed } from "@/lib/hardening/route";
+import { handleProcessingRequest, methodNotAllowed } from "@/lib/processing/http";
 
 /**
  * PDF to Word API — text only.

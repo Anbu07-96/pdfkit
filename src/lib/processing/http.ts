@@ -12,9 +12,6 @@ import { getProcessingLimits, type ProcessingLimits } from "@/lib/processing/lim
 import { runProcessingJob } from "@/lib/processing/service";
 import { createZipArchive } from "@/lib/processing/zip";
 import { formatBytes } from "@/lib/utils/format";
-import { getUserIdentity } from "@/lib/auth/session";
-import type { UserIdentity } from "@/lib/auth/types";
-import { getUsageService } from "@/lib/usage/service";
 
 /**
  * HTTP adapter for the processing service.
@@ -45,6 +42,12 @@ export const JSON_RESPONSE_HEADERS = JSON_HEADERS;
 
 /**
  * Hand document bytes to `Response` without copying them.
+ *
+ * `BodyInit` is typed as an ArrayBuffer-backed view, while the processing
+ * contract types bytes as plain `Uint8Array` (`ArrayBufferLike`). At runtime
+ * every processor produces exactly the ArrayBuffer-backed array the platform
+ * expects, so this declares that once, at the boundary, instead of doubling
+ * the peak memory of every large download with a defensive copy.
  */
 function asResponseBody(bytes: Uint8Array): BodyInit {
   return bytes as Uint8Array<ArrayBuffer>;
@@ -69,14 +72,15 @@ function errorResponse(error: unknown): Response {
   });
 }
 
-/** `report final.pdf` → `report final.pdf`; strips anything header-unsafe. */
-function sanitizeFileName(name: string, fallback: string): string {
+/** `report final.pdf` → `report final.pdf`; strips anything header-unsafe. */function sanitizeFileName(name: string, fallback: string): string {
   const cleaned = name
     .replace(/[\r\n"\\]/g, "")
     .replace(/[/\\]/g, "-")
     // Strip C0 control characters so the header cannot be split.
     .replace(/[\u0000-\u001f\u007f]/g, "")
-    // Header values must be ByteStrings
+    // Header values must be ByteStrings: characters above U+00FF would make
+    // the Response constructor throw, so they are replaced defensively no
+    // matter where the name came from.
     .replace(/[^\u0000-\u00ff]/g, "_")
     .trim();
   return cleaned.length > 0 && cleaned.length <= 120 ? cleaned : fallback;
@@ -103,7 +107,9 @@ async function readUploadedFiles(
     };
   }
 
-  // `content-length` covers the whole multipart envelope
+  // `content-length` covers the whole multipart envelope (boundaries and part
+  // headers), so a small allowance keeps a request that is just under the file
+  // budget from being rejected here. Exact accounting happens below.
   const envelopeAllowance = Math.ceil(limits.maxTotalSize * 0.05) + 8 * 1024;
   const declaredLength = Number(request.headers.get("content-length") ?? "");
   if (
@@ -169,14 +175,9 @@ async function readUploadedFiles(
         };
       }
 
-      // Sanitize input file name against path traversal
-      const rawName = entry.name ? entry.name.split(/[/\\]/).pop() || entry.name : "";
-      const safeInputName =
-        rawName.replace(/[\u0000-\u001f\u007f]/g, "").trim() || `document-${index + 1}.pdf`;
-
       files.push({
         id: `input-${index + 1}`,
-        name: safeInputName,
+        name: entry.name || `document-${index + 1}.pdf`,
         size: entry.size,
         mimeType: entry.type ?? "",
         bytes: new Uint8Array(await entry.arrayBuffer()),
@@ -198,13 +199,11 @@ export interface HandleProcessingRequestOptions<TOptions> {
    * processor validates them server-side.
    */
   readOptions?: (form: FormData) => TOptions;
-  /** Resolved user identity from auth layer (Phase 42/43). */
-  identity?: UserIdentity;
 }
 
 export async function handleProcessingRequest<TOptions = Record<string, unknown>>(
   request: Request,
-  { toolId, fallbackFileName, readOptions, identity }: HandleProcessingRequestOptions<TOptions>,
+  { toolId, fallbackFileName, readOptions }: HandleProcessingRequestOptions<TOptions>,
 ): Promise<Response> {
   const limits = getProcessingLimits();
 
@@ -233,26 +232,19 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
     return jsonError("PROCESSING_ERROR", "No document was produced.");
   }
 
-  // Record successful usage metering (Phase 43)
-  const userIdentity = identity || (await getUserIdentity());
-  const totalProcessedBytes = upload.files.reduce((sum, f) => sum + f.size, 0);
-  try {
-    await getUsageService().recordJobSuccess(userIdentity, totalProcessedBytes);
-  } catch (usageError) {
-    console.error("[usage] Failed to record usage after successful job", usageError);
-  }
-
   const metaHeaders: Record<string, string> = {
     "x-pdfkit-artifacts": String(result.artifacts.length),
     ...(result.meta?.pages !== undefined
       ? { "x-pdfkit-pages": String(result.meta.pages) }
       : {}),
+    // Pages in the produced document, when it differs from the input.
     ...(result.meta?.outputPages !== undefined
       ? { "x-pdfkit-output-pages": String(result.meta.outputPages) }
       : {}),
   };
 
-  // Compression statistics (Compress PDF)
+  // Compression statistics (Compress PDF): the interface must show the sizes
+  // and savings the server actually measured, never client-side guesses.
   if (result.meta?.originalBytes !== undefined) {
     metaHeaders["x-pdfkit-original-bytes"] = String(result.meta.originalBytes);
   }
@@ -282,7 +274,8 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
     metaHeaders["x-pdfkit-raster-skipped"] = String(result.meta.rasterSkipped);
   }
 
-  // Metadata removal facts
+  // Metadata removal facts (Remove Metadata): the interface reports what the
+  // server found and verified, never a client-side guess.
   if (result.meta?.removedFields !== undefined) {
     metaHeaders["x-pdfkit-removed-fields"] = String(result.meta.removedFields);
   }
@@ -293,7 +286,8 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
     metaHeaders["x-pdfkit-verification"] = String(result.meta.verification);
   }
 
-  // Text extraction facts
+  // Text extraction facts (PDF to Word): the interface reports how much text
+  // the server actually found, never a guess.
   if (result.meta?.characters !== undefined) {
     metaHeaders["x-pdfkit-characters"] = String(result.meta.characters);
   }
@@ -304,40 +298,37 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
     metaHeaders["x-pdfkit-mode"] = String(result.meta.mode);
   }
 
-  // Watermark facts
+  // Watermark facts: the interface reports how many pages the server stamped.
   if (result.meta?.watermarkedPages !== undefined) {
     metaHeaders["x-pdfkit-watermarked-pages"] = String(
       result.meta.watermarkedPages,
     );
   }
 
-  // Add Text facts
-  if (result.meta?.textPages !== undefined) {
-    metaHeaders["x-pdfkit-text-pages"] = String(result.meta.textPages);
-  }
-
-  // Page-number facts
+  // Page-number facts: how many pages received a number.
   if (result.meta?.numberedPages !== undefined) {
     metaHeaders["x-pdfkit-numbered-pages"] = String(result.meta.numberedPages);
   }
 
-  // Crop facts
+  // Crop facts: how many pages were cropped (CropBox set).
   if (result.meta?.croppedPages !== undefined) {
     metaHeaders["x-pdfkit-cropped-pages"] = String(result.meta.croppedPages);
   }
 
-  // Flatten facts
+  // Flatten facts: how many form fields the server flattened into content.
   if (result.meta?.flattenedFields !== undefined) {
     metaHeaders["x-pdfkit-flattened-fields"] = String(
       result.meta.flattenedFields,
     );
   }
 
-  // Single artifact delivery
+  // A single document is streamed as-is; several are bundled into a ZIP.
   if (result.artifacts.length === 1) {
     const artifact = result.artifacts[0];
     const fileName = sanitizeFileName(artifact.name, fallbackFileName);
 
+    // The bytes are handed over as-is: processors produce fresh arrays, and
+    // copying would double the peak memory of every large download.
     return new Response(asResponseBody(artifact.bytes), {
       status: 200,
       headers: {
@@ -374,12 +365,27 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
   });
 }
 
+/**
+ * Report a document's real page count.
+ *
+ * Shared by every page-level tool; the browser uses it to show "24 pages" and
+ * to validate ranges before submitting, but the processors re-check everything
+ * anyway.
+ */
 export interface SingleUploadedPdf {
   file: ProcessingInputFile;
+  /** The parsed body, for routes that also read option fields. */
   form: FormData;
+  /** Drops the in-memory bytes. Call in a `finally`. */
   release: () => void;
 }
 
+/**
+ * Read exactly one uploaded PDF, applying every shared upload check.
+ *
+ * Used by the page-count and thumbnail endpoints so neither re-implements
+ * multipart parsing, size accounting or file-count rules.
+ */
 export async function readSingleUploadedPdf(
   request: Request,
 ): Promise<SingleUploadedPdf | { response: Response }> {
@@ -405,6 +411,13 @@ export async function readSingleUploadedPdf(
   };
 }
 
+/**
+ * Report a document's real page count.
+ *
+ * Shared by every page-level tool; the browser uses it to show "24 pages" and
+ * to validate selections before submitting, but the processors re-check
+ * everything anyway.
+ */
 export async function handleInspectRequest(request: Request): Promise<Response> {
   const upload = await readSingleUploadedPdf(request);
   if ("response" in upload) return upload.response;
@@ -418,10 +431,12 @@ export async function handleInspectRequest(request: Request): Promise<Response> 
     }
     return errorResponse(error);
   } finally {
+    // Release the buffer as soon as the page count has been read.
     upload.release();
   }
 }
 
+/** Consistent 405 for unsupported verbs on a processing route. */
 export function methodNotAllowed(allow = "POST"): Response {
   return Response.json(
     {

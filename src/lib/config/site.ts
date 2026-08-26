@@ -1,10 +1,10 @@
 import { TOOL_CATEGORIES } from "@/lib/tools";
 
 export const siteConfig = {
-  name: process.env.NEXT_PUBLIC_APP_NAME ?? "PDFKit",
+  name: "PDFKit",
   tagline: "Your documents. Processed simply.",
   description:
-    "A fast, privacy-conscious online platform for everyday PDF and document processing tasks.",
+    "PDFKit is a fast, privacy-conscious web app for everyday PDF and document tasks. The product is in early development — tools are being built and released one by one.",
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
   /** Set NEXT_PUBLIC_CONTACT_EMAIL to override in a real deployment. */
   contactEmail: process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "",

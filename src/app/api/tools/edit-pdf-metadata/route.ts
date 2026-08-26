@@ -1,4 +1,4 @@
-import { handleProcessingRequest, methodNotAllowed } from "@/lib/hardening/route";
+import { handleProcessingRequest, methodNotAllowed } from "@/lib/processing/http";
 import type { EditPdfMetadataOptions } from "@/lib/processing/processors/edit-pdf-metadata";
 
 /**

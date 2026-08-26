@@ -6,9 +6,9 @@ PDFKit is a fast, privacy-conscious web application for everyday PDF and
 document work — organising pages, converting formats, editing, securing, and
 later OCR and AI document intelligence.
 
-> ## Current status: Phase 46A — Tool Feasibility Audit & Local Redaction
+> ## Current status: Phase 26 — Flatten PDF
 >
-> **Thirty tools genuinely work:**
+> **Eighteen tools genuinely work:**
 >
 > - **Merge PDF** — combine several PDFs in the order you choose.
 > - **Split PDF** — split every page into its own file, or split by page ranges;
@@ -16,7 +16,6 @@ later OCR and AI document intelligence.
 > - **Extract PDF Pages** — keep only the pages you list, in the order you list them.
 > - **Delete PDF Pages** — remove the pages you list and keep the rest.
 > - **Reorder PDF Pages** — real page previews, drag or keyboard reordering.
-> - **Organize PDF** — reorder, rotate and delete pages in a single visual workflow.
 > - **Rotate PDF** — turn individual pages or the whole document, with previews
 >   that update to match.
 > - **Compress PDF** — real size reduction with honest before/after numbers;
@@ -52,24 +51,6 @@ later OCR and AI document intelligence.
 >   are rejected before any change (flattening would invalidate the
 >   signature), and the tool says plainly that **document scripts are NOT
 >   removed** and that **flattening is irreversible**.
-> - **Password Protect** — real RC4 128-bit encryption (PDF Standard Security
->   Handler V2/R3): opening the document genuinely requires the password.
->   Verified, not just claimed — and honestly labelled: it is **not** AES-256.
->   The password is used in memory for the request only and is never logged.
-> - **Unlock PDF** — remove a password you already have from an RC4-protected
->   PDF (40-bit and 128-bit; the output is verified to open without any
->   password). AES-protected files are refused honestly, and a wrong password
->   is reported without ever being echoed. Not password recovery — the
->   supplied password is only authenticated.
-> - **Add Text** — add a multi-line text box as real, searchable vector text
->   (nine anchor positions, four font sizes, all/first/last pages) without
->   rasterising pages. Oversized text is scaled down to fit — stated plainly.
-> - **Add Shapes** — add vector rectangles, circles, ellipses, and lines with
->   custom stroke width, stroke color, and fill color, strictly constrained to page boundaries.
-> - **Add Images** — insert JPG or PNG logos, photos, or stamps into a PDF page.
-> - **Highlight** — add visual semi-transparent color overlays to mark areas (not redaction).
-> - **Draw** — draw freehand vector strokes and shapes directly on PDF pages.
-> - **Annotations** — embed native PDF sticky note comments (/Text) and URI hyperlinks (/Link).
 >
 > **Every other tool is still unimplemented** and honestly marked
 > **Coming soon**, with its upload area disabled. There is no simulated
@@ -92,13 +73,9 @@ later OCR and AI document intelligence.
 - [Compress PDF](#compress-pdf)
 - [Images to PDF](#images-to-pdf)
 - [PDF to JPG and PDF to PNG](#pdf-to-jpg-and-pdf-to-png)
-- [Password Protect](#password-protect)
-- [Unlock PDF](#unlock-pdf)
-- [Add Text](#add-text)
 - [Page previews](#page-previews)
 - [Page ranges](#page-ranges)
 - [Processing limits](#processing-limits)
-- [Production hardening](#production-hardening)
 - [What is deliberately not implemented](#what-is-deliberately-not-implemented)
 - [Project structure](#project-structure)
 - [Environment variables](#environment-variables)
@@ -118,12 +95,12 @@ A single web app for common document tasks, built around three product rules:
 3. **Speed and reach** — a light interface that works from 320px phones to large
    desktop screens, keyboard-accessible throughout.
 
-The catalog describes **44 tools** in six categories — Organize, Convert, Edit,
-Security, OCR and AI — of which **27 are implemented** today: Merge PDF, Split
+The catalog describes **42 tools** in six categories — Organize, Convert, Edit,
+Security, OCR and AI — of which **18 are implemented** today: Merge PDF, Split
 PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF Pages, Rotate PDF,
 Compress PDF, Images to PDF, PNG to PDF, PDF to JPG, PDF to PNG, PDF to Word,
-Edit PDF Metadata, Remove Metadata, Watermark, Add Text, Page Numbers, Crop,
-Flatten PDF, Password Protect and Unlock PDF.
+Edit PDF Metadata, Remove Metadata, Watermark, Page Numbers, Crop and
+Flatten PDF.
 
 ---
 
@@ -234,46 +211,6 @@ npm start
   every save, so editing them would silently be lost (stated in the interface)
 - Keywords are stored comma-separated and read back as a list; pages and
   content are never touched, and removals are proven by re-reading the output
-
-**Password Protect (real, end to end)**
-
-- Real RC4 128-bit encryption (PDF Standard Security Handler V2/R3) via
-  `@pdfsmaller/pdf-encrypt-lite`; the interface and docs say exactly that and
-  never claim AES-256, "military-grade" or "zero-knowledge"
-- The output is verified three ways before it is returned: it declares RC4
-  128-bit, it refuses to open without a password, and the password given
-  reopens it with every page intact
-- Already-encrypted PDFs are refused with a clear message; characters the
-  legacy security handler cannot encode are rejected, never silently dropped
-- The password travels once as a multipart field, lives in memory for the
-  request only, and never appears in logs, URLs, file names, headers or error
-  bodies (a test proves the absence)
-
-**Unlock PDF (real, end to end)**
-
-- Real decryption via `@pdfsmaller/pdf-decrypt-lite` (RC4 40-bit V1/R2 and
-  128-bit V2/R3 — the latter is exactly what Password Protect writes, and the
-  protect → unlock round trip is tested end to end over both real routes)
-- The `/Encrypt` dictionary is stripped: the output is verified to open with
-  no password before the download exists, with every page intact
-- Honest refusals with dedicated codes: unprotected input
-  (`PDF_NOT_ENCRYPTED`), wrong password (`WRONG_PASSWORD`, never echoed),
-  AES-class files (`UNSUPPORTED_ENCRYPTION`) — it is not password recovery
-- Files that open without a prompt yet carry owner restrictions can be
-  unlocked with an empty entry, and the workspace says so
-
-**Add Text (real, end to end)**
-
-- Real vector text drawn with pdf-lib's standard Latin font — pages are never
-  rasterised, so the output stays a real, searchable PDF (proven in tests by
-  re-extracting the text with pdfium)
-- One text box per request: multi-line (up to 20 lines / 500 characters), nine
-  anchor positions, four font sizes, and all/first/last page choice
-- Text that would overflow the page is scaled down to fit instead of being
-  silently clipped; characters the font cannot encode are rejected with a
-  clear message, never replaced
-- The stamped-page count is measured on the server and reported in
-  `X-PDFKit-Text-Pages`
 
 **Images to PDF (real, end to end)**
 
@@ -398,7 +335,7 @@ why PDFKit, FAQ, footer.
 
 **Tool architecture**
 
-- One central catalog (`src/lib/tools`) with 44 tools and 6 categories
+- One central catalog (`src/lib/tools`) with 42 tools and 6 categories
 - Status model `AVAILABLE | COMING_SOON | PRO | DISABLED` (everything is
   `COMING_SOON` today, enforced by a test)
 - Client-side search over name, description, category and keywords
@@ -451,13 +388,7 @@ Failures return JSON:
 | `TOO_MANY_FILES` | 413 | More files than the configured maximum |
 | `TOTAL_SIZE_EXCEEDED` | 413 | Combined upload exceeds the total limit |
 | `INVALID_PDF` | 422 | Content is not a readable PDF (signature or structure) |
-| `ENCRYPTED_PDF` | 422 | The document already has a password (Password Protect refuses to re-encrypt) |
-| `PDF_NOT_ENCRYPTED` | 422 | Unlock PDF was given a document with no protection to remove |
-| `WRONG_PASSWORD` | 422 | The supplied password does not authenticate (and is never echoed) |
-| `UNSUPPORTED_ENCRYPTION` | 422 | AES-class encryption (V≥4); Unlock PDF supports RC4 only |
-| `INVALID_TEXT_CONFIGURATION` | 400 | Add Text options fail validation (empty/oversized text, unknown option) |
-| `SERVER_BUSY` | 503 | The optional concurrency cap is reached — retry shortly (no queue) |
-| `REQUEST_TIMEOUT` | 504 | The request exceeded the configured time budget |
+| `ENCRYPTED_PDF` | 422 | The document is password protected |
 | `PROCESSING_ERROR` / `INTERNAL_ERROR` | 500 | Unexpected failure (no details leak) |
 
 **How files are handled:** documents are read into memory, merged and returned in
@@ -875,96 +806,6 @@ Phase 14 feasibility study documents why (AGPL-licensed alternatives, or a
 sandboxed LibreOffice worker the current architecture deliberately does not
 have).
 
-## Password Protect
-
-```bash
-curl -X POST http://localhost:3000/api/tools/password-protect \
-  -F "files=@document.pdf;type=application/pdf" \
-  -F "password=correct horse battery staple" \
-  -o document-protected.pdf
-```
-
-| Field | Required | Meaning |
-| --- | --- | --- |
-| `files` | yes | Exactly one PDF |
-| `password` | yes | 1–128 characters, used exactly as typed — never trimmed |
-
-Real RC4 128-bit encryption (PDF Standard Security Handler, V2/R3) via
-`@pdfsmaller/pdf-encrypt-lite`. Opening the output genuinely requires the
-password. It is **not** AES-256 — every place the tool appears says exactly
-which scheme is applied, and the words "military-grade" and "zero-knowledge"
-appear nowhere.
-
-Before the download exists, the output is verified: it reports RC4 128-bit in
-its encryption dictionary, it refuses to open without a password, and the
-password supplied reopens it with every page intact. An already-encrypted
-input is refused with `ENCRYPTED_PDF` rather than being silently re-encrypted,
-and passwords the legacy handler cannot encode (non-Latin characters) are
-rejected with a clear message.
-
-Password hygiene is structural: the value arrives once as a multipart field,
-is held in memory for the request, and can never appear in logs (only
-tool/outcome/counts are logged), URLs, file names, response headers or error
-bodies — the tests assert the absence explicitly.
-
-## Unlock PDF
-
-```bash
-curl -X POST http://localhost:3000/api/tools/unlock-pdf \
-  -F "files=@document-protected.pdf;type=application/pdf" \
-  -F "password=correct horse battery staple" \
-  -o document-unlocked.pdf
-```
-
-| Field | Required | Meaning |
-| --- | --- | --- |
-| `files` | yes | Exactly one protected PDF |
-| `password` | no | The file's password; omit/empty only for files that open without asking |
-
-Real decryption via `@pdfsmaller/pdf-decrypt-lite`: RC4 40-bit (V1/R2) and
-128-bit (V2/R3) — the latter is exactly what Password Protect writes, and the
-full protect → unlock round trip is tested over both real routes. The
-`/Encrypt` dictionary is stripped, so the output is an ordinary PDF again;
-the processor proves it by re-opening the result without a password and
-counting every page before returning it.
-
-Refusals are honest and specific: an unprotected input answers
-`PDF_NOT_ENCRYPTED`, a password that does not authenticate answers
-`WRONG_PASSWORD` (the entry is never echoed anywhere), and AES-class files
-(V≥4) answer `UNSUPPORTED_ENCRYPTION` — only RC4 is supported, and the
-message says so. This is not password recovery: the supplied password is
-authenticated, never guessed. Damaged encryption dictionaries are reported as
-`INVALID_PDF`, not misread as "not encrypted".
-
-## Add Text
-
-```bash
-curl -X POST http://localhost:3000/api/tools/add-text \
-  -F "files=@form.pdf;type=application/pdf" \
-  -F "text=Received 25 August" \
-  -F "placement=top-left" \
-  -F "size=12" \
-  -F "pages=first" \
-  -o form-text-added.pdf
-```
-
-| Field | Required | Meaning |
-| --- | --- | --- |
-| `files` | yes | Exactly one PDF |
-| `text` | yes | 1–500 characters, up to 20 lines (newlines allowed) |
-| `placement` | yes | One of nine anchors: `top-left` … `center` … `bottom-right` |
-| `size` | yes | `12`, `16`, `24` or `36` (points) |
-| `pages` | yes | `all`, `first` or `last` |
-
-A text box drawn as real vector text with pdf-lib's standard Latin font —
-pages are never rasterised, so the document stays searchable and the added
-text is extractable (processor tests prove it by re-reading the text with
-pdfium). Text that would overflow the page is scaled down to fit instead of
-being silently clipped, and characters the WinAnsi font cannot encode are
-rejected with `INVALID_TEXT_CONFIGURATION` and a clear message — never
-silently replaced. The number of pages stamped is reported in
-`X-PDFKit-Text-Pages`.
-
 ## Page previews
 
 ```bash
@@ -1032,53 +873,16 @@ Limits are enforced by the server on every request. The numbers shown in the
 interface come from the build-time configuration, so rebuild after changing
 them if you want the hints to match exactly.
 
-## Production hardening
-
-Every `/api/tools/*` route goes through one hardened wrapper
-(`src/lib/hardening/route.ts`), which adds three guards around the unchanged
-HTTP adapter:
-
-- **Numeric Content-Length gate** — a malformed `Content-Length` header (not
-  a plain decimal byte count) is rejected with 400 before the body is read.
-- **Optional concurrency cap** — `PDFKIT_MAX_CONCURRENT_JOBS` (default `0` =
-  no cap). When the cap is reached, extra requests fail fast with
-  `503 SERVER_BUSY`. There is deliberately no queue.
-- **Request timeout** — `PDFKIT_REQUEST_TIMEOUT_MS` (default 120 s). The
-  caller receives `504 REQUEST_TIMEOUT` after the budget. The job itself is
-  **not** aborted — pdfium's WASM work cannot be cancelled mid-render, so
-  pretending otherwise would be dishonest; the job finishes privately, its
-  result is discarded and its slot is released when it actually ends.
-
-## Production Observability and Health
-
-- **Health Probe Endpoint** — `GET /api/health` returns HTTP 200 with structured
-  JSON (`status: "ok"`, `timestamp`, `uptimeSeconds`, `version`). Independent of
-  PDF processing and WASM/pdfium initialization; does not expose internal secrets.
-- **Structured JSON Logging** — `src/lib/monitoring/logger.ts` emits privacy-safe
-  structured JSON entries in production (`event: "job_completed"`, `tool`, `outcome`,
-  `files`, `bytes`, `ms`, `code`). Never logs passwords, file names, document
-  contents, or secrets.
-- **Sentry Error Reporting** — `sentry.server.config.ts` and `src/lib/monitoring/sentry.ts`
-  integrate Sentry for server-side error reporting when `SENTRY_DSN` is configured.
-  Sanitizes request bodies, headers, and credentials defensively before transmission.
-
-Routes keep the long-lived Node runtime (`runtime = "nodejs"`,
-`dynamic = "force-dynamic"`); nothing runs on the edge. A GitHub Actions CI
-workflow (`.github/workflows/ci.yml`) runs lint, typecheck, tests and a
-production build on every push to `main` and every pull request.
-
 ## What is deliberately not implemented
 
-Office↔PDF conversion (Word/Excel/PowerPoint), redaction, digital signatures,
-OCR, AI, authentication, cloud storage, databases, payments, API keys, a
-public developer API, background workers and job queues are **not**
-implemented. There is no simulated processing anywhere: no fake
+Office↔PDF conversion, editing, security tools, OCR, AI, authentication,
+cloud storage, databases, payments, API keys, a public developer API,
+background workers and job queues are **not** implemented. There is no simulated processing anywhere: no fake
 progress bars, no fake results, no fake downloads, no placeholder page images.
 Only Merge PDF, Split PDF, Extract PDF Pages, Delete PDF Pages, Reorder PDF
 Pages, Rotate PDF, Compress PDF, Images to PDF, PNG to PDF, PDF to JPG, PDF to
 PNG, PDF to Word (text only), Edit PDF Metadata, Remove Metadata, Watermark,
-Add Text, Page Numbers, Crop, Flatten PDF, Password Protect and Unlock PDF
-are real.
+Page Numbers, Crop and Flatten PDF are real.
 
 ---
 
@@ -1138,8 +942,6 @@ Copy `.env.example` to `.env.local`. Every value is optional in Phase 1.
 | `PDFKIT_MAX_UPLOAD_SIZE`        | Bytes per file (default 25 MB)             |
 | `PDFKIT_MAX_TOTAL_UPLOAD_SIZE`  | Bytes per request (default 100 MB)         |
 | `PDFKIT_MAX_SPLIT_OUTPUTS`      | Documents one job may produce (default 50) |
-| `PDFKIT_REQUEST_TIMEOUT_MS`     | Request time budget before 504 (default 120000, ceiling 600000); the job is not aborted |
-| `PDFKIT_MAX_CONCURRENT_JOBS`    | Jobs processed at once before 503 (default 0 = no cap, ceiling 1024) |
 | `PDFKIT_COMPRESS_MAX_RASTER_PAGES` | Pages the aggressive compress pass may rasterise (default 60, ceiling 300) |
 | `PDFKIT_CONVERSION_MAX_PAGES` | Pages a PDF → image export may render (default 50, ceiling 200) |
 | `PDFKIT_CONVERSION_DPI` | Export render resolution (default 150, ceiling 300) |
@@ -1159,33 +961,8 @@ npm run test:watch      # watch mode
 npm run test:coverage   # with coverage
 ```
 
-Covered today (91 files, 1191 tests):
+Covered today (78 files, 1081 tests):
 
-- **Hardening (Phase 28)** — config defaults/env overrides/ceilings, the
-  numeric Content-Length gate, the job-slot counter, and the hardened handler
-  itself: 400 before the body is read, pass-through with slot release,
-  `503 SERVER_BUSY` when capped, `504 REQUEST_TIMEOUT` without pretending to
-  abort (the slot is held until the job genuinely ends), safe 500 on an
-  unexpected throw, and one real route checked for the Phase 28 flags.
-- **Password Protect** — option parsing (exact-as-typed, boundaries), the
-  processor (real RC4 128-bit verified three ways; already-encrypted
-  refused; unencodable passwords rejected), the API (standard headers,
-  genuine encryption proven over HTTP, password proven absent from every
-  response header), and the workspace (match-gated action, only the password
-  — never the confirmation — is sent, honest RC4 copy, cleared fields).
-- **Unlock PDF** — option parsing (empty allowed), the processor
-  (protect → unlock round trip with page order proven, empty-user-password
-  files, `PDF_NOT_ENCRYPTED`, `WRONG_PASSWORD` never echoed, AES-class
-  refused via a hand-declared V4/R4 dictionary — not a genuine AES fixture),
-  the API (end-to-end round trip over both real routes, every refusal code),
-  and the workspace (server-confirmed protection, unprotected files told
-  kindly, wrong-password and AES errors surfaced).
-- **Add Text** — option parsing (nine placements, four sizes, length/line
-  budgets), the processor (text proven extractable with pdfium on every
-  stamped page, multi-line blocks, fit-scaling, WinAnsi rejection, original
-  content untouched), the API (standard headers, `X-PDFKit-Text-Pages`,
-  every error mode), and the workspace (defaults, full payload with
-  multi-line text, budget blocking, server-confirmed success, cancel).
 - **Flatten processor** — text field, checkbox, radio group, dropdown and
   option list flattened (field count verified), values proven extractable
   with pdfium (including Unicode), empty fields, multiple pages, rotated
@@ -1382,15 +1159,13 @@ Covered today (91 files, 1191 tests):
 
 ## Future phases
 
-Candidate next phases on the current architecture (see also `/roadmap`):
+Phase 24 stops here on purpose. The planned order (see also `/roadmap`):
 
-1. More edit tools on proven primitives — headers/footers on the numbering
-   pipeline, or real redaction (content **removal**, not covering; crop is
-   explicitly not redaction).
-2. DOCX → PDF (requires the sandboxed LibreOffice worker decided against in
+1. Headers/footers on the proven numbering primitives; flatten via the pdfium
+   pipeline.
+2. DOCX → PDF (the sandboxed-LibreOffice platform decision). (requires the sandboxed LibreOffice worker decided against in
    the Phase 14 feasibility study — a platform decision, not a code change);
    OCR (native engine or external service, both a platform decision).
-3. Digital signatures (a platform decision).
 4. AI document intelligence.
 5. Accounts, cloud storage, billing and a public developer API.
 
