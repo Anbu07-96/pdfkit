@@ -7,8 +7,9 @@ import { parseAddShapesOptions } from "@/lib/processing/add-shapes";
 import { parseAndValidatePageRanges, expandPageRanges } from "@/lib/processing/pages";
 import { sanitizeCellText, createCsvString } from "@/lib/processing/tables";
 import { validateAndNormalizeEmail, validatePassword } from "@/lib/auth/validation";
+import { baseDocumentName } from "@/lib/processing/file-names";
 
-describe("Phase 47 — Adversarial Input Security & Reliability Tests", () => {
+describe("Phase 52 — Adversarial Input Security & Reliability Tests", () => {
   describe("Spreadsheet & Formula Injection Protection", () => {
     it("escapes formula injection cells starting with =, +, -, @", () => {
       expect(sanitizeCellText("=SUM(1,2)")).toBe("'=SUM(1,2)");
@@ -31,6 +32,15 @@ describe("Phase 47 — Adversarial Input Security & Reliability Tests", () => {
 
       expect(csv).toContain('"Safe Header","Formula Header"');
       expect(csv).toContain('"Data","\'=SUM(A1:A10)"');
+    });
+  });
+
+  describe("Path Traversal & Filename Sanitization", () => {
+    it("strips path traversal sequences and control characters from document names", () => {
+      expect(baseDocumentName("../../etc/passwd")).toBe("passwd");
+      expect(baseDocumentName("C:\\Windows\\System32\\cmd.exe")).toBe("cmd.exe");
+      expect(baseDocumentName("document\r\nHeader: Injection")).toBe("documentHeader_ Injection");
+      expect(baseDocumentName("")).toBe("document");
     });
   });
 
