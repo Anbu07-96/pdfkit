@@ -1,7 +1,7 @@
 import "server-only";
 
 /**
- * Disposable, temporary, and generic placeholder email domain blocklist.
+ * Known disposable, temporary, and generic placeholder email domain blocklist.
  * Prevents throwaway accounts and fake registrations (e.g., user@user.com, test@test.com).
  */
 export const UNTRUSTED_EMAIL_DOMAINS = new Set<string>([
@@ -56,7 +56,7 @@ export const UNTRUSTED_EMAIL_DOMAINS = new Set<string>([
   "yopmail.net",
 ]);
 
-/** Common weak / insecure password blacklist & weak pattern set */
+/** Common weak / insecure password blacklist */
 export const COMMON_PASSWORDS = new Set<string>([
   "password",
   "password1",
@@ -142,10 +142,8 @@ export function validateAndNormalizeEmail(
     return { isValid: false, error: "Email address format is invalid." };
   }
 
-  // Reject local parts that are generic placeholders (e.g. "user", "test", "admin") when paired with generic domain
-  const normalizedLocal = localPart.toLowerCase();
   const normalizedDomain = domainPart.toLowerCase();
-  const normalizedEmail = `${normalizedLocal}@${normalizedDomain}`;
+  const normalizedEmail = `${localPart.toLowerCase()}@${normalizedDomain}`;
 
   // Check untrusted / disposable domain blocklist
   if (UNTRUSTED_EMAIL_DOMAINS.has(normalizedDomain)) {
@@ -166,10 +164,12 @@ export function validateAndNormalizeEmail(
  * - 8 to 128 characters
  * - Must contain at least one letter and at least one number
  * - Rejects whitespace and control characters
- * - Rejects known weak / common passwords and trivial sequential patterns (e.g., 1234asdf)
+ * - Rejects known weak / common passwords and sequential patterns
+ * - Rejects passwords containing parts of the user's email local-part
  */
 export function validatePassword(
   rawPassword: string | undefined | null,
+  rawEmail?: string | undefined | null,
 ): PasswordValidationResult {
   if (!rawPassword || typeof rawPassword !== "string") {
     return { isValid: false, error: "Password is required." };
@@ -195,9 +195,18 @@ export function validatePassword(
     return { isValid: false, error: "Password must contain at least one number." };
   }
 
-  const lower = rawPassword.toLowerCase();
-  if (COMMON_PASSWORDS.has(lower) || /^(1234asdf|asdf1234|qwerty1234|password1234|admin1234)$/i.test(lower)) {
+  const lowerPassword = rawPassword.toLowerCase();
+
+  if (COMMON_PASSWORDS.has(lowerPassword) || /^(1234asdf|asdf1234|qwerty1234|password1234|admin1234)$/i.test(lowerPassword)) {
     return { isValid: false, error: "Password is too common or easily guessed." };
+  }
+
+  // Reject passwords containing email local-part
+  if (rawEmail && typeof rawEmail === "string") {
+    const localPart = rawEmail.split("@")[0]?.trim().toLowerCase();
+    if (localPart && localPart.length >= 3 && lowerPassword.includes(localPart)) {
+      return { isValid: false, error: "Password cannot contain parts of your email address." };
+    }
   }
 
   return { isValid: true };

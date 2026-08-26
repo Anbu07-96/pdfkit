@@ -44,7 +44,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Combine multiple PDF files into one ordered document.",
     category: "organize",
     icon: "merge",
-    // Implemented in Phase 2: server-side merging with pdf-lib.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["combine", "join", "concatenate", "append"],
@@ -60,7 +59,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Divide one PDF into separate documents by page ranges.",
     category: "organize",
     icon: "split",
-    // Implemented in Phase 3: server-side splitting with pdf-lib.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["divide", "separate", "cut", "ranges", "pages", "extract"],
@@ -76,8 +74,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Reduce PDF file size while keeping the document readable.",
     category: "organize",
     icon: "compress",
-    // Implemented in Phase 7: lossless structural/stream optimisation with
-    // pdf-lib + fflate, plus an optional aggressive pdfium + JPEG pass.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["optimize", "shrink", "reduce size", "smaller"],
@@ -93,7 +89,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Turn selected pages so every page faces the right way.",
     category: "organize",
     icon: "rotate",
-    // Implemented in Phase 6: server-side rotation with real page previews.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["turn", "orientation", "landscape", "portrait", "sideways"],
@@ -109,7 +104,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Remove pages you do not need from a PDF document.",
     category: "organize",
     icon: "trash",
-    // Implemented in Phase 4: server-side page removal with pdf-lib.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["remove pages", "erase", "drop pages", "delete"],
@@ -125,7 +119,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Drag pages into a new order inside the same document.",
     category: "organize",
     icon: "reorder",
-    // Implemented in Phase 5: server-side reordering with real page previews.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["rearrange", "sort pages", "move pages", "organise", "organize"],
@@ -136,12 +129,26 @@ export const TOOLS: readonly Tool[] = [
     ],
   }),
   pdfTool({
+    id: "organize-pdf",
+    name: "Organize PDF",
+    description: "Reorder, rotate and delete pages in a single visual workflow.",
+    category: "organize",
+    icon: "reorder",
+    status: "AVAILABLE",
+    plannedTier: "free",
+    keywords: ["reorder", "rotate", "delete pages", "rearrange", "organise", "organize"],
+    howItWorks: [
+      "Upload your PDF and see previews of every page.",
+      "Drag or reorder pages, rotate pages, or remove pages you do not need.",
+      "Download the organized PDF.",
+    ],
+  }),
+  pdfTool({
     id: "extract-pdf-pages",
     name: "Extract PDF Pages",
     description: "Pull selected pages out of a PDF into a new file.",
     category: "organize",
     icon: "extract",
-    // Implemented in Phase 4: server-side page extraction with pdf-lib.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["pick pages", "copy pages", "subset", "keep pages"],
@@ -161,9 +168,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Turn JPG and PNG images into a single PDF document.",
     category: "convert",
     icon: "image",
-    // Implemented in Phase 8: server-side embedding with pdf-lib (JPEG data
-    // is passed through untouched; PNG transparency is preserved on a white
-    // page background).
     status: "AVAILABLE",
     plannedTier: "free",
     supportedFileTypes: [".jpg", ".jpeg", ".png"],
@@ -181,9 +185,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Turn PNG images into a single PDF document.",
     category: "convert",
     icon: "image",
-    // Implemented in Phase 17: the shared image-to-PDF pipeline in PNG-only
-    // form — transparency is preserved as a soft mask over a white page
-    // background, and non-PNG payloads are rejected by signature.
     status: "AVAILABLE",
     plannedTier: "free",
     supportedFileTypes: [".png"],
@@ -201,8 +202,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Export every page of a PDF as a JPG image.",
     category: "convert",
     icon: "image",
-    // Implemented in Phase 8: pdfium renders each page at the configured
-    // export resolution; jpeg-js encodes at quality 90.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["jpeg", "export images", "page images", "screenshot"],
@@ -218,8 +217,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Export PDF pages as lossless PNG images.",
     category: "convert",
     icon: "image",
-    // Implemented in Phase 8: pdfium renders each page; the in-house PNG
-    // encoder writes exact RGBA pixels.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["export images", "page images", "lossless"],
@@ -236,10 +233,6 @@ export const TOOLS: readonly Tool[] = [
       "Extract the text of a PDF into an editable Word document.",
     category: "convert",
     icon: "word",
-    // Implemented in Phase 15: text-only conversion. The text is extracted
-    // with the existing pdfium rasteriser and written with the MIT-licensed
-    // docx generator; formatting, images, tables and exact layout are not
-    // preserved — the tool says so everywhere.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["docx", "editable", "microsoft word", "text"],
@@ -247,6 +240,36 @@ export const TOOLS: readonly Tool[] = [
       "Upload the PDF whose text you need in Word.",
       "Every page's text is extracted in order, one paragraph per line.",
       "Download a .docx file. Text only — formatting, images, tables and exact layout are not preserved.",
+    ],
+  }),
+  pdfTool({
+    id: "extract-images",
+    name: "Extract Images",
+    description: "Extract embedded raster images from PDF pages.",
+    category: "convert",
+    icon: "image",
+    status: "AVAILABLE",
+    plannedTier: "free",
+    keywords: ["extract photos", "pictures", "save images", "embedded images"],
+    howItWorks: [
+      "Upload the PDF document.",
+      "Select pages to extract images from.",
+      "Download extracted JPG/PNG images directly or as a ZIP.",
+    ],
+  }),
+  pdfTool({
+    id: "pdf-to-text",
+    name: "PDF to Text",
+    description: "Extract plain searchable text from PDF pages.",
+    category: "convert",
+    icon: "text",
+    status: "AVAILABLE",
+    plannedTier: "free",
+    keywords: ["txt", "plain text", "extract text", "save text"],
+    howItWorks: [
+      "Upload the PDF document.",
+      "Select pages to extract text from.",
+      "Download a .txt file containing the page text. Scanned pages contain no text — OCR is NOT performed.",
     ],
   }),
   pdfTool({
@@ -274,6 +297,7 @@ export const TOOLS: readonly Tool[] = [
     description: "Turn tables inside a PDF into an Excel spreadsheet.",
     category: "convert",
     icon: "excel",
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["xlsx", "spreadsheet", "tables", "data"],
     howItWorks: [
@@ -327,15 +351,16 @@ export const TOOLS: readonly Tool[] = [
   pdfTool({
     id: "add-text",
     name: "Add Text",
-    description: "Place new text boxes anywhere on a PDF page.",
+    description: "Place a text box on any page of a PDF.",
     category: "edit",
     icon: "text",
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["write", "type", "fill form", "insert text"],
     howItWorks: [
       "Upload the PDF you want to write on.",
-      "Add and position text boxes on any page.",
-      "Download the edited PDF.",
+      "Type the text and pick a position, size and pages.",
+      "Download the PDF with the text added as real, searchable text.",
     ],
   }),
   pdfTool({
@@ -344,11 +369,14 @@ export const TOOLS: readonly Tool[] = [
     description: "Insert logos, photos or stamps into a PDF page.",
     category: "edit",
     icon: "image",
+    status: "AVAILABLE",
     plannedTier: "free",
+    supportedFileTypes: [".pdf", ".jpg", ".jpeg", ".png"],
+    acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png"],
     keywords: ["insert image", "logo", "stamp", "picture"],
     howItWorks: [
-      "Upload the PDF and the images you want to place.",
-      "Position and resize each image.",
+      "Upload the PDF and the image (JPG or PNG) you want to place.",
+      "Position and resize the image.",
       "Download the edited PDF.",
     ],
   }),
@@ -358,11 +386,12 @@ export const TOOLS: readonly Tool[] = [
     description: "Draw freehand lines and marks directly on a document.",
     category: "edit",
     icon: "draw",
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["freehand", "pen", "sketch", "sign by hand"],
     howItWorks: [
       "Upload your PDF.",
-      "Draw on the page with the pen tool.",
+      "Draw vector strokes on the page.",
       "Download the edited PDF.",
     ],
   }),
@@ -372,12 +401,13 @@ export const TOOLS: readonly Tool[] = [
     description: "Mark important passages with a highlighter.",
     category: "edit",
     icon: "highlight",
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["marker", "emphasise", "colour text"],
     howItWorks: [
       "Upload your PDF.",
-      "Select the text or area you want to highlight.",
-      "Download the marked-up PDF.",
+      "Select the area you want to highlight.",
+      "Download the marked-up PDF. Highlighting is a visual overlay — it does NOT remove content.",
     ],
   }),
   pdfTool({
@@ -386,6 +416,7 @@ export const TOOLS: readonly Tool[] = [
     description: "Add rectangles, circles, lines and arrows to a page.",
     category: "edit",
     icon: "shapes",
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["rectangle", "circle", "arrow", "line", "box"],
     howItWorks: [
@@ -400,9 +431,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Stamp a text watermark across the pages of a PDF.",
     category: "edit",
     icon: "watermark",
-    // Implemented in Phase 21: vector text stamps with pdf-lib — pages are
-    // never rasterised. Text-only, standard Latin fonts; a visible watermark
-    // is a deterrent, not protection.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["stamp", "draft", "confidential", "branding"],
@@ -418,8 +446,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Add page numbers to the pages of a PDF.",
     category: "edit",
     icon: "page-numbers",
-    // Implemented in Phase 22: vector text stamps with pdf-lib — pages are
-    // never rasterised. "Page X of Y" always reports the real page count.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["numbering", "footer", "index", "pagination"],
@@ -436,9 +462,6 @@ export const TOOLS: readonly Tool[] = [
       "Trim margins or crop selected pages by area. Cropping changes what is visible, but does not remove hidden content.",
     category: "edit",
     icon: "crop",
-    // Implemented in Phase 24: CropBox only — MediaBox, content, rotation and
-    // page order are untouched. Cropped-out content stays in the file and
-    // remains recoverable; this is not redaction.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["trim", "margins", "resize page", "cut edges"],
@@ -455,12 +478,6 @@ export const TOOLS: readonly Tool[] = [
       "Flatten PDF forms into permanent page content. Field values remain selectable; links stay clickable. Signed PDFs are rejected, and document scripts are not removed.",
     category: "edit",
     icon: "flatten",
-    // Implemented in Phase 26: vector flattening with pdf-lib's
-    // PDFForm.flatten() — pages are never rasterised. Signed PDFs are
-    // rejected before any mutation (flattening would invalidate the
-    // signature), the dangling widget references pdf-lib leaves behind are
-    // cleaned up, and document-level JavaScript is honestly NOT removed —
-    // this is not a sanitisation feature.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["form", "fields", "acroform", "make read-only", "burn in"],
@@ -476,12 +493,13 @@ export const TOOLS: readonly Tool[] = [
     description: "Add comments and notes for review and feedback.",
     category: "edit",
     icon: "annotate",
+    status: "AVAILABLE",
     plannedTier: "free",
-    keywords: ["comment", "notes", "review", "feedback", "sticky note"],
+    keywords: ["comment", "notes", "review", "feedback", "sticky note", "hyperlink", "link"],
     howItWorks: [
-      "Upload the PDF you are reviewing.",
-      "Attach comments to specific places on the page.",
-      "Download the annotated PDF.",
+      "Upload the PDF you want to annotate.",
+      "Add sticky note comments or web links.",
+      "Download the annotated PDF with native PDF annotations embedded.",
     ],
   }),
 
@@ -491,9 +509,6 @@ export const TOOLS: readonly Tool[] = [
     description: "View and change a document's title, author and keywords.",
     category: "edit",
     icon: "metadata",
-    // Implemented in Phase 11: server-side Info-dictionary editing with
-    // pdf-lib; producer and dates are shown read-only because pdf-lib
-    // re-stamps them on every save.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["title", "author", "subject", "keywords", "properties", "info"],
@@ -513,12 +528,13 @@ export const TOOLS: readonly Tool[] = [
     description: "Encrypt a PDF so only people with the password can open it.",
     category: "security",
     icon: "lock",
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["encrypt", "password", "secure", "protect"],
     howItWorks: [
       "Upload the PDF you want to protect.",
-      "Set a password and the permissions you want to allow.",
-      "Download the encrypted PDF.",
+      "Set the password that will be required to open the document.",
+      "Download the protected PDF — opening it asks for that password.",
     ],
   }),
   pdfTool({
@@ -527,26 +543,28 @@ export const TOOLS: readonly Tool[] = [
     description: "Remove a password you own from a protected PDF.",
     category: "security",
     icon: "unlock",
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["decrypt", "remove password", "open protected"],
     howItWorks: [
       "Upload the protected PDF.",
       "Enter the password you already have for the file.",
-      "Download the unlocked PDF.",
+      "Download the unlocked PDF — an ordinary document again.",
     ],
   }),
   pdfTool({
     id: "redact-information",
     name: "Redact Information",
-    description: "Permanently black out sensitive text and areas.",
+    description: "Place vector blackout boxes over sensitive page areas. Blackout boxes cover visible content on the page canvas.",
     category: "security",
     icon: "redact",
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["black out", "hide", "censor", "sensitive", "gdpr"],
     howItWorks: [
       "Upload the document that contains sensitive content.",
-      "Mark the text or areas to redact.",
-      "Download a PDF with that content removed, not just covered.",
+      "Mark the page areas to cover with blackout boxes.",
+      "Download a PDF with those areas covered by vector blackout rectangles. Note: Blackout rectangles cover visible content on the rendered page — underlying text streams are not stripped.",
     ],
   }),
   pdfTool({
@@ -569,9 +587,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Strip title, author, keywords and XMP data from a PDF.",
     category: "security",
     icon: "metadata",
-    // Implemented in Phase 12: the Info fields and the XMP stream are deleted
-    // and the removal is verified by re-reading the output. Producer and
-    // timestamps remain (pdf-lib re-stamps them) and the tool says so.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["privacy", "exif", "clean", "author", "hidden data", "title", "keywords"],
@@ -683,6 +698,7 @@ export const TOOLS: readonly Tool[] = [
     description: "Detect tables in a document and export them as data.",
     category: "ai",
     icon: "table",
+    status: "AVAILABLE",
     plannedTier: "pro",
     keywords: ["csv", "spreadsheet", "rows", "columns", "data"],
     howItWorks: [
@@ -753,6 +769,7 @@ export const TOOLS: readonly Tool[] = [
     description: "See what changed between two versions of a document.",
     category: "ai",
     icon: "ai-compare",
+    status: "AVAILABLE",
     plannedTier: "pro",
     keywords: ["diff", "changes", "versions", "redline", "ai"],
     howItWorks: [

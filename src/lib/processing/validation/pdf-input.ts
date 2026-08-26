@@ -97,7 +97,6 @@ export function validateProcessingInput({
   const oversized: string[] = [];
   const empty: string[] = [];
   const notPdf: string[] = [];
-  const checkContent = rules.contentKind === "image" ? hasImageSignature : hasPdfSignature;
   let totalSize = 0;
 
   for (const file of files) {
@@ -122,7 +121,13 @@ export function validateProcessingInput({
     }
 
     // Content check: the bytes must actually look like the declared kind.
-    if (!checkContent(file.bytes)) {
+    const isImageFile = [".jpg", ".jpeg", ".png"].includes(extension);
+    const isValidSignature =
+      rules.contentKind === "image" || (rules.contentKind === "mixed" && isImageFile)
+        ? hasImageSignature(file.bytes)
+        : hasPdfSignature(file.bytes);
+
+    if (!isValidSignature) {
       notPdf.push(file.name);
       continue;
     }

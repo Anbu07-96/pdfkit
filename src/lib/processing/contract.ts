@@ -95,9 +95,9 @@ export interface ProcessorInputRules {
   /**
    * Which byte signature the content check verifies. Unset means `pdf`, the
    * behaviour every Phase 2-7 tool relies on; `image` verifies the JPEG/PNG
-   * signatures instead (Images to PDF).
+   * signatures instead (Images to PDF); `mixed` verifies PDF or JPEG/PNG per file.
    */
-  contentKind?: "pdf" | "image";
+  contentKind?: "pdf" | "image" | "mixed";
 }
 
 /** Runtime context handed to a processor by the service. */

@@ -18,20 +18,30 @@ export default function PrivacyPage() {
         <h2>What the current version does</h2>
         <ul>
           <li>
-            The eighteen working tools — <strong>Merge PDF</strong>,{" "}
+            The twenty-seven working tools — <strong>Merge PDF</strong>,{" "}
             <strong>Split PDF</strong>, <strong>Extract PDF Pages</strong>,{" "}
-            <strong>Delete PDF Pages</strong>, <strong>Reorder PDF Pages</strong> and{" "}
-            <strong>Rotate PDF</strong>, <strong>Compress PDF</strong>,{" "}
-            <strong>Images to PDF</strong>, <strong>PNG to PDF</strong>,{" "}
-            <strong>PDF to JPG</strong> and <strong>PDF to PNG</strong>,{" "}
-            <strong>PDF to Word</strong>, <strong>Edit PDF Metadata</strong> and{" "}
-            <strong>Remove Metadata</strong>, <strong>Watermark</strong>,{" "}
-            <strong>Page Numbers</strong>, <strong>Crop</strong> and{" "}
-            <strong>Flatten PDF</strong> — are the only ones that send data
-            anywhere. When you start the operation,
+            <strong>Delete PDF Pages</strong>, <strong>Reorder PDF Pages</strong>,{" "}
+            <strong>Organize PDF</strong>, <strong>Rotate PDF</strong>,{" "}
+            <strong>Compress PDF</strong>, <strong>Images to PDF</strong>,{" "}
+            <strong>PNG to PDF</strong>, <strong>PDF to JPG</strong>,{" "}
+            <strong>PDF to PNG</strong>, <strong>PDF to Word</strong>,{" "}
+            <strong>Edit PDF Metadata</strong>, <strong>Remove Metadata</strong>,{" "}
+            <strong>Watermark</strong>, <strong>Add Text</strong>,{" "}
+            <strong>Add Shapes</strong>, <strong>Add Images</strong>,{" "}
+            <strong>Highlight</strong>, <strong>Draw</strong>,{" "}
+            <strong>Annotations</strong>, <strong>Page Numbers</strong>,{" "}
+            <strong>Crop</strong>, <strong>Flatten PDF</strong>,{" "}
+            <strong>Password Protect</strong> and <strong>Unlock PDF</strong> — are the only ones that send data anywhere. When you start the operation,
             the selected files are uploaded to the PDFKit server, processed in memory
             and returned in the response. The page tools also read the page count the
             same way.
+          </li>
+          <li>
+            The passwords you type for <strong>Password Protect</strong> and{" "}
+            <strong>Unlock PDF</strong> travel once, as part of that request, and are
+            used in memory only. They are never written to logs, never stored and
+            never shown back — if you lose a password, the PDF cannot be recovered
+            here.
           </li>
           <li>
             <strong>Page previews</strong> — including rotated previews — are

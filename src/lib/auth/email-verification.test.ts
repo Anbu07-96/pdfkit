@@ -9,7 +9,7 @@ import {
   setUsageRepositoryOverride,
 } from "@/lib/usage/repository";
 
-describe("Phase 50 — Email Verification Architecture", () => {
+describe("Phase 51 — Email Verification Architecture", () => {
   let repo: InMemoryUsageRepository;
 
   beforeEach(() => {

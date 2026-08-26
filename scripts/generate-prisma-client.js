@@ -52,11 +52,6 @@ const indexDts = `export interface UserAccount {
   name: string | null;
   tier: string;
   status: string;
-  accountTrustStatus: string;
-  authProvider: string | null;
-  emailVerified: Date | null;
-  verificationToken: string | null;
-  verificationExpires: Date | null;
   billingProvider: string | null;
   razorpayCustomerId: string | null;
   razorpaySubscriptionId: string | null;
@@ -83,7 +78,6 @@ export interface RazorpayWebhookEvent {
 export interface UserAccountWhereUniqueInput {
   id?: string;
   userId?: string;
-  verificationToken?: string;
   razorpayCustomerId?: string;
   razorpaySubscriptionId?: string;
 }
@@ -95,11 +89,6 @@ export interface UserAccountCreateInput {
   name?: string | null;
   tier?: string;
   status?: string;
-  accountTrustStatus?: string;
-  authProvider?: string | null;
-  emailVerified?: Date | null;
-  verificationToken?: string | null;
-  verificationExpires?: Date | null;
   billingProvider?: string | null;
   razorpayCustomerId?: string | null;
   razorpaySubscriptionId?: string | null;
@@ -112,11 +101,6 @@ export interface UserAccountUpdateInput {
   name?: string | null;
   tier?: string;
   status?: string;
-  accountTrustStatus?: string;
-  authProvider?: string | null;
-  emailVerified?: Date | null;
-  verificationToken?: string | null;
-  verificationExpires?: Date | null;
   billingProvider?: string | null;
   razorpayCustomerId?: string | null;
   razorpaySubscriptionId?: string | null;

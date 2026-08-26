@@ -125,9 +125,9 @@ describe("Phase 47 — Adversarial Input Security & Reliability Tests", () => {
     });
 
     it("normalizes uppercase and whitespace in email addresses", () => {
-      const res = validateAndNormalizeEmail("  John.Doe@Gmail.Com  ");
+      const res = validateAndNormalizeEmail("  John.Doe@EXAMPLE.Com  ");
       expect(res.isValid).toBe(true);
-      expect(res.normalizedEmail).toBe("john.doe@gmail.com");
+      expect(res.normalizedEmail).toBe("john.doe@example.com");
     });
 
     it("rejects weak, short, or common passwords", () => {

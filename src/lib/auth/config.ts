@@ -48,7 +48,7 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const passwordResult = validatePassword(credentials.password);
+        const passwordResult = validatePassword(credentials.password, credentials.email);
         if (!passwordResult.isValid) {
           return null;
         }

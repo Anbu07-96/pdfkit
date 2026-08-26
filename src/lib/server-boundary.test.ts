@@ -15,15 +15,19 @@ const SRC = join(process.cwd(), "src");
 
 /** Modules that must never be reachable from browser code. */
 const SERVER_ONLY_IMPORTS = [
+  "stripe",
   "pdf-lib",
   "@hyzyla/pdfium",
   "jpeg-js",
   "docx",
   "fflate",
+  "@/lib/billing/",
+  "@/lib/usage/service",
   "@/lib/processing/processors/",
   "@/lib/processing/optimize/",
   "@/lib/processing/service",
   "@/lib/processing/http",
+  "@/lib/hardening/",
   "@/lib/processing/registry",
   "@/lib/processing/inspect",
   "@/lib/processing/limits",
@@ -75,15 +79,27 @@ describe("server-only boundary", () => {
     expect(violations).toEqual([]);
   });
 
-  it("marks every processing and thumbnail module server-only", () => {
+  it("marks every processing, billing and thumbnail module server-only", () => {
     const serverModules = files.filter(
       (path) =>
-        (path.includes("/lib/processing/") || path.includes("/lib/thumbnails/")) &&
+        (path.includes("/lib/processing/") || path.includes("/lib/thumbnails/") || path.includes("/lib/billing/")) &&
         !path.endsWith("pages.ts") &&
         !path.endsWith("compression.ts") &&
         !path.endsWith("watermark.ts") &&
         !path.endsWith("page-numbers.ts") &&
+        !path.endsWith("password-protect.ts") &&
+        !path.endsWith("unlock-pdf.ts") &&
+        !path.endsWith("add-text.ts") &&
+        !path.endsWith("add-shapes.ts") &&
+        !path.endsWith("add-images.ts") &&
+        !path.endsWith("annotations.ts") &&
+        !path.endsWith("organize-pdf.ts") &&
+        !path.endsWith("extract-images.ts") &&
+        !path.endsWith("pdf-to-text.ts") &&
+        !path.endsWith("highlight.ts") &&
+        !path.endsWith("draw.ts") &&
         !path.endsWith("crop.ts") &&
+        !path.endsWith("redact.ts") &&
         !path.endsWith("metadata.ts") &&
         !path.endsWith("errors.ts") &&
         !path.endsWith("rules.ts") &&

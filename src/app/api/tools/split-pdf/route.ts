@@ -1,4 +1,4 @@
-import { handleProcessingRequest, methodNotAllowed } from "@/lib/processing/http";
+import { handleProcessingRequest, methodNotAllowed } from "@/lib/hardening/route";
 import type { SplitPdfOptions } from "@/lib/processing/processors/split-pdf";
 import type { PageSelectionMode } from "@/lib/processing/pages";
 

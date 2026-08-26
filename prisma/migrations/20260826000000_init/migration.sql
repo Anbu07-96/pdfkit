@@ -6,11 +6,6 @@ CREATE TABLE "UserAccount" (
     "name" TEXT,
     "tier" TEXT NOT NULL DEFAULT 'free',
     "status" TEXT NOT NULL DEFAULT 'active',
-    "accountTrustStatus" TEXT NOT NULL DEFAULT 'unverified',
-    "authProvider" TEXT DEFAULT 'credentials',
-    "emailVerified" TIMESTAMP(3),
-    "verificationToken" TEXT,
-    "verificationExpires" TIMESTAMP(3),
     "billingProvider" TEXT DEFAULT 'razorpay',
     "razorpayCustomerId" TEXT,
     "razorpaySubscriptionId" TEXT,
@@ -46,9 +41,6 @@ CREATE TABLE "RazorpayWebhookEvent" (
 CREATE UNIQUE INDEX "UserAccount_userId_key" ON "UserAccount"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "UserAccount_verificationToken_key" ON "UserAccount"("verificationToken");
-
--- CreateIndex
 CREATE UNIQUE INDEX "UserAccount_razorpayCustomerId_key" ON "UserAccount"("razorpayCustomerId");
 
 -- CreateIndex
@@ -56,9 +48,6 @@ CREATE UNIQUE INDEX "UserAccount_razorpaySubscriptionId_key" ON "UserAccount"("r
 
 -- CreateIndex
 CREATE INDEX "UserAccount_userId_idx" ON "UserAccount"("userId");
-
--- CreateIndex
-CREATE INDEX "UserAccount_verificationToken_idx" ON "UserAccount"("verificationToken");
 
 -- CreateIndex
 CREATE INDEX "UserAccount_razorpayCustomerId_idx" ON "UserAccount"("razorpayCustomerId");
