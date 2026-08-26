@@ -2,6 +2,10 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GithubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
+import {
+  validateAndNormalizeEmail,
+  validatePassword,
+} from "@/lib/auth/validation";
 
 /**
  * NextAuth options configuration.
@@ -15,9 +19,6 @@ const NEXTAUTH_SECRET =
   process.env.NEXTAUTH_SECRET ||
   process.env.AUTH_SECRET ||
   "pdfkit-dev-auth-secret-do-not-use-in-production";
-
-/** Standard RFC-compliant email validation regex */
-const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
 export const authOptions: NextAuthOptions = {
   secret: NEXTAUTH_SECRET,
@@ -42,22 +43,22 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const email = credentials.email.trim();
-        const password = credentials.password.trim();
-
-        // Strict credential validation: require non-empty fields, valid email format & min password length
-        if (!email || !password || password.length < 6) {
+        const emailResult = validateAndNormalizeEmail(credentials.email);
+        if (!emailResult.isValid || !emailResult.normalizedEmail) {
           return null;
         }
 
-        if (!EMAIL_REGEX.test(email)) {
+        const passwordResult = validatePassword(credentials.password);
+        if (!passwordResult.isValid) {
           return null;
         }
+
+        const normalizedEmail = emailResult.normalizedEmail;
 
         return {
-          id: `usr_${Buffer.from(email).toString("hex").slice(0, 12)}`,
-          email,
-          name: email.split("@")[0] || "User",
+          id: `usr_${Buffer.from(normalizedEmail).toString("hex").slice(0, 12)}`,
+          email: normalizedEmail,
+          name: normalizedEmail.split("@")[0] || "User",
           tier: "free",
         };
       },
