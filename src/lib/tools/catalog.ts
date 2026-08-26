@@ -44,7 +44,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Combine multiple PDF files into one ordered document.",
     category: "organize",
     icon: "merge",
-    // Implemented in Phase 2: server-side merging with pdf-lib.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["combine", "join", "concatenate", "append"],
@@ -60,7 +59,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Divide one PDF into separate documents by page ranges.",
     category: "organize",
     icon: "split",
-    // Implemented in Phase 3: server-side splitting with pdf-lib.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["divide", "separate", "cut", "ranges", "pages", "extract"],
@@ -76,8 +74,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Reduce PDF file size while keeping the document readable.",
     category: "organize",
     icon: "compress",
-    // Implemented in Phase 7: lossless structural/stream optimisation with
-    // pdf-lib + fflate, plus an optional aggressive pdfium + JPEG pass.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["optimize", "shrink", "reduce size", "smaller"],
@@ -93,7 +89,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Turn selected pages so every page faces the right way.",
     category: "organize",
     icon: "rotate",
-    // Implemented in Phase 6: server-side rotation with real page previews.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["turn", "orientation", "landscape", "portrait", "sideways"],
@@ -109,7 +104,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Remove pages you do not need from a PDF document.",
     category: "organize",
     icon: "trash",
-    // Implemented in Phase 4: server-side page removal with pdf-lib.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["remove pages", "erase", "drop pages", "delete"],
@@ -125,7 +119,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Drag pages into a new order inside the same document.",
     category: "organize",
     icon: "reorder",
-    // Implemented in Phase 5: server-side reordering with real page previews.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["rearrange", "sort pages", "move pages", "organise", "organize"],
@@ -141,7 +134,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Reorder, rotate and delete pages in a single visual workflow.",
     category: "organize",
     icon: "reorder",
-    // Implemented in Phase 37: reorder, rotate and delete pages in one request.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["reorder", "rotate", "delete pages", "rearrange", "organise", "organize"],
@@ -157,7 +149,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Pull selected pages out of a PDF into a new file.",
     category: "organize",
     icon: "extract",
-    // Implemented in Phase 4: server-side page extraction with pdf-lib.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["pick pages", "copy pages", "subset", "keep pages"],
@@ -177,9 +168,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Turn JPG and PNG images into a single PDF document.",
     category: "convert",
     icon: "image",
-    // Implemented in Phase 8: server-side embedding with pdf-lib (JPEG data
-    // is passed through untouched; PNG transparency is preserved on a white
-    // page background).
     status: "AVAILABLE",
     plannedTier: "free",
     supportedFileTypes: [".jpg", ".jpeg", ".png"],
@@ -197,9 +185,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Turn PNG images into a single PDF document.",
     category: "convert",
     icon: "image",
-    // Implemented in Phase 17: the shared image-to-PDF pipeline in PNG-only
-    // form — transparency is preserved as a soft mask over a white page
-    // background, and non-PNG payloads are rejected by signature.
     status: "AVAILABLE",
     plannedTier: "free",
     supportedFileTypes: [".png"],
@@ -217,8 +202,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Export every page of a PDF as a JPG image.",
     category: "convert",
     icon: "image",
-    // Implemented in Phase 8: pdfium renders each page at the configured
-    // export resolution; jpeg-js encodes at quality 90.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["jpeg", "export images", "page images", "screenshot"],
@@ -234,8 +217,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Export PDF pages as lossless PNG images.",
     category: "convert",
     icon: "image",
-    // Implemented in Phase 8: pdfium renders each page; the in-house PNG
-    // encoder writes exact RGBA pixels.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["export images", "page images", "lossless"],
@@ -252,10 +233,6 @@ export const TOOLS: readonly Tool[] = [
       "Extract the text of a PDF into an editable Word document.",
     category: "convert",
     icon: "word",
-    // Implemented in Phase 15: text-only conversion. The text is extracted
-    // with the existing pdfium rasteriser and written with the MIT-licensed
-    // docx generator; formatting, images, tables and exact layout are not
-    // preserved — the tool says so everywhere.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["docx", "editable", "microsoft word", "text"],
@@ -377,9 +354,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Place a text box on any page of a PDF.",
     category: "edit",
     icon: "text",
-    // Implemented in Phase 31: real vector text drawn with pdf-lib's standard
-    // Latin font at nine anchor positions (all/first/last pages), never
-    // rasterised; oversized text is scaled to fit and the interface says so.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["write", "type", "fill form", "insert text"],
@@ -442,8 +416,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Add rectangles, circles, lines and arrows to a page.",
     category: "edit",
     icon: "shapes",
-    // Implemented in Phase 33: real vector shapes (rectangle, circle, ellipse, line)
-    // drawn with pdf-lib, bounded to page margins.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["rectangle", "circle", "arrow", "line", "box"],
@@ -459,9 +431,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Stamp a text watermark across the pages of a PDF.",
     category: "edit",
     icon: "watermark",
-    // Implemented in Phase 21: vector text stamps with pdf-lib — pages are
-    // never rasterised. Text-only, standard Latin fonts; a visible watermark
-    // is a deterrent, not protection.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["stamp", "draft", "confidential", "branding"],
@@ -477,8 +446,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Add page numbers to the pages of a PDF.",
     category: "edit",
     icon: "page-numbers",
-    // Implemented in Phase 22: vector text stamps with pdf-lib — pages are
-    // never rasterised. "Page X of Y" always reports the real page count.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["numbering", "footer", "index", "pagination"],
@@ -495,9 +462,6 @@ export const TOOLS: readonly Tool[] = [
       "Trim margins or crop selected pages by area. Cropping changes what is visible, but does not remove hidden content.",
     category: "edit",
     icon: "crop",
-    // Implemented in Phase 24: CropBox only — MediaBox, content, rotation and
-    // page order are untouched. Cropped-out content stays in the file and
-    // remains recoverable; this is not redaction.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["trim", "margins", "resize page", "cut edges"],
@@ -514,12 +478,6 @@ export const TOOLS: readonly Tool[] = [
       "Flatten PDF forms into permanent page content. Field values remain selectable; links stay clickable. Signed PDFs are rejected, and document scripts are not removed.",
     category: "edit",
     icon: "flatten",
-    // Implemented in Phase 26: vector flattening with pdf-lib's
-    // PDFForm.flatten() — pages are never rasterised. Signed PDFs are
-    // rejected before any mutation (flattening would invalidate the
-    // signature), the dangling widget references pdf-lib leaves behind are
-    // cleaned up, and document-level JavaScript is honestly NOT removed —
-    // this is not a sanitisation feature.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["form", "fields", "acroform", "make read-only", "burn in"],
@@ -535,8 +493,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Add comments and notes for review and feedback.",
     category: "edit",
     icon: "annotate",
-    // Implemented in Phase 36: native PDF sticky note comments (/Text) and
-    // URI hyperlinks (/Link) embedded directly with pdf-lib.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["comment", "notes", "review", "feedback", "sticky note", "hyperlink", "link"],
@@ -553,9 +509,6 @@ export const TOOLS: readonly Tool[] = [
     description: "View and change a document's title, author and keywords.",
     category: "edit",
     icon: "metadata",
-    // Implemented in Phase 11: server-side Info-dictionary editing with
-    // pdf-lib; producer and dates are shown read-only because pdf-lib
-    // re-stamps them on every save.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["title", "author", "subject", "keywords", "properties", "info"],
@@ -575,9 +528,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Encrypt a PDF so only people with the password can open it.",
     category: "security",
     icon: "lock",
-    // Implemented in Phase 29: real RC4 128-bit encryption (Standard Security
-    // Handler V2/R3) via @pdfsmaller/pdf-encrypt-lite, verified before the
-    // download exists. Not AES-256 — the copy says so everywhere.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["encrypt", "password", "secure", "protect"],
@@ -593,9 +543,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Remove a password you own from a protected PDF.",
     category: "security",
     icon: "unlock",
-    // Implemented in Phase 30: real decryption via @pdfsmaller/pdf-decrypt-lite
-    // (RC4 40-bit V1/R2 and 128-bit V2/R3, the latter matching Password
-    // Protect). AES files are refused honestly; this is not password recovery.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["decrypt", "remove password", "open protected"],
@@ -608,7 +555,7 @@ export const TOOLS: readonly Tool[] = [
   pdfTool({
     id: "redact-information",
     name: "Redact Information",
-    description: "Permanently black out sensitive text and areas.",
+    description: "Place vector blackout boxes over sensitive page areas. Blackout boxes cover visible content on the page canvas.",
     category: "security",
     icon: "redact",
     status: "AVAILABLE",
@@ -616,8 +563,8 @@ export const TOOLS: readonly Tool[] = [
     keywords: ["black out", "hide", "censor", "sensitive", "gdpr"],
     howItWorks: [
       "Upload the document that contains sensitive content.",
-      "Mark the text or areas to redact.",
-      "Download a PDF with that content covered by vector blackout boxes.",
+      "Mark the page areas to cover with blackout boxes.",
+      "Download a PDF with those areas covered by vector blackout rectangles. Note: Blackout rectangles cover visible content on the rendered page — underlying text streams are not stripped.",
     ],
   }),
   pdfTool({
@@ -640,9 +587,6 @@ export const TOOLS: readonly Tool[] = [
     description: "Strip title, author, keywords and XMP data from a PDF.",
     category: "security",
     icon: "metadata",
-    // Implemented in Phase 12: the Info fields and the XMP stream are deleted
-    // and the removal is verified by re-reading the output. Producer and
-    // timestamps remain (pdf-lib re-stamps them) and the tool says so.
     status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["privacy", "exif", "clean", "author", "hidden data", "title", "keywords"],

@@ -8,6 +8,20 @@ export interface ExtractedTable {
 }
 
 /**
+ * Sanitizes cell text to prevent formula injection in Excel/CSV viewers.
+ * Cells starting with =, +, -, @, \t, or \r are prepended with a single quote.
+ */
+export function sanitizeCellText(cell: string): string {
+  if (typeof cell !== "string") return "";
+  const isFormula = /^[=+\-@\t\r]/.test(cell) || /^[=+\-@\t\r]/.test(cell.trim());
+  const trimmed = cell.trim();
+  if (isFormula && trimmed.length > 0) {
+    return `'${trimmed}`;
+  }
+  return trimmed;
+}
+
+/**
  * Extracts tabular text rows from plain text lines.
  */
 export function parseTextToTableRows(text: string): string[][] {
@@ -19,7 +33,7 @@ export function parseTextToTableRows(text: string): string[][] {
     // Split on 2 or more spaces or tab characters to separate columns
     const cells = line
       .split(/\t+|\s{2,}/)
-      .map((c) => c.trim())
+      .map((c) => sanitizeCellText(c))
       .filter((c) => c.length > 0);
 
     if (cells.length > 0) {
@@ -43,7 +57,8 @@ export async function createExcelWorkbookBuffer(
   for (const table of tables) {
     const sheet = workbook.addWorksheet(`Page ${table.pageNumber}`);
     for (const row of table.rows) {
-      sheet.addRow(row);
+      const sanitizedRow = row.map((cell) => sanitizeCellText(cell));
+      sheet.addRow(sanitizedRow);
     }
   }
 
@@ -52,7 +67,7 @@ export async function createExcelWorkbookBuffer(
 }
 
 /**
- * Converts table rows to CSV format string.
+ * Converts table rows to CSV format string with formula injection protection.
  */
 export function createCsvString(tables: ExtractedTable[]): string {
   const lines: string[] = [];
@@ -60,7 +75,12 @@ export function createCsvString(tables: ExtractedTable[]): string {
   for (const table of tables) {
     lines.push(`--- Page ${table.pageNumber} ---`);
     for (const row of table.rows) {
-      const csvRow = row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",");
+      const csvRow = row
+        .map((cell) => {
+          const sanitized = sanitizeCellText(cell);
+          return `"${sanitized.replace(/"/g, '""')}"`;
+        })
+        .join(",");
       lines.push(csvRow);
     }
     lines.push("");
