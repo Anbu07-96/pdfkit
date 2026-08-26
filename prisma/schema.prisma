@@ -14,6 +14,11 @@ model UserAccount {
   name                   String?
   tier                   String       @default("free")
   status                 String       @default("active")
+  accountTrustStatus     String       @default("unverified")
+  authProvider           String?      @default("credentials")
+  emailVerified          DateTime?
+  verificationToken      String?      @unique
+  verificationExpires    DateTime?
   billingProvider        String?      @default("razorpay")
   razorpayCustomerId     String?      @unique
   razorpaySubscriptionId String?      @unique
@@ -22,6 +27,7 @@ model UserAccount {
   dailyUsages            DailyUsage[]
 
   @@index([userId])
+  @@index([verificationToken])
   @@index([razorpayCustomerId])
   @@index([razorpaySubscriptionId])
 }

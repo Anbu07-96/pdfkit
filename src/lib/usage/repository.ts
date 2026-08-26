@@ -68,6 +68,15 @@ export class InMemoryUsageRepository implements UsageRepository {
     return account ? { ...account } : null;
   }
 
+  async getUserAccountByVerificationToken(token: string): Promise<PersistedUserAccount | null> {
+    for (const account of this.accounts.values()) {
+      if (account.verificationToken === token) {
+        return { ...account };
+      }
+    }
+    return null;
+  }
+
   async getUserAccountByRazorpayCustomerId(customerId: string): Promise<PersistedUserAccount | null> {
     for (const account of this.accounts.values()) {
       if (account.razorpayCustomerId === customerId) {
@@ -92,6 +101,11 @@ export class InMemoryUsageRepository implements UsageRepository {
     name?: string | null;
     tier?: UserAccountTier;
     status?: string;
+    accountTrustStatus?: string;
+    authProvider?: string | null;
+    emailVerified?: Date | null;
+    verificationToken?: string | null;
+    verificationExpires?: Date | null;
     billingProvider?: string | null;
     razorpayCustomerId?: string | null;
     razorpaySubscriptionId?: string | null;
@@ -106,6 +120,24 @@ export class InMemoryUsageRepository implements UsageRepository {
       name: account.name !== undefined ? account.name : existing?.name || null,
       tier: account.tier || existing?.tier || "free",
       status: account.status || existing?.status || "active",
+      accountTrustStatus:
+        account.accountTrustStatus || existing?.accountTrustStatus || "unverified",
+      authProvider:
+        account.authProvider !== undefined
+          ? account.authProvider
+          : existing?.authProvider || "credentials",
+      emailVerified:
+        account.emailVerified !== undefined
+          ? account.emailVerified
+          : existing?.emailVerified || null,
+      verificationToken:
+        account.verificationToken !== undefined
+          ? account.verificationToken
+          : existing?.verificationToken || null,
+      verificationExpires:
+        account.verificationExpires !== undefined
+          ? account.verificationExpires
+          : existing?.verificationExpires || null,
       billingProvider:
         account.billingProvider !== undefined
           ? account.billingProvider
@@ -241,6 +273,42 @@ export class PrismaUsageRepository implements UsageRepository {
         name: acc.name,
         tier: acc.tier as UserAccountTier,
         status: acc.status,
+        accountTrustStatus: acc.accountTrustStatus,
+        authProvider: acc.authProvider,
+        emailVerified: acc.emailVerified,
+        verificationToken: acc.verificationToken,
+        verificationExpires: acc.verificationExpires,
+        billingProvider: acc.billingProvider,
+        razorpayCustomerId: acc.razorpayCustomerId,
+        razorpaySubscriptionId: acc.razorpaySubscriptionId,
+        createdAt: acc.createdAt,
+        updatedAt: acc.updatedAt,
+      };
+    } catch (error) {
+      this.handleDbError(error);
+    }
+  }
+
+  async getUserAccountByVerificationToken(token: string): Promise<PersistedUserAccount | null> {
+    try {
+      const acc = await this.prisma.userAccount.findUnique({
+        where: { verificationToken: token },
+      });
+
+      if (!acc) return null;
+
+      return {
+        id: acc.id,
+        userId: acc.userId,
+        email: acc.email,
+        name: acc.name,
+        tier: acc.tier as UserAccountTier,
+        status: acc.status,
+        accountTrustStatus: acc.accountTrustStatus,
+        authProvider: acc.authProvider,
+        emailVerified: acc.emailVerified,
+        verificationToken: acc.verificationToken,
+        verificationExpires: acc.verificationExpires,
         billingProvider: acc.billingProvider,
         razorpayCustomerId: acc.razorpayCustomerId,
         razorpaySubscriptionId: acc.razorpaySubscriptionId,
@@ -267,6 +335,11 @@ export class PrismaUsageRepository implements UsageRepository {
         name: acc.name,
         tier: acc.tier as UserAccountTier,
         status: acc.status,
+        accountTrustStatus: acc.accountTrustStatus,
+        authProvider: acc.authProvider,
+        emailVerified: acc.emailVerified,
+        verificationToken: acc.verificationToken,
+        verificationExpires: acc.verificationExpires,
         billingProvider: acc.billingProvider,
         razorpayCustomerId: acc.razorpayCustomerId,
         razorpaySubscriptionId: acc.razorpaySubscriptionId,
@@ -293,6 +366,11 @@ export class PrismaUsageRepository implements UsageRepository {
         name: acc.name,
         tier: acc.tier as UserAccountTier,
         status: acc.status,
+        accountTrustStatus: acc.accountTrustStatus,
+        authProvider: acc.authProvider,
+        emailVerified: acc.emailVerified,
+        verificationToken: acc.verificationToken,
+        verificationExpires: acc.verificationExpires,
         billingProvider: acc.billingProvider,
         razorpayCustomerId: acc.razorpayCustomerId,
         razorpaySubscriptionId: acc.razorpaySubscriptionId,
@@ -310,6 +388,11 @@ export class PrismaUsageRepository implements UsageRepository {
     name?: string | null;
     tier?: UserAccountTier;
     status?: string;
+    accountTrustStatus?: string;
+    authProvider?: string | null;
+    emailVerified?: Date | null;
+    verificationToken?: string | null;
+    verificationExpires?: Date | null;
     billingProvider?: string | null;
     razorpayCustomerId?: string | null;
     razorpaySubscriptionId?: string | null;
@@ -323,6 +406,11 @@ export class PrismaUsageRepository implements UsageRepository {
           name: account.name ?? null,
           tier: account.tier || "free",
           status: account.status || "active",
+          accountTrustStatus: account.accountTrustStatus || "unverified",
+          authProvider: account.authProvider ?? "credentials",
+          emailVerified: account.emailVerified ?? null,
+          verificationToken: account.verificationToken ?? null,
+          verificationExpires: account.verificationExpires ?? null,
           billingProvider: account.billingProvider ?? "razorpay",
           razorpayCustomerId: account.razorpayCustomerId ?? null,
           razorpaySubscriptionId: account.razorpaySubscriptionId ?? null,
@@ -332,6 +420,17 @@ export class PrismaUsageRepository implements UsageRepository {
           ...(account.name !== undefined ? { name: account.name } : {}),
           ...(account.tier !== undefined ? { tier: account.tier } : {}),
           ...(account.status !== undefined ? { status: account.status } : {}),
+          ...(account.accountTrustStatus !== undefined
+            ? { accountTrustStatus: account.accountTrustStatus }
+            : {}),
+          ...(account.authProvider !== undefined ? { authProvider: account.authProvider } : {}),
+          ...(account.emailVerified !== undefined ? { emailVerified: account.emailVerified } : {}),
+          ...(account.verificationToken !== undefined
+            ? { verificationToken: account.verificationToken }
+            : {}),
+          ...(account.verificationExpires !== undefined
+            ? { verificationExpires: account.verificationExpires }
+            : {}),
           ...(account.billingProvider !== undefined ? { billingProvider: account.billingProvider } : {}),
           ...(account.razorpayCustomerId !== undefined
             ? { razorpayCustomerId: account.razorpayCustomerId }
@@ -349,6 +448,11 @@ export class PrismaUsageRepository implements UsageRepository {
         name: acc.name,
         tier: acc.tier as UserAccountTier,
         status: acc.status,
+        accountTrustStatus: acc.accountTrustStatus,
+        authProvider: acc.authProvider,
+        emailVerified: acc.emailVerified,
+        verificationToken: acc.verificationToken,
+        verificationExpires: acc.verificationExpires,
         billingProvider: acc.billingProvider,
         razorpayCustomerId: acc.razorpayCustomerId,
         razorpaySubscriptionId: acc.razorpaySubscriptionId,
@@ -425,6 +529,7 @@ export function getUsageRepository(): UsageRepository {
       getUsage: async () => unconfiguredErr(),
       recordUsage: async () => unconfiguredErr(),
       getUserAccount: async () => unconfiguredErr(),
+      getUserAccountByVerificationToken: async () => unconfiguredErr(),
       getUserAccountByRazorpayCustomerId: async () => unconfiguredErr(),
       getUserAccountByRazorpaySubscriptionId: async () => unconfiguredErr(),
       upsertUserAccount: async () => unconfiguredErr(),

@@ -72,6 +72,11 @@ export interface PersistedUserAccount {
   name: string | null;
   tier: UserAccountTier;
   status: string;
+  accountTrustStatus: string;
+  authProvider: string | null;
+  emailVerified: Date | null;
+  verificationToken: string | null;
+  verificationExpires: Date | null;
   billingProvider: string | null;
   razorpayCustomerId: string | null;
   razorpaySubscriptionId: string | null;
@@ -105,6 +110,11 @@ export interface UsageRepository {
   getUserAccount(userId: string): Promise<PersistedUserAccount | null>;
 
   /**
+   * Get account metadata by verification token.
+   */
+  getUserAccountByVerificationToken(token: string): Promise<PersistedUserAccount | null>;
+
+  /**
    * Get account metadata by Razorpay Customer ID.
    */
   getUserAccountByRazorpayCustomerId(customerId: string): Promise<PersistedUserAccount | null>;
@@ -123,6 +133,11 @@ export interface UsageRepository {
     name?: string | null;
     tier?: UserAccountTier;
     status?: string;
+    accountTrustStatus?: string;
+    authProvider?: string | null;
+    emailVerified?: Date | null;
+    verificationToken?: string | null;
+    verificationExpires?: Date | null;
     billingProvider?: string | null;
     razorpayCustomerId?: string | null;
     razorpaySubscriptionId?: string | null;
