@@ -23,6 +23,7 @@
     "@sentry/nextjs": "^10.71.0",
     "clsx": "^2.1.1",
     "docx": "^9.7.1",
+    "exceljs": "^4.4.0",
     "fflate": "^0.8.3",
     "geist": "^1.7.2",
     "ioredis": "^6.0.0",

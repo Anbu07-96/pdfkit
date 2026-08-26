@@ -99,6 +99,7 @@ describe("server-only boundary", () => {
         !path.endsWith("highlight.ts") &&
         !path.endsWith("draw.ts") &&
         !path.endsWith("crop.ts") &&
+        !path.endsWith("redact.ts") &&
         !path.endsWith("metadata.ts") &&
         !path.endsWith("errors.ts") &&
         !path.endsWith("rules.ts") &&

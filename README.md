@@ -6,9 +6,9 @@ PDFKit is a fast, privacy-conscious web application for everyday PDF and
 document work — organising pages, converting formats, editing, securing, and
 later OCR and AI document intelligence.
 
-> ## Current status: Phase 44 — Production Stripe Billing & Subscription Architecture
+> ## Current status: Phase 46A — Tool Feasibility Audit & Local Redaction
 >
-> **Twenty-nine tools genuinely work:**
+> **Thirty tools genuinely work:**
 >
 > - **Merge PDF** — combine several PDFs in the order you choose.
 > - **Split PDF** — split every page into its own file, or split by page ranges;

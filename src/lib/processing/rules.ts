@@ -240,7 +240,43 @@ export const SINGLE_PDF_INPUT_RULES: ProcessorInputRules = {
   mimeTypes: ["application/pdf"],
 };
 
+/** Redact Information works on exactly one document. */
+export const REDACT_INFORMATION_INPUT_RULES: ProcessorInputRules = {
+  minFiles: 1,
+  maxFiles: 1,
+  extensions: [".pdf"],
+  mimeTypes: ["application/pdf"],
+};
+
+/** Extract Tables works on exactly one document. */
+export const EXTRACT_TABLES_INPUT_RULES: ProcessorInputRules = {
+  minFiles: 1,
+  maxFiles: 1,
+  extensions: [".pdf"],
+  mimeTypes: ["application/pdf"],
+};
+
+/** PDF to Excel works on exactly one document. */
+export const PDF_TO_EXCEL_INPUT_RULES: ProcessorInputRules = {
+  minFiles: 1,
+  maxFiles: 1,
+  extensions: [".pdf"],
+  mimeTypes: ["application/pdf"],
+};
+
+/** Compare Documents requires exactly two PDF documents. */
+export const COMPARE_DOCUMENTS_INPUT_RULES: ProcessorInputRules = {
+  minFiles: 2,
+  maxFiles: 2,
+  extensions: [".pdf"],
+  mimeTypes: ["application/pdf"],
+};
+
 export const INPUT_RULES_BY_TOOL: Record<string, ProcessorInputRules> = {
+  "compare-documents": COMPARE_DOCUMENTS_INPUT_RULES,
+  "extract-tables": EXTRACT_TABLES_INPUT_RULES,
+  "pdf-to-excel": PDF_TO_EXCEL_INPUT_RULES,
+  "redact-information": REDACT_INFORMATION_INPUT_RULES,
   "merge-pdf": MERGE_PDF_INPUT_RULES,
   "split-pdf": SPLIT_PDF_INPUT_RULES,
   "extract-pdf-pages": EXTRACT_PDF_PAGES_INPUT_RULES,

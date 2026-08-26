@@ -25,6 +25,10 @@ import { ReorderPdfPagesWorkspace } from "@/components/tools/workspaces/reorder-
 import { OrganizePdfWorkspace } from "@/components/tools/workspaces/organize-pdf-workspace";
 import { RotatePdfWorkspace } from "@/components/tools/workspaces/rotate-pdf-workspace";
 import { SplitPdfWorkspace } from "@/components/tools/workspaces/split-pdf-workspace";
+import { CompareDocumentsWorkspace } from "@/components/tools/workspaces/compare-documents-workspace";
+import { ExtractTablesWorkspace } from "@/components/tools/workspaces/extract-tables-workspace";
+import { PdfToExcelWorkspace } from "@/components/tools/workspaces/pdf-to-excel-workspace";
+import { RedactWorkspace } from "@/components/tools/workspaces/redact-workspace";
 import { UnlockPdfWorkspace } from "@/components/tools/workspaces/unlock-pdf-workspace";
 import { getProcessingLimits } from "@/lib/processing/limits";
 import { getThumbnailLimits } from "@/lib/thumbnails/limits";
@@ -103,6 +107,18 @@ export function getToolWorkspace(toolId: string): React.ReactNode | null {
     case "unlock-pdf": {
       const limits = getProcessingLimits();
       return <UnlockPdfWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
+    }
+    case "redact-information": {
+      return <RedactWorkspace />;
+    }
+    case "extract-tables": {
+      return <ExtractTablesWorkspace />;
+    }
+    case "pdf-to-excel": {
+      return <PdfToExcelWorkspace />;
+    }
+    case "compare-documents": {
+      return <CompareDocumentsWorkspace />;
     }
     case "watermark": {
       const limits = getProcessingLimits();

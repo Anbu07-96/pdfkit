@@ -335,6 +335,27 @@ async function toProcessedDocument(
   };
 }
 
+/** Generic tool job execution fallback for client UI workspaces. */
+export async function executeToolJob(
+  toolId: string,
+  form: FormData,
+  signal?: AbortSignal,
+): Promise<{ status: "succeeded" | "failed"; artifact?: { name: string; blob: Blob }; error?: { message: string } }> {
+  try {
+    const response = await postForm(`/api/tools/${toolId}`, form, signal);
+    const doc = await toProcessedDocument(response, "output.bin");
+    return {
+      status: "succeeded",
+      artifact: { name: doc.fileName, blob: doc.blob },
+    };
+  } catch (err) {
+    return {
+      status: "failed",
+      error: { message: err instanceof Error ? err.message : "Processing failed." },
+    };
+  }
+}
+
 export interface PdfInspectionResult {
   fileName: string;
   size: number;

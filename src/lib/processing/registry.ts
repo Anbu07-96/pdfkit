@@ -31,6 +31,10 @@ import { organizePdfProcessor } from "@/lib/processing/processors/organize-pdf";
 import { reorderPdfPagesProcessor } from "@/lib/processing/processors/reorder-pdf-pages";
 import { rotatePdfProcessor } from "@/lib/processing/processors/rotate-pdf";
 import { splitPdfProcessor } from "@/lib/processing/processors/split-pdf";
+import { compareDocumentsProcessor } from "@/lib/processing/processors/compare-documents";
+import { extractTablesProcessor } from "@/lib/processing/processors/extract-tables";
+import { pdfToExcelProcessor } from "@/lib/processing/processors/pdf-to-excel";
+import { redactProcessor } from "@/lib/processing/processors/redact";
 import { unlockPdfProcessor } from "@/lib/processing/processors/unlock-pdf";
 
 /**
@@ -76,6 +80,10 @@ const PROCESSORS = new Map<string, ToolProcessor<never>>([
   [flattenPdfProcessor.toolId, flattenPdfProcessor as ToolProcessor<never>],
   [passwordProtectProcessor.toolId, passwordProtectProcessor as ToolProcessor<never>],
   [unlockPdfProcessor.toolId, unlockPdfProcessor as ToolProcessor<never>],
+  [redactProcessor.toolId, redactProcessor as ToolProcessor<never>],
+  [extractTablesProcessor.toolId, extractTablesProcessor as ToolProcessor<never>],
+  [pdfToExcelProcessor.toolId, pdfToExcelProcessor as ToolProcessor<never>],
+  [compareDocumentsProcessor.toolId, compareDocumentsProcessor as ToolProcessor<never>],
 ]);
 
 /** Tool ids with a working implementation. */

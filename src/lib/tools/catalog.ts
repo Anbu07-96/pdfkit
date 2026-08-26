@@ -320,6 +320,7 @@ export const TOOLS: readonly Tool[] = [
     description: "Turn tables inside a PDF into an Excel spreadsheet.",
     category: "convert",
     icon: "excel",
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["xlsx", "spreadsheet", "tables", "data"],
     howItWorks: [
@@ -610,12 +611,13 @@ export const TOOLS: readonly Tool[] = [
     description: "Permanently black out sensitive text and areas.",
     category: "security",
     icon: "redact",
+    status: "AVAILABLE",
     plannedTier: "free",
     keywords: ["black out", "hide", "censor", "sensitive", "gdpr"],
     howItWorks: [
       "Upload the document that contains sensitive content.",
       "Mark the text or areas to redact.",
-      "Download a PDF with that content removed, not just covered.",
+      "Download a PDF with that content covered by vector blackout boxes.",
     ],
   }),
   pdfTool({
@@ -752,6 +754,7 @@ export const TOOLS: readonly Tool[] = [
     description: "Detect tables in a document and export them as data.",
     category: "ai",
     icon: "table",
+    status: "AVAILABLE",
     plannedTier: "pro",
     keywords: ["csv", "spreadsheet", "rows", "columns", "data"],
     howItWorks: [
@@ -822,6 +825,7 @@ export const TOOLS: readonly Tool[] = [
     description: "See what changed between two versions of a document.",
     category: "ai",
     icon: "ai-compare",
+    status: "AVAILABLE",
     plannedTier: "pro",
     keywords: ["diff", "changes", "versions", "redline", "ai"],
     howItWorks: [
