@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { User } from "next-auth";
 import type { AdapterUser } from "next-auth/adapters";
-import { authOptions } from "@/lib/auth/config";
+import { authOptions, getAuthProviders } from "@/lib/auth/config";
 import {
   validateAndNormalizeEmail,
   validatePassword,
@@ -15,13 +15,37 @@ interface ProviderWithOptions {
   };
 }
 
-describe("Phase 51 — Email & Password Hardening & Validation", () => {
+describe("Phase 54 — Auth Hardening, Provider Removal & Anti-Bot Security", () => {
   const credentialsProvider = authOptions.providers.find(
     (p) => p.id === "credentials",
   ) as unknown as ProviderWithOptions;
 
   const authorize =
     credentialsProvider?.options?.authorize || credentialsProvider?.authorize;
+
+  describe("Provider Configuration", () => {
+    it("does NOT include GitHub provider", () => {
+      const providers = getAuthProviders();
+      const githubProvider = providers.find((p) => p.id === "github");
+      expect(githubProvider).toBeUndefined();
+    });
+
+    it("includes Google and Azure AD / Microsoft providers when env vars exist", () => {
+      vi.stubEnv("GOOGLE_CLIENT_ID", "google_id");
+      vi.stubEnv("GOOGLE_CLIENT_SECRET", "google_secret");
+      vi.stubEnv("MICROSOFT_CLIENT_ID", "ms_id");
+      vi.stubEnv("MICROSOFT_CLIENT_SECRET", "ms_secret");
+
+      const providers = getAuthProviders();
+      const googleProvider = providers.find((p) => p.id === "google");
+      const azureProvider = providers.find((p) => p.id === "azure-ad");
+
+      expect(googleProvider).toBeDefined();
+      expect(azureProvider).toBeDefined();
+
+      vi.unstubAllEnvs();
+    });
+  });
 
   describe("Email Validation & Normalization", () => {
     it("validates and normalizes legitimate emails to lowercase", () => {

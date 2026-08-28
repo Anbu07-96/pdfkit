@@ -1,36 +1,24 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import GithubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
+import AzureADProvider from "next-auth/providers/azure-ad";
 import {
   validateAndNormalizeEmail,
   validatePassword,
 } from "@/lib/auth/validation";
+import {
+  checkLoginLockout,
+  clearFailedLogin,
+  recordFailedLogin,
+} from "@/lib/auth/failed-login-tracker";
 
 /**
- * NextAuth options configuration.
- *
- * Configured with JWT session strategy and secret from environment.
- * Development / testing mode includes a credentials provider with strict validation.
- * Production environments enable GitHub / Google OAuth when credentials are present in env.
+ * Resolves active NextAuth providers dynamically based on environment variables.
+ * Disables GitHub completely, and enables Google / Microsoft OAuth when secrets exist.
  */
-
-const NEXTAUTH_SECRET =
-  process.env.NEXTAUTH_SECRET ||
-  process.env.AUTH_SECRET ||
-  "pdfkit-dev-auth-secret-do-not-use-in-production";
-
-export const authOptions: NextAuthOptions = {
-  secret: NEXTAUTH_SECRET,
-  session: {
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-  },
-  pages: {
-    signIn: "/login",
-  },
-  providers: [
-    // Local / Testing credentials provider
+export function getAuthProviders() {
+  return [
+    // Credentials provider
     CredentialsProvider({
       id: "credentials",
       name: "Email & Password",
@@ -48,12 +36,23 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const passwordResult = validatePassword(credentials.password, credentials.email);
-        if (!passwordResult.isValid) {
+        const normalizedEmail = emailResult.normalizedEmail;
+
+        // Check server-side lockout
+        const lockout = checkLoginLockout(normalizedEmail);
+        if (lockout.isLocked) {
+          console.warn(`[auth] Login attempt rejected for locked out email: ${normalizedEmail}`);
           return null;
         }
 
-        const normalizedEmail = emailResult.normalizedEmail;
+        const passwordResult = validatePassword(credentials.password, credentials.email);
+        if (!passwordResult.isValid) {
+          recordFailedLogin(normalizedEmail);
+          return null;
+        }
+
+        // Clear failed attempts on successful login
+        clearFailedLogin(normalizedEmail);
 
         return {
           id: `usr_${Buffer.from(normalizedEmail).toString("hex").slice(0, 12)}`,
@@ -64,16 +63,7 @@ export const authOptions: NextAuthOptions = {
       },
     }),
 
-    // OAuth Providers enabled when env variables exist
-    ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
-      ? [
-          GithubProvider({
-            clientId: process.env.GITHUB_CLIENT_ID,
-            clientSecret: process.env.GITHUB_CLIENT_SECRET,
-          }),
-        ]
-      : []),
-
+    // Google OAuth Provider
     ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
       ? [
           GoogleProvider({
@@ -82,7 +72,40 @@ export const authOptions: NextAuthOptions = {
           }),
         ]
       : []),
-  ],
+
+    // Microsoft / Outlook (Azure AD) OAuth Provider
+    ...((process.env.AZURE_AD_CLIENT_ID || process.env.MICROSOFT_CLIENT_ID) &&
+    (process.env.AZURE_AD_CLIENT_SECRET || process.env.MICROSOFT_CLIENT_SECRET)
+      ? [
+          AzureADProvider({
+            clientId:
+              process.env.AZURE_AD_CLIENT_ID || process.env.MICROSOFT_CLIENT_ID || "",
+            clientSecret:
+              process.env.AZURE_AD_CLIENT_SECRET ||
+              process.env.MICROSOFT_CLIENT_SECRET ||
+              "",
+            tenantId: process.env.AZURE_AD_TENANT_ID || "common",
+          }),
+        ]
+      : []),
+  ];
+}
+
+const NEXTAUTH_SECRET =
+  process.env.NEXTAUTH_SECRET ||
+  process.env.AUTH_SECRET ||
+  "pdfkit-dev-auth-secret-do-not-use-in-production";
+
+export const authOptions: NextAuthOptions = {
+  secret: NEXTAUTH_SECRET,
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+  pages: {
+    signIn: "/login",
+  },
+  providers: getAuthProviders(),
   callbacks: {
     async jwt({ token, user }) {
       if (user) {

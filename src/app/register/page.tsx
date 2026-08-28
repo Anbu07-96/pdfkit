@@ -1,6 +1,6 @@
 "use client";
 
-import { LogIn, ShieldAlert } from "lucide-react";
+import { UserPlus, ShieldAlert, CheckCircle2 } from "lucide-react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import * as React from "react";
@@ -9,19 +9,26 @@ import { Input } from "@/components/ui/input";
 import { SectionHeader } from "@/components/ui/section-header";
 import { siteConfig } from "@/lib/config/site";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [success, setSuccess] = React.useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const cleanEmail = email.trim();
     const cleanPassword = password.trim();
 
-    if (!cleanEmail || !cleanPassword) {
-      setError("Please enter both email and password.");
+    if (!cleanEmail || !cleanPassword || !confirmPassword) {
+      setError("Please fill in all fields.");
+      return;
+    }
+
+    if (cleanPassword !== confirmPassword) {
+      setError("Passwords do not match. Please re-enter your password.");
       return;
     }
 
@@ -32,6 +39,7 @@ export default function LoginPage() {
 
     setLoading(true);
     setError(null);
+    setSuccess(null);
 
     try {
       const res = await signIn("credentials", {
@@ -42,9 +50,12 @@ export default function LoginPage() {
       });
 
       if (res?.error) {
-        setError("Invalid credentials or unverified email account.");
+        setError("Could not create account with these credentials. Ensure your email is a non-disposable address and password contains letters and numbers.");
       } else if (res?.url) {
-        window.location.href = res.url;
+        setSuccess("Account created successfully. Redirecting to your account dashboard...");
+        setTimeout(() => {
+          window.location.href = res.url!;
+        }, 1000);
       }
     } catch {
       setError("An unexpected error occurred. Please try again.");
@@ -56,12 +67,12 @@ export default function LoginPage() {
   return (
     <main className="container max-w-md py-12">
       <SectionHeader
-        title={`Sign in to ${siteConfig.name}`}
-        description="Access your account, plan quotas and security settings."
+        title={`Create your ${siteConfig.name} Account`}
+        description="Register for expanded daily PDF processing quotas."
       />
 
       <div className="mt-8 rounded-2xl border border-border bg-surface p-6 shadow-xs space-y-6">
-        {/* OAuth Authentication Methods */}
+        {/* OAuth Fast Sign Up */}
         <div className="flex flex-col gap-3">
           <Button
             variant="secondary"
@@ -87,7 +98,7 @@ export default function LoginPage() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
               />
             </svg>
-            Continue with Google
+            Sign up with Google
           </Button>
 
           <Button
@@ -102,7 +113,7 @@ export default function LoginPage() {
               <path fill="#05a6f0" d="M1 12h10v10H1z" />
               <path fill="#ffba08" d="M12 12h10v10H12z" />
             </svg>
-            Continue with Microsoft / Outlook
+            Sign up with Microsoft
           </Button>
         </div>
 
@@ -110,10 +121,9 @@ export default function LoginPage() {
           <div className="absolute inset-0 flex items-center">
             <span className="w-full border-t border-border" />
           </div>
-          <span className="relative bg-surface px-2">Or email sign in</span>
+          <span className="relative bg-surface px-2">Or register with email</span>
         </div>
 
-        {/* Credentials Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <Input
             label="Email address"
@@ -123,6 +133,7 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
             autoComplete="email"
+            hint="Non-disposable, valid email required."
             suppressHydrationWarning
           />
 
@@ -133,7 +144,19 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            autoComplete="current-password"
+            autoComplete="new-password"
+            hint="8+ characters with letters and numbers."
+            suppressHydrationWarning
+          />
+
+          <Input
+            label="Confirm password"
+            type="password"
+            placeholder="••••••••"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+            autoComplete="new-password"
             suppressHydrationWarning
           />
 
@@ -144,16 +167,23 @@ export default function LoginPage() {
             </p>
           ) : null}
 
-          <Button type="submit" size="lg" disabled={loading || !email || !password}>
-            <LogIn className="size-4" />
-            {loading ? "Signing in…" : "Sign In"}
+          {success ? (
+            <p className="text-xs text-success flex items-center gap-1.5" role="status">
+              <CheckCircle2 className="size-4 shrink-0" />
+              {success}
+            </p>
+          ) : null}
+
+          <Button type="submit" size="lg" disabled={loading || !email || !password || !confirmPassword}>
+            <UserPlus className="size-4" />
+            {loading ? "Creating account…" : "Create Account"}
           </Button>
         </form>
 
         <div className="pt-2 text-center text-xs text-muted border-t border-border">
-          Don&apos;t have an account?{" "}
-          <Link href="/register" className="font-semibold text-brand hover:underline">
-            Create an account
+          Already have an account?{" "}
+          <Link href="/login" className="font-semibold text-brand hover:underline">
+            Sign in
           </Link>
         </div>
       </div>
