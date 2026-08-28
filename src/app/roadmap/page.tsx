@@ -17,7 +17,7 @@ const PHASES = [
       "Design system, light and dark themes",
       "Application shell: navigation, layout, footer",
       "Homepage with search, popular tools, categories, privacy, FAQ",
-      "Central tool catalog with 42 tools and honest availability states",
+      "Central tool catalog with 44 tools and honest availability states",
       "Processing contract defined with no implementation",
       "Reusable tool page template and upload interface (selection only)",
       "Automated tests for the catalog, search, theme and key components",
@@ -98,6 +98,44 @@ const PHASES = [
       "PDF to JPG and PDF to PNG at 150 DPI via the shared pdfium renderer",
       "One image for single pages, a ZIP per document otherwise",
       "Signature checks, pixel/page/output limits, all enforced server-side",
+    ],
+  },
+  {
+    title: "Phase 31 — Add Text",
+    status: "Completed" as const,
+    items: [
+      "Real vector text boxes (multi-line, nine anchors, four sizes) — pages never rasterised",
+      "Oversized text scaled down to fit; unencodable characters rejected plainly",
+      "Stamped-page count measured server-side (X-PDFKit-Text-Pages)",
+    ],
+  },
+  {
+    title: "Phase 30 — Unlock PDF",
+    status: "Completed" as const,
+    items: [
+      "Real decryption with a password you already have — not password recovery",
+      "RC4 40-bit and 128-bit supported; AES-class files refused honestly",
+      "Protect → unlock round trip verified end to end over both routes",
+      "Wrong passwords reported, never echoed; unprotected input told apart from damaged files",
+    ],
+  },
+  {
+    title: "Phase 29 — Password Protect",
+    status: "Completed" as const,
+    items: [
+      "Real RC4 128-bit encryption (Standard Security V2/R3) — opening requires the password",
+      "Output verified three ways before download; already-encrypted files refused",
+      "Honest labelling everywhere: RC4 named, AES-256 never claimed",
+      "Password held in memory for the request only — never logged",
+    ],
+  },
+  {
+    title: "Phase 28 — Production hardening, wave 1",
+    status: "Completed" as const,
+    items: [
+      "One hardened wrapper around every processing route",
+      "Numeric Content-Length gate, optional concurrency cap (503, no queue)",
+      "Request timeout (504) that never pretends to abort pdfium mid-render; CI workflow",
     ],
   },
   {

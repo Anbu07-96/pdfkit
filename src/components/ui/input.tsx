@@ -64,6 +64,7 @@ export function Input({
         <input
           id={inputId}
           disabled={disabled}
+          suppressHydrationWarning
           aria-invalid={error ? true : undefined}
           aria-describedby={cn(errorId, hintId) || undefined}
           className={cn(

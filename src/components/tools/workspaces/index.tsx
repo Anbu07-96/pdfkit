@@ -1,3 +1,8 @@
+import { AddImagesWorkspace } from "@/components/tools/workspaces/add-images-workspace";
+import { AddShapesWorkspace } from "@/components/tools/workspaces/add-shapes-workspace";
+import { AddTextWorkspace } from "@/components/tools/workspaces/add-text-workspace";
+import { AnnotationsWorkspace } from "@/components/tools/workspaces/annotations-workspace";
+import { DrawWorkspace } from "@/components/tools/workspaces/draw-workspace";
 import { CompressPdfWorkspace } from "@/components/tools/workspaces/compress-pdf-workspace";
 import { EditPdfMetadataWorkspace } from "@/components/tools/workspaces/edit-pdf-metadata-workspace";
 import { RemoveMetadataWorkspace } from "@/components/tools/workspaces/remove-metadata-workspace";
@@ -7,14 +12,24 @@ import { PdfToWordWorkspace } from "@/components/tools/workspaces/pdf-to-word-wo
 import { PngToPdfWorkspace } from "@/components/tools/workspaces/png-to-pdf-workspace";
 import { WatermarkWorkspace } from "@/components/tools/workspaces/watermark-workspace";
 import { PageNumbersWorkspace } from "@/components/tools/workspaces/page-numbers-workspace";
+import { PasswordProtectWorkspace } from "@/components/tools/workspaces/password-protect-workspace";
 import { CropWorkspace } from "@/components/tools/workspaces/crop-workspace";
 import { FlattenPdfWorkspace } from "@/components/tools/workspaces/flatten-pdf-workspace";
+import { HighlightWorkspace } from "@/components/tools/workspaces/highlight-workspace";
 import { DeletePdfPagesWorkspace } from "@/components/tools/workspaces/delete-pdf-pages-workspace";
+import { ExtractImagesWorkspace } from "@/components/tools/workspaces/extract-images-workspace";
+import { PdfToTextWorkspace } from "@/components/tools/workspaces/pdf-to-text-workspace";
 import { ExtractPdfPagesWorkspace } from "@/components/tools/workspaces/extract-pdf-pages-workspace";
 import { MergePdfWorkspace } from "@/components/tools/workspaces/merge-pdf-workspace";
 import { ReorderPdfPagesWorkspace } from "@/components/tools/workspaces/reorder-pdf-pages-workspace";
+import { OrganizePdfWorkspace } from "@/components/tools/workspaces/organize-pdf-workspace";
 import { RotatePdfWorkspace } from "@/components/tools/workspaces/rotate-pdf-workspace";
 import { SplitPdfWorkspace } from "@/components/tools/workspaces/split-pdf-workspace";
+import { CompareDocumentsWorkspace } from "@/components/tools/workspaces/compare-documents-workspace";
+import { ExtractTablesWorkspace } from "@/components/tools/workspaces/extract-tables-workspace";
+import { PdfToExcelWorkspace } from "@/components/tools/workspaces/pdf-to-excel-workspace";
+import { RedactWorkspace } from "@/components/tools/workspaces/redact-workspace";
+import { UnlockPdfWorkspace } from "@/components/tools/workspaces/unlock-pdf-workspace";
 import { getProcessingLimits } from "@/lib/processing/limits";
 import { getThumbnailLimits } from "@/lib/thumbnails/limits";
 import { getInputRules } from "@/lib/processing/rules";
@@ -83,9 +98,63 @@ export function getToolWorkspace(toolId: string): React.ReactNode | null {
       const limits = getProcessingLimits();
       return <PageNumbersWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
     }
+    case "password-protect": {
+      const limits = getProcessingLimits();
+      return (
+        <PasswordProtectWorkspace limits={{ maxFileSize: limits.maxFileSize }} />
+      );
+    }
+    case "unlock-pdf": {
+      const limits = getProcessingLimits();
+      return <UnlockPdfWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
+    }
+    case "redact-information": {
+      return <RedactWorkspace />;
+    }
+    case "extract-tables": {
+      return <ExtractTablesWorkspace />;
+    }
+    case "pdf-to-excel": {
+      return <PdfToExcelWorkspace />;
+    }
+    case "compare-documents": {
+      return <CompareDocumentsWorkspace />;
+    }
     case "watermark": {
       const limits = getProcessingLimits();
       return <WatermarkWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
+    }
+    case "add-shapes": {
+      const limits = getProcessingLimits();
+      return <AddShapesWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
+    }
+    case "add-images": {
+      const limits = getProcessingLimits();
+      return <AddImagesWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
+    }
+    case "highlight": {
+      const limits = getProcessingLimits();
+      return <HighlightWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
+    }
+    case "draw": {
+      const limits = getProcessingLimits();
+      return <DrawWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
+    }
+    case "annotations": {
+      const limits = getProcessingLimits();
+      return <AnnotationsWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
+    }
+    case "extract-images": {
+      const limits = getProcessingLimits();
+      return <ExtractImagesWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
+    }
+    case "pdf-to-text": {
+      const limits = getProcessingLimits();
+      return <PdfToTextWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
+    }
+    case "add-text": {
+      const limits = getProcessingLimits();
+      return <AddTextWorkspace limits={{ maxFileSize: limits.maxFileSize }} />;
     }
     case "png-to-pdf": {
       const limits = getProcessingLimits();
@@ -192,6 +261,18 @@ export function getToolWorkspace(toolId: string): React.ReactNode | null {
       const thumbnails = getThumbnailLimits();
       return (
         <ReorderPdfPagesWorkspace
+          limits={{
+            maxFileSize: limits.maxFileSize,
+            thumbnailMaxPages: thumbnails.maxPages,
+          }}
+        />
+      );
+    }
+    case "organize-pdf": {
+      const limits = getProcessingLimits();
+      const thumbnails = getThumbnailLimits();
+      return (
+        <OrganizePdfWorkspace
           limits={{
             maxFileSize: limits.maxFileSize,
             thumbnailMaxPages: thumbnails.maxPages,

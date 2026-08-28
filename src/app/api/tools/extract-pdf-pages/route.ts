@@ -1,4 +1,4 @@
-import { handleProcessingRequest, methodNotAllowed } from "@/lib/processing/http";
+import { handleProcessingRequest, methodNotAllowed } from "@/lib/hardening/route";
 import type { ExtractPdfPagesOptions } from "@/lib/processing/processors/extract-pdf-pages";
 
 /**
