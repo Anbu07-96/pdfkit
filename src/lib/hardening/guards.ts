@@ -3,7 +3,7 @@ import "server-only";
 import { jsonError } from "@/lib/processing/http";
 
 /**
- * Request guards (Phase 28, Wave 1).
+ * Request guards (Phase 28/55).
  *
  * Cheap, deterministic checks that run before a single byte of the request
  * body is parsed, plus the slot counter behind the optional concurrency cap.
@@ -11,15 +11,6 @@ import { jsonError } from "@/lib/processing/http";
 
 /**
  * The numeric Content-Length gate.
- *
- * When a Content-Length header is present it must be a plain decimal byte
- * count. Anything else (`abc`, `-1`, `1e5`, `12.5`, a number beyond the safe
- * integer range) is a client or middleware bug — or an attempt to desynchronise
- * proxies — and is rejected with 400 before the body is read. A missing header
- * is allowed: chunked multipart uploads are legitimate, and the exact byte
- * accounting in the HTTP adapter still applies to them.
- *
- * Returns `null` when the request may proceed, or a ready-made error response.
  */
 export function checkContentLengthHeader(request: Request): Response | null {
   const header = request.headers.get("content-length");
@@ -33,6 +24,43 @@ export function checkContentLengthHeader(request: Request): Response | null {
     );
   }
   return null;
+}
+
+/**
+ * Verify Origin or Referer header on state-changing requests to prevent CSRF.
+ * Returns null if valid, or a ready-made HTTP 403 Response if invalid origin.
+ */
+export function checkRequestOrigin(request: Request): Response | null {
+  const origin = request.headers.get("origin") || request.headers.get("referer");
+  if (!origin) return null; // Same-origin or non-browser client
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  try {
+    const requestHost = new URL(origin).host;
+    const siteHost = new URL(siteUrl).host;
+
+    // Allow site host, localhost, or allowed dev origins
+    if (
+      requestHost === siteHost ||
+      requestHost.includes("localhost") ||
+      requestHost.includes("127.0.0.1") ||
+      requestHost.endsWith(".e2b.app") ||
+      requestHost.endsWith(".app.github.dev")
+    ) {
+      return null;
+    }
+
+    console.warn(`[hardening] CSRF origin check failed for origin: ${origin}`);
+    return jsonError(
+      "VALIDATION_ERROR",
+      "Request origin verification failed.",
+    );
+  } catch {
+    return jsonError(
+      "VALIDATION_ERROR",
+      "Invalid request origin header.",
+    );
+  }
 }
 
 /**

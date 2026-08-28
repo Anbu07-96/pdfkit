@@ -9,7 +9,7 @@ import {
 } from "@/lib/hardening/guards";
 
 /**
- * Distributed Concurrency & Rate-Limiting Protection (Phase 41).
+ * Distributed Concurrency & Rate-Limiting Protection (Phase 41/55).
  *
  * Provides shared protection state across multiple application instances
  * when Redis is configured (`PDFKIT_REDIS_URL` or `REDIS_URL`).
@@ -54,11 +54,25 @@ function getRedisClient(): Redis | null {
   }
 }
 
-/** Compute an anonymized 16-character SHA-256 token for client rate limiting. */
+/** Compute an anonymized 16-character SHA-256 token for client rate limiting with proxy IP hardening. */
 export function anonymizeClientIp(request: Request): string {
+  const cfIp = request.headers.get("cf-connecting-ip")?.trim();
+  const realIp = request.headers.get("x-real-ip")?.trim();
   const forwarded = request.headers.get("x-forwarded-for") ?? "";
-  const realIp = request.headers.get("x-real-ip") ?? "";
-  const ip = (forwarded.split(",")[0] || realIp || "127.0.0.1").trim();
+
+  // Reverse proxies like Render/Railway/Cloudflare append the real client IP to the end or set CF-Connecting-IP / X-Real-IP
+  const forwardedIps = forwarded
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  // Pick CF-Connecting-IP > X-Real-IP > last X-Forwarded-For entry > first X-Forwarded-For entry > fallback
+  const rawCandidate =
+    cfIp || realIp || forwardedIps[forwardedIps.length - 1] || forwardedIps[0] || "127.0.0.1";
+
+  // Sanitize IP format to prevent header injection in keys
+  const ip = /^[\d.a-fA-F:]+$/.test(rawCandidate) ? rawCandidate : "127.0.0.1";
+
   return createHash("sha256").update(`${ip}:${SALT}`).digest("hex").slice(0, 16);
 }
 
