@@ -26,6 +26,7 @@ export const primaryNav: NavLink[] = [
     href: category.route,
     description: category.description,
   })),
+  { label: "Bulk", href: "/bulk", description: "Convert many files at once" },
   { label: "Pricing", href: "/pricing", description: "Plans and availability" },
 ];
 
@@ -43,6 +44,7 @@ export const footerNav: FooterGroup[] = [
       { label: "Edit", href: "/categories/edit" },
       { label: "OCR", href: "/categories/ocr" },
       { label: "AI", href: "/categories/ai" },
+      { label: "Bulk tools", href: "/bulk" },
       { label: "Pricing", href: "/pricing" },
     ],
   },

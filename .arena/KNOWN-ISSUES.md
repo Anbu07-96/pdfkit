@@ -57,3 +57,31 @@ Before exposing PDFKit to real production traffic, the following infrastructure 
    - **AI Tools** (`summarize-pdf`, `ask-pdf`, `extract-important-information`, `generate-notes`, `generate-key-points`, `extract-dates-and-deadlines`, `translate-documents`): Kept COMING_SOON because LLM inference requires external paid AI APIs, violating zero-external-API constraints.
    - **OCR Tools** (`scanned-pdf-to-searchable-pdf`, `ocr-document`, `image-to-text`): Kept COMING_SOON pending local offline language model assets.
    - **Digital Signature** (`digital-signature`): Kept COMING_SOON pending X.509 PKCS#7 / PFX certificate manager integration.
+
+---
+
+## 5. Bulk Tools Limits, Rationale & Known Limitations (Phase 61)
+
+### Architecture
+- Bulk processing is **client-orchestrated**: the browser sends each file as its own ordinary request to the existing single-file endpoint (sequentially, ≥1.1 s apart). No server-side batch endpoint exists, so quota metering, rate limiting, concurrency caps, origin checks, validation and sanitisation apply per file with no bulk bypass.
+- A bulk operation may only exist while its underlying single-file tool is `AVAILABLE` (enforced by `src/lib/tools/bulk.test.ts`).
+
+### Selected limits and why
+| Limit | Anonymous | Free | Pro | Business | Reasoning |
+| --- | --- | --- | --- | --- | --- |
+| Files per batch | 10 | 50 | 100 | 100 | `min(tier ceiling, daily job quota)` — anon 10 = its whole daily job quota (a bigger batch could never finish); free 50 = whole daily quota; pro/business 100 where browser memory and session duration bind before quota does. |
+| Total upload per batch | 50 MB | 100 MB | 250 MB | 250 MB | Same `min(quota, ceiling)` derivation; 250 MB is an upload-session practicality cap. Per-request server cap (25 MB/file) untouched since files travel one by one. |
+| Rendered pages per batch (PDF→JPG/PNG) | 200 | 200 | 200 | 200 | 150 DPI dense page ≈ 1 MB JPEG → ~200 MB worst-case browser-held output; ~100–400 s of server rasterisation spread across short requests, each far below the 120 s request timeout. |
+| Extracted images per batch | 400 | 400 | 400 | 400 | 2× the new per-file server cap (200), bounding in-memory artifacts. |
+| Result bytes per batch | 200 MB | 200 MB | 200 MB | 200 MB | All outputs are held in browser RAM while the batch ZIP is assembled; 200 MB keeps mobile browsers (killed well before desktop limits) safe. |
+| Concurrent jobs per batch | 1 | 1 | 1 | 1 | Sequential dispatch adds no server concurrency pressure and stays under the 60 req/min IP rate limit with pacing. |
+| Request timeout | 120 s unchanged | — | — | — | Each file is one request; the existing hardening timeout applies as-is. |
+
+### Known limitations
+- **Budget overshoot of one file**: budgets are checked *between* files, so the file that crosses a page/output/image budget still completes. Overshoot is bounded by one file's output, which the server already caps per file (≤50 pages, ≤6 MB/image, ≤200 images). Worst case equals two adversarial single-file jobs run back-to-back, which is possible today via manual use.
+- **Bulk office conversions are NOT offered**: Word→PDF, Excel→PDF and PowerPoint→PDF have no single-file engines (COMING_SOON; require LibreOffice/headless browser). The bulk landing page states this explicitly.
+- **Quota display cadence**: the bulk UI refreshes `GET /api/usage` on mount, every 5 settled files and at batch end — not per file — to stay under the shared per-IP rate limit. The server remains the source of truth and stops the batch with `QUOTA_EXCEEDED` regardless of what the UI shows.
+- **429 backoff is coarse**: on `TOO_MANY_REQUESTS` the runner waits 60 s (max 2 retries) because the server does not send `Retry-After`.
+- **Anonymous bucket is shared**: unauthenticated visitors share the `anon` usage bucket per deployment instance (pre-existing Phase 43 behavior); a large anonymous batch may therefore find the quota already consumed.
+- **Extract Images is raster-only**: it extracts embedded raster XObjects (JPEG/PNG/Flate); vector graphics and images drawn as page content are not reconstructed. Pre-existing behavior, unchanged.
+- **Page-budget enforcement is reactive for raster ops**: page counts come from the server's `X-PDFKit-Pages` response header, so a batch learns a file's page count only after that file is processed (no per-file pre-inspection requests are made, by design, to halve request volume).

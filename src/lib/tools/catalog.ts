@@ -250,7 +250,16 @@ export const TOOLS: readonly Tool[] = [
     icon: "image",
     status: "AVAILABLE",
     plannedTier: "free",
-    keywords: ["extract photos", "pictures", "save images", "embedded images"],
+    keywords: [
+      "extract photos",
+      "pictures",
+      "save images",
+      "embedded images",
+      "batch",
+      "multiple pdfs",
+      "zip",
+      "bulk",
+    ],
     howItWorks: [
       "Upload the PDF document.",
       "Select pages to extract images from.",
@@ -790,4 +799,5 @@ export const POPULAR_TOOL_IDS = [
   "extract-pdf-pages",
   "images-to-pdf",
   "pdf-to-jpg",
+  "extract-images",
 ] as const;

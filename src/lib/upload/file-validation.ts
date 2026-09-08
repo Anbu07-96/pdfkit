@@ -19,7 +19,8 @@ export type FileRejectionReason =
   | "too-large"
   | "empty-file"
   | "too-many-files"
-  | "duplicate";
+  | "duplicate"
+  | "total-size-exceeded";
 
 export interface FileConstraints {
   /** Allowed extensions, lower-case and dot-prefixed, e.g. `[".pdf"]`. */
@@ -30,6 +31,12 @@ export interface FileConstraints {
   maxFileSize?: number;
   /** Maximum number of files that may be selected in total. */
   maxFiles?: number;
+  /**
+   * Maximum combined size of every selected file, in bytes. Checked against
+   * the files already selected plus the incoming ones, so the total stays
+   * bounded no matter how files are added (Phase 61, bulk tools).
+   */
+  maxTotalSize?: number;
 }
 
 export interface FileRejection {
@@ -96,6 +103,12 @@ export function validateFiles<T extends FileLike>(
   const rejected: FileRejection[] = [];
   const seen = new Set(existingFiles.map(fileKey));
 
+  const existingBytes = existingFiles.reduce(
+    (total, file) => total + file.size,
+    0,
+  );
+  let runningBytes = existingBytes;
+
   for (const file of files) {
     if (!isFileTypeAllowed(file, constraints)) {
       rejected.push({
@@ -150,8 +163,21 @@ export function validateFiles<T extends FileLike>(
       continue;
     }
 
+    if (
+      typeof constraints.maxTotalSize === "number" &&
+      runningBytes + file.size > constraints.maxTotalSize
+    ) {
+      rejected.push({
+        file,
+        reason: "total-size-exceeded",
+        message: `${file.name} does not fit: the combined upload must stay within the total size limit.`,
+      });
+      continue;
+    }
+
     seen.add(fileKey(file));
     accepted.push(file);
+    runningBytes += file.size;
   }
 
   return { accepted, rejected };

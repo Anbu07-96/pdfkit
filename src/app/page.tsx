@@ -1,4 +1,5 @@
 import { FaqSection } from "@/components/home/faq-section";
+import { BulkTools } from "@/components/home/bulk-tools";
 import { Hero } from "@/components/home/hero";
 import { PopularTools } from "@/components/home/popular-tools";
 import { PrivacySection } from "@/components/home/privacy-section";
@@ -11,6 +12,7 @@ export default function HomePage() {
       <Hero />
       <PopularTools />
       <ToolCategories />
+      <BulkTools />
       <PrivacySection />
       <WhyPdfkit />
       <FaqSection />

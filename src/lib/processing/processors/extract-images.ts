@@ -1,9 +1,10 @@
 import "server-only";
 
-import { PDFDict, PDFName, PDFRawStream } from "pdf-lib";
+import { PDFDict, PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
 import { decompressSync, unzlibSync } from "fflate";
 import type {
   ProcessingArtifact,
+  ProcessingContext,
   ProcessingRequest,
   ProcessingSuccess,
   ToolProcessor,
@@ -20,12 +21,49 @@ import {
   resolveExtractImagesPages,
 } from "@/lib/processing/extract-images";
 
+/**
+ * Collect the image XObject streams of one page's Resources dictionary.
+ *
+ * Shared by the pre-count pass (limit enforcement) and the extraction pass so
+ * both walks always agree on what counts as an image.
+ */
+function pageImageStreams(
+  source: PDFDocument,
+  pageNumber: number,
+): PDFRawStream[] {
+  const page = source.getPage(pageNumber - 1);
+  const resources = page.node.get(PDFName.of("Resources"));
+  if (!resources) return [];
+
+  const resDict = source.context.lookup(resources);
+  if (!(resDict instanceof PDFDict)) return [];
+
+  const xObject = resDict.get(PDFName.of("XObject"));
+  if (!xObject) return [];
+
+  const xObjectDict = source.context.lookup(xObject);
+  if (!(xObjectDict instanceof PDFDict)) return [];
+
+  const found: PDFRawStream[] = [];
+  for (const key of xObjectDict.keys()) {
+    const obj = source.context.lookup(xObjectDict.get(key));
+    if (obj instanceof PDFRawStream) {
+      const subtype = obj.dict.get(PDFName.of("Subtype"));
+      if (subtype?.toString() === "/Image" && obj.getContents().length > 0) {
+        found.push(obj);
+      }
+    }
+  }
+  return found;
+}
+
 export class ExtractImagesProcessor implements ToolProcessor {
   readonly toolId = "extract-images";
   readonly input = EXTRACT_IMAGES_INPUT_RULES;
 
   async process(
     request: ProcessingRequest<Record<string, unknown>>,
+    context?: ProcessingContext,
   ): Promise<ProcessingSuccess> {
     const file = request.files[0];
     if (!file) {
@@ -42,35 +80,38 @@ export class ExtractImagesProcessor implements ToolProcessor {
     const pageCount = readPageCount(source, file.name);
 
     const targetPages = resolveExtractImagesPages(options.pages, pageCount);
+
+    // Phase 61: count the images on the target pages *before* extracting a
+    // single byte. Without this cap a crafted PDF with thousands of tiny
+    // embedded images could make one request allocate an unbounded number of
+    // in-memory artifacts (and a giant ZIP) — single-file use and bulk use
+    // alike.
+    const maxImages = context?.limits.maxExtractedImages;
+    if (maxImages !== undefined) {
+      let imageTotal = 0;
+      for (const pageNumber of targetPages) {
+        imageTotal += pageImageStreams(source, pageNumber).length;
+      }
+      if (imageTotal > maxImages) {
+        throw new ProcessingError(
+          "TOO_MANY_OUTPUTS",
+          `This PDF contains ${imageTotal} embedded images on the selected pages, more than the limit of ${maxImages}. Extract a narrower page selection or split the document first.`,
+        );
+      }
+    }
+
     const artifacts: ProcessingArtifact[] = [];
 
     const baseName = file.name.replace(/\.pdf$/i, "");
 
     for (const pageNumber of targetPages) {
-      const page = source.getPage(pageNumber - 1);
-      const resources = page.node.get(PDFName.of("Resources"));
-      if (!resources) continue;
-
-      const resDict = source.context.lookup(resources);
-      if (!(resDict instanceof PDFDict)) continue;
-
-      const xObject = resDict.get(PDFName.of("XObject"));
-      if (!xObject) continue;
-
-      const xObjectDict = source.context.lookup(xObject);
-      if (!(xObjectDict instanceof PDFDict)) continue;
-
       let imageCountOnPage = 0;
 
-      for (const key of xObjectDict.keys()) {
-        const obj = source.context.lookup(xObjectDict.get(key));
-        if (obj instanceof PDFRawStream) {
-          const subtype = obj.dict.get(PDFName.of("Subtype"));
-          if (subtype?.toString() === "/Image") {
-            const rawContents = obj.getContents();
-            if (rawContents.length === 0) continue;
+      for (const obj of pageImageStreams(source, pageNumber)) {
+        const rawContents = obj.getContents();
+        if (rawContents.length === 0) continue;
 
-            imageCountOnPage += 1;
+        imageCountOnPage += 1;
 
             // Check if JPEG
             const isJpg =
@@ -166,8 +207,6 @@ export class ExtractImagesProcessor implements ToolProcessor {
                 bytes: rawContents,
               });
             }
-          }
-        }
       }
     }
 

@@ -1,10 +1,12 @@
 import type { MetadataRoute } from "next";
 import { siteConfig } from "@/lib/config/site";
+import { BULK_OPERATIONS } from "@/lib/tools/bulk";
 import { TOOL_CATEGORIES, TOOLS } from "@/lib/tools";
 
 const STATIC_ROUTES = [
   "/",
   "/tools",
+  "/bulk",
   "/pricing",
   "/help",
   "/faq",
@@ -31,6 +33,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     })),
     ...TOOLS.map((tool) => ({
       url: `${base}${tool.route}`,
+      lastModified,
+      priority: 0.5,
+    })),
+    ...BULK_OPERATIONS.map((operation) => ({
+      url: `${base}${operation.route}`,
       lastModified,
       priority: 0.5,
     })),

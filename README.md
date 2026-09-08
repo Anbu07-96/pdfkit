@@ -1023,6 +1023,7 @@ Configurable through the environment, with safe defaults:
 | `PDFKIT_MAX_UPLOAD_SIZE` | `26214400` (25 MB) | Maximum size of one file |
 | `PDFKIT_MAX_TOTAL_UPLOAD_SIZE` | `104857600` (100 MB) | Maximum combined size |
 | `PDFKIT_MAX_SPLIT_OUTPUTS` | `50` | Documents one job may produce |
+| `PDFKIT_EXTRACT_IMAGES_MAX_IMAGES` | `200` | Images Extract Images may return per document (ceiling 1000) |
 | `PDFKIT_COMPRESS_MAX_RASTER_PAGES` | `60` | Pages the aggressive compress pass may rasterise (ceiling 300) |
 | `PDFKIT_CONVERSION_MAX_PAGES` | `50` | Pages a PDF → image export may render (ceiling 200) |
 | `PDFKIT_CONVERSION_DPI` | `150` | Render resolution for image exports (ceiling 300) |
@@ -1031,6 +1032,44 @@ Configurable through the environment, with safe defaults:
 Limits are enforced by the server on every request. The numbers shown in the
 interface come from the build-time configuration, so rebuild after changing
 them if you want the hints to match exactly.
+
+## Bulk tools
+
+The `/bulk` section (Phase 61) batches the existing single-file conversion
+endpoints. The browser orchestrates the batch and sends **one file per
+request**, so quota metering, rate limiting, concurrency capping, origin
+checks, validation and sanitisation apply to every file exactly as in the
+single-file tools — there is no bulk bypass.
+
+- **Supported**: bulk PDF → Word, PDF → Excel, PDF → Text, PDF → JPG,
+  PDF → PNG, Images → PDF (one PDF per image) and Extract Images.
+- **Not supported (honestly)**: bulk Word/Excel/PowerPoint → PDF — those
+  single-file engines are not implemented (see "What is deliberately not
+  implemented").
+- **UX**: drag & drop many files, count/total-size validation before upload,
+  live per-file status, cancel, retry of failed files, individual downloads
+  and a "Download all" ZIP assembled in the browser with fflate.
+- **Quota**: every file counts as one job plus its bytes against the daily
+  plan quota. `GET /api/usage` returns the caller's quota snapshot so the
+  batch UI can show what a batch needs before it starts.
+
+Batch limits (shown in the UI before a batch starts):
+
+| Limit | Anonymous | Free | Pro | Business |
+| --- | --- | --- | --- | --- |
+| Files per batch | 10 | 50 | 100 | 100 |
+| Total upload per batch | 50 MB | 100 MB | 250 MB | 250 MB |
+| Rendered pages per batch (PDF → JPG/PNG) | 200 | 200 | 200 | 200 |
+| Extracted images per batch | 400 | 400 | 400 | 400 |
+| Result bytes held per batch (browser) | 200 MB | 200 MB | 200 MB | 200 MB |
+
+The file and upload caps are `min(tier ceiling, daily quota)` so they follow
+environment-configured quotas automatically. Requests are paced at least
+1.1 s apart (staying under the default 60 requests/minute IP rate limit),
+and the runner backs off on `429 TOO_MANY_REQUESTS` and `503 SERVER_BUSY`.
+Budgets are checked between files, so the file that crosses a budget still
+completes — the overshoot is bounded by one file's output, which the server
+already caps per file.
 
 ## Production hardening
 

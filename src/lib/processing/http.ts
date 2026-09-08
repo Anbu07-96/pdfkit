@@ -213,6 +213,12 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
 
   const options = readOptions ? readOptions(upload.form) : undefined;
 
+  // Capture the input byte total BEFORE the job runs: the service's `finally`
+  // block clears the files array (in-memory cleanup), which would otherwise
+  // leave this at 0 — and the daily byte quota would never accumulate
+  // (Phase 61 audit: this is exactly what happened before the fix).
+  const totalProcessedBytes = upload.files.reduce((sum, file) => sum + file.size, 0);
+
   // Hand over to the processing service (validation happens inside).
   const result = await runProcessingJob<TOptions>(
     { toolId, files: upload.files, options },
@@ -235,7 +241,6 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
 
   // Record successful usage metering (Phase 43)
   const userIdentity = identity || (await getUserIdentity());
-  const totalProcessedBytes = upload.files.reduce((sum, f) => sum + f.size, 0);
   try {
     await getUsageService().recordJobSuccess(userIdentity, totalProcessedBytes);
   } catch (usageError) {
@@ -302,6 +307,13 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
   }
   if (result.meta?.mode !== undefined) {
     metaHeaders["x-pdfkit-mode"] = String(result.meta.mode);
+  }
+
+  // Extract Images facts (also used by the bulk runner's image budget)
+  if (result.meta?.extractedImagesCount !== undefined) {
+    metaHeaders["x-pdfkit-extracted-images"] = String(
+      result.meta.extractedImagesCount,
+    );
   }
 
   // Watermark facts

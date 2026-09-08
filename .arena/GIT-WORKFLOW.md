@@ -16,7 +16,7 @@
    ```
 
 3. **Strict Branch Discipline**:
-   - **Fixed Session Branch**: Remain on `arena/01a0360f-pdfkit` unless explicitly instructed otherwise by the user.
+   - **Fixed Session Branch**: Remain on `arena/01a081d8-pdfkit` unless explicitly instructed otherwise by the user.
    - **Never Switch Branches**: Do not switch to `main` or create new branches without explicit instruction.
    - **Never Delete Branches**: Do not delete local or remote branches.
 
@@ -41,7 +41,7 @@
    - Always report the exact local commit SHA, current branch, and clean working tree status after committing.
 
 7. **Push & Synchronization Safety**:
-   - Verify local branch matches the target remote branch before pushing (`git push -u origin arena/01a0360f-pdfkit`).
+   - Verify local branch matches the target remote branch before pushing (`git push -u origin arena/01a081d8-pdfkit`).
    - Never assume GitHub is synchronized with local work.
    - If `git push` fails due to GitHub App token workflow permissions (e.g. `.github/workflows/ci.yml`), notify the user to reconnect GitHub in Arena.
 

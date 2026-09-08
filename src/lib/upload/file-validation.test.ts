@@ -91,6 +91,39 @@ describe("validateFiles", () => {
     expect(accepted.map((entry) => entry.name)).toEqual(["a.pdf", "b.pdf"]);
     expect(rejected[0]?.reason).toBe("too-many-files");
   });
+
+  it("rejects files that push the combined size over the total limit", () => {
+    const totalConstraints = { ...constraints, maxTotalSize: 100 };
+    const { accepted, rejected } = validateFiles(
+      [file("a.pdf", 60), file("b.pdf", 50)],
+      totalConstraints,
+    );
+    expect(accepted.map((entry) => entry.name)).toEqual(["a.pdf"]);
+    expect(rejected[0]?.reason).toBe("total-size-exceeded");
+  });
+
+  it("counts already selected files against the total limit", () => {
+    const totalConstraints = { ...constraints, maxTotalSize: 100 };
+    const existing = [file("a.pdf", 80)];
+    const { accepted, rejected } = validateFiles(
+      [file("b.pdf", 30), file("c.pdf", 20)],
+      totalConstraints,
+      existing,
+    );
+    // b does not fit (80 + 30 > 100) but c does (80 + 20 ≤ 100).
+    expect(accepted.map((entry) => entry.name)).toEqual(["c.pdf"]);
+    expect(rejected[0]?.reason).toBe("total-size-exceeded");
+  });
+
+  it("accepts files that exactly reach the total limit", () => {
+    const totalConstraints = { ...constraints, maxTotalSize: 100 };
+    const { accepted, rejected } = validateFiles(
+      [file("a.pdf", 60), file("b.pdf", 40)],
+      totalConstraints,
+    );
+    expect(accepted).toHaveLength(2);
+    expect(rejected).toHaveLength(0);
+  });
 });
 
 describe("buildAcceptAttribute", () => {

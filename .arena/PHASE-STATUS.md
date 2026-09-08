@@ -1,14 +1,10 @@
 # PDFKit — Phase Status & Implementation Roadmap
 
 ## 1. Branch & History Summary
-- **Current Branch**: `arena/01a0360f-pdfkit`
-- **Origin Main Baseline**: `e0ba835`
-- **PR #4**: Open on GitHub targeting `main` ([PR #4](https://github.com/Anbu07-96/pdfkit/pull/4)).
-- **Phase 45 Status**: **IMPLEMENTED / COMPLETE**
-- **Phase 46A Status**: **IMPLEMENTED / COMPLETE**
-- **Phase 46B Status**: **IMPLEMENTED / COMPLETE**
-- **Phase 46C Status**: **IMPLEMENTED / COMPLETE**
-- **Phase 46D Status**: **IMPLEMENTED / COMPLETE**
+- **Current Branch**: `arena/01a081d8-pdfkit`
+- **Origin Main Baseline**: `da4a50e` (`Merge PDFKit phases 54-60`)
+- **Phases 47–60**: Implemented and merged to `main` (see `git log`).
+- **Phase 61 (Bulk Tools & Image Extraction) Status**: **IMPLEMENTED / COMPLETE** on the session branch.
 
 ---
 
@@ -32,6 +28,8 @@
 | **46B** | Staging Deployment Preparation & Pre-Deployment Verification | Complete | Staging readiness verified across build, Node compatibility, env vars, Prisma migrations, Redis, Auth, limits & health routes. |
 | **46C** | Staging Deployment & Razorpay Payment Gateway Migration | Complete | Replaced Stripe with Razorpay as primary billing gateway for Indian users. HMAC signature verification, `/api/billing/verify`, `/api/billing/webhook`, test coverage complete. |
 | **46D** | Security Hardening, Account Validation & Authentication Quality | Complete | Hardened email validation with disposable domain blocklist and lowercase normalization. Enforced strong alphanumeric password policy (min 8 chars, common password rejection). Updated CSP security headers in `next.config.ts`. Verified redaction behavior & catalog accuracy. |
+| **47–60** | Office/AI/OCR feasibility work, staging, billing (Razorpay), hardening waves | Implemented / Merged | Merged to `main` in `da4a50e` (`Merge PDFKit phases 54-60`). Repository state is authoritative. |
+| **61** | Bulk Tools & Image Extraction | Implemented / Complete | Client-orchestrated batch architecture (`/bulk` section): 7 bulk operations over existing single-file endpoints, per-file status/cancel/retry, browser-side batch ZIP, `GET /api/usage` quota snapshot, tier-derived batch limits (files/bytes/pages/images/output), request pacing under the IP rate limit. Extract Images hardened with a per-document image cap (`PDFKIT_EXTRACT_IMAGES_MAX_IMAGES`, default 200) and made more discoverable (popular tools, keywords, bulk cross-links). |
 
 ---
 

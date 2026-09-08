@@ -948,6 +948,70 @@ The Stripe integration is isolated behind a server-only service boundary (`Billi
 
 ---
 
+## 5v. Bulk Tools & Batch Processing (Phase 61)
+
+**Client-orchestrated batches over the existing single-file endpoints.**
+The `/bulk` section batches conversions — PDF → Word/Excel/Text/JPG/PNG,
+Images → PDF (one PDF per image) and Extract Images — without any new
+server-side processing surface. The browser's batch runner
+(`src/lib/bulk/runner.ts`) sends **one file per request** to the existing
+`/api/tools/<tool>` endpoint, sequentially, with ≥1.1 s between request
+starts.
+
+Why not a server-side batch endpoint (audit conclusion): the MVP holds every
+document in memory, caps requests at 120 s, and delivers an all-or-nothing
+result — a batch of N files would hold N inputs plus N outputs in RAM, could
+not finish rasterisation within the request timeout, and could not report
+per-file progress, cancellation or retry. Client orchestration gets all of
+that for free while every existing guard (quota preflight + metering, IP
+rate limit, concurrency cap, origin check, validation, sanitisation,
+in-memory-only processing, cleanup) applies to each file exactly as before.
+A bulk operation may only exist when its underlying single-file tool is
+`AVAILABLE` (`src/lib/tools/bulk.test.ts` enforces it).
+
+**Components.**
+
+- `src/lib/tools/bulk.ts` — bulk operations catalog, tier ceilings and the
+  `resolveBulkBatchCaps(tier, dailyJobLimit, dailyByteLimit)` derivation.
+  Pure data, shared by server pages and the browser runner.
+- `src/lib/bulk/runner.ts` — transport-only batch loop: pacing, 429/503
+  backoff, abort, per-file statuses, quota stop, page/output/image budgets.
+- `src/lib/bulk/zip.ts` — client-side "Download all" ZIP (fflate). Archive
+  results are unpacked and flattened into one sanitised folder per source
+  file; every entry name is re-sanitised (no paths, traversal or control
+  characters), mirroring the server's `sanitizeZipEntryName`.
+- `GET /api/usage` — the caller's daily quota snapshot (read-only, session
+  identity with anonymous fallback, rate-limited) so the workspace can show
+  "this batch needs X jobs / Y MB" before it starts.
+- `src/components/bulk/bulk-workspace.tsx` — shared UX for all operations:
+  multi-file drag & drop with count/total-size validation, live per-file
+  status, cancel, retry of unfinished files, individual downloads and the
+  batch ZIP.
+
+**Batch limits and why.** Files per batch and upload bytes are
+`min(tier ceiling, daily quota)`: anonymous 10 (its whole daily job quota),
+free 50 (whole daily job quota), pro/business 100 (20%/2% of daily job quota,
+where browser memory and session duration bind before the quota does).
+Shared budgets: 200 rendered pages per batch (150 DPI JPEG ≈ 1 MB/page worst
+case → ~200 MB of browser-held output), 200 MB of results per batch (all
+outputs live in browser RAM while the ZIP is assembled; mobile browsers are
+killed well before desktop limits), 400 extracted images per batch (2× the
+per-file server cap). Budgets are checked *between* files, so the overshoot
+is one file's output — bounded by the server's per-file caps. Concurrency is
+one in-flight request per batch; the server-side
+`PDFKIT_MAX_CONCURRENT_JOBS` is unchanged.
+
+**Extract Images hardening (Phase 61).** The processor now counts image
+XObjects on the selected pages *before* extracting anything and rejects
+documents over `PDFKIT_EXTRACT_IMAGES_MAX_IMAGES` (default 200, ceiling
+1000) with `TOO_MANY_OUTPUTS` — closing a pre-existing gap where a crafted
+PDF with thousands of tiny embedded images could allocate unbounded
+in-memory artifacts. The count is also reported via the
+`X-PDFKit-Extracted-Images` header, which the bulk runner uses for the batch
+image budget.
+
+---
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:

@@ -85,6 +85,7 @@ export function UploadZone({
   mimeTypes,
   maxFileSize,
   maxFiles,
+  maxTotalSize,
 }: UploadZoneProps) {
   const [uncontrolledFiles, setUncontrolledFiles] = React.useState<SelectedFile[]>([]);
   const [rejections, setRejections] = React.useState<FileRejection[]>([]);
@@ -98,8 +99,8 @@ export function UploadZone({
   const locked = disabled || busy;
 
   const constraints: FileConstraints = React.useMemo(
-    () => ({ extensions, mimeTypes, maxFileSize, maxFiles }),
-    [extensions, mimeTypes, maxFileSize, maxFiles],
+    () => ({ extensions, mimeTypes, maxFileSize, maxFiles, maxTotalSize }),
+    [extensions, mimeTypes, maxFileSize, maxFiles, maxTotalSize],
   );
 
   const update = React.useCallback(
@@ -156,7 +157,12 @@ export function UploadZone({
     : "Supported files";
   const sizeHint = maxFileSize ? `up to ${formatBytes(maxFileSize, 0)} each` : null;
   const countHint = maxFiles ? `${maxFiles} file${maxFiles === 1 ? "" : "s"} max` : null;
-  const details = [typeHint, sizeHint, countHint].filter(Boolean).join(" · ");
+  const totalHint = maxTotalSize
+    ? `${formatBytes(maxTotalSize, 0)} total`
+    : null;
+  const details = [typeHint, sizeHint, countHint, totalHint]
+    .filter(Boolean)
+    .join(" · ");
 
   const state = disabled
     ? "disabled"
@@ -295,6 +301,11 @@ export function UploadZone({
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-medium text-foreground">
               {files.length} {files.length === 1 ? "file" : "files"} selected
+              {maxTotalSize
+                ? ` · ${formatBytes(
+                    files.reduce((total, file) => total + file.size, 0),
+                  )} / ${formatBytes(maxTotalSize, 0)}`
+                : ""}
             </p>
             <Button variant="ghost" size="sm" onClick={clearAll} disabled={locked}>
               Remove all

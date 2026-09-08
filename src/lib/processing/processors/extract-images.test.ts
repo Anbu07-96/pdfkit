@@ -1,8 +1,9 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { PDFDocument } from "pdf-lib";
 import { ProcessingError } from "@/lib/processing/errors";
 import { extractImagesProcessor } from "@/lib/processing/processors/extract-images";
+import { getProcessingLimits } from "@/lib/processing/limits";
 import { makePdf } from "@/test/pdf-fixtures";
 
 const TINY_PNG = new Uint8Array([
@@ -53,6 +54,70 @@ describe("extract-images processor", () => {
     } catch (error) {
       expect(error).toBeInstanceOf(ProcessingError);
       expect((error as ProcessingError).message).toMatch(/No images were found/i);
+    }
+  });
+
+  it("rejects a document whose image count exceeds the limit before extracting anything", async () => {
+    vi.stubEnv("PDFKIT_EXTRACT_IMAGES_MAX_IMAGES", "3");
+    try {
+      // Five pages, one image each → five images, over the cap of 3.
+      const doc = await PDFDocument.create();
+      for (let i = 0; i < 5; i += 1) {
+        const page = doc.addPage([200, 200]);
+        const img = await doc.embedPng(TINY_PNG);
+        page.drawImage(img, { x: 0, y: 0, width: 50, height: 50 });
+      }
+      const pdfBytes = await doc.save();
+
+      try {
+        await extractImagesProcessor.process(
+          {
+            toolId: "extract-images",
+            files: [await fileInput("many.pdf", pdfBytes)],
+            options: { pages: "all" },
+          },
+          // The service always passes the context; tests of the limit need it too.
+          { limits: getProcessingLimits() },
+        );
+        throw new Error("expected throw");
+      } catch (error) {
+        expect(error).toBeInstanceOf(ProcessingError);
+        const processingError = error as ProcessingError;
+        expect(processingError.code).toBe("TOO_MANY_OUTPUTS");
+        expect(processingError.message).toMatch(/more than the limit of 3/i);
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("extracts exactly up to the configured limit without rejecting", async () => {
+    vi.stubEnv("PDFKIT_EXTRACT_IMAGES_MAX_IMAGES", "5");
+    try {
+      const doc = await PDFDocument.create();
+      for (let i = 0; i < 4; i += 1) {
+        const page = doc.addPage([200, 200]);
+        const img = await doc.embedPng(TINY_PNG);
+        page.drawImage(img, { x: 0, y: 0, width: 50, height: 50 });
+      }
+      const pdfBytes = await doc.save();
+
+      const result = await extractImagesProcessor.process(
+        {
+          toolId: "extract-images",
+          files: [await fileInput("within.pdf", pdfBytes)],
+          options: { pages: "all" },
+        },
+        { limits: getProcessingLimits() },
+      );
+
+      expect(result.status).toBe("succeeded");
+      if (result.status === "succeeded") {
+        expect(result.artifacts.length).toBe(4);
+        expect(result.meta?.extractedImagesCount).toBe(4);
+      }
+    } finally {
+      vi.unstubAllEnvs();
     }
   });
 });

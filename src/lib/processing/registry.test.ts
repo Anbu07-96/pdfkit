@@ -159,6 +159,7 @@ describe("getProcessingLimits", () => {
     vi.stubEnv("PDFKIT_MAX_TOTAL_UPLOAD_SIZE", "4096");
 
     vi.stubEnv("PDFKIT_MAX_SPLIT_OUTPUTS", "7");
+    vi.stubEnv("PDFKIT_EXTRACT_IMAGES_MAX_IMAGES", "42");
     vi.stubEnv("PDFKIT_COMPRESS_MAX_RASTER_PAGES", "25");
     vi.stubEnv("PDFKIT_CONVERSION_MAX_PAGES", "17");
     vi.stubEnv("PDFKIT_CONVERSION_DPI", "200");
@@ -169,6 +170,7 @@ describe("getProcessingLimits", () => {
       maxFileSize: 1024,
       maxTotalSize: 4096,
       maxOutputs: 7,
+      maxExtractedImages: 42,
       maxCompressRasterPages: 25,
       maxConversionPages: 17,
       conversionDpi: 200,

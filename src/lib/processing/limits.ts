@@ -16,6 +16,7 @@ import "server-only";
  * | PDFKIT_MAX_UPLOAD_SIZE            | 25 MB   | size of a single file      |
  * | PDFKIT_MAX_TOTAL_UPLOAD_SIZE      | 100 MB  | total size of one request  |
  * | PDFKIT_MAX_SPLIT_OUTPUTS          | 50      | documents one job may emit |
+ * | PDFKIT_EXTRACT_IMAGES_MAX_IMAGES  | 200     | images Extract Images emits per job |
  * | PDFKIT_COMPRESS_MAX_RASTER_PAGES  | 60      | pages rasterised per compress job |
  * | PDFKIT_CONVERSION_MAX_PAGES       | 50      | pages per PDF → image job    |
  * | PDFKIT_CONVERSION_DPI             | 150     | render resolution for exports |
@@ -40,6 +41,13 @@ export interface ProcessingLimits {
    */
   maxOutputs: number;
   /**
+   * Maximum number of embedded images Extract Images may return from one
+   * document (Phase 61). Checked by counting image XObjects on the target
+   * pages *before* any bytes are extracted, so a crafted PDF with thousands
+   * of tiny images cannot allocate unbounded in-memory artifacts.
+   */
+  maxExtractedImages: number;
+  /**
    * Maximum number of pages the aggressive (rasterising) compression pass may
    * render in one job. Above it, `high` compression stays lossless. Bounds the
    * CPU and memory one compress request can spend.
@@ -58,6 +66,7 @@ export const DEFAULT_PROCESSING_LIMITS: ProcessingLimits = {
   maxFileSize: 25 * MB,
   maxTotalSize: 100 * MB,
   maxOutputs: 50,
+  maxExtractedImages: 200,
   maxCompressRasterPages: 60,
   maxConversionPages: 50,
   conversionDpi: 150,
@@ -66,6 +75,7 @@ export const DEFAULT_PROCESSING_LIMITS: ProcessingLimits = {
 
 /** Hard ceilings, so a misconfigured environment cannot exhaust the server. */
 const MAX_COMPRESS_RASTER_PAGES_CEILING = 300;
+const MAX_EXTRACTED_IMAGES_CEILING = 1000;
 const CONVERSION_CEILINGS = {
   maxPages: 200,
   dpi: 300,
@@ -97,6 +107,14 @@ export function getProcessingLimits(): ProcessingLimits {
   const maxOutputs = readPositiveInt(
     process.env.PDFKIT_MAX_SPLIT_OUTPUTS,
     DEFAULT_PROCESSING_LIMITS.maxOutputs,
+  );
+
+  const maxExtractedImages = Math.min(
+    readPositiveInt(
+      process.env.PDFKIT_EXTRACT_IMAGES_MAX_IMAGES,
+      DEFAULT_PROCESSING_LIMITS.maxExtractedImages,
+    ),
+    MAX_EXTRACTED_IMAGES_CEILING,
   );
 
   const maxCompressRasterPages = Math.min(
@@ -132,12 +150,12 @@ export function getProcessingLimits(): ProcessingLimits {
   return {
     maxFiles,
     maxFileSize,
+    maxTotalSize: Math.max(maxTotalSize, maxFileSize),
     maxOutputs,
+    maxExtractedImages,
     maxCompressRasterPages,
     maxConversionPages,
     conversionDpi,
     conversionMaxImageBytes,
-    // A total smaller than a single file would be contradictory.
-    maxTotalSize: Math.max(maxTotalSize, maxFileSize),
   };
 }
