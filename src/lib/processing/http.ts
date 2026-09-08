@@ -64,7 +64,12 @@ export function readBatchIdHeader(request: Request): string | undefined {
   return BATCH_ID_PATTERN.test(raw) ? raw : undefined;
 }
 
-const BATCH_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-]{7,63}$/;
+/**
+ * The strict batch-id allowlist (alnum first, then alnum+hyphen, 8-64 chars).
+ * Shared with the bulk telemetry beacon so client-reported ids are validated
+ * exactly like the per-file request header.
+ */
+export const BATCH_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-]{7,63}$/;
 
 export function jsonError(
   code: ProcessingErrorCode,
@@ -214,6 +219,12 @@ export interface HandleProcessingRequestOptions<TOptions> {
   /** Fallback download name when the artifact does not provide one. */
   fallbackFileName: string;
   /**
+   * Server-generated request correlation id (Phase 63). Attached to job
+   * telemetry/logs so one request's HTTP response, timeout and job outcome
+   * lines can be correlated. Correlation only — never a security input.
+   */
+  requestId?: string;
+  /**
    * Pull tool options out of the multipart body. Values are untrusted: the
    * processor validates them server-side.
    */
@@ -224,7 +235,7 @@ export interface HandleProcessingRequestOptions<TOptions> {
 
 export async function handleProcessingRequest<TOptions = Record<string, unknown>>(
   request: Request,
-  { toolId, fallbackFileName, readOptions, identity }: HandleProcessingRequestOptions<TOptions>,
+  { toolId, fallbackFileName, readOptions, identity, requestId }: HandleProcessingRequestOptions<TOptions>,
 ): Promise<Response> {
   const limits = getProcessingLimits();
 
@@ -246,7 +257,14 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
   // Hand over to the processing service (validation happens inside).
   const result = await runProcessingJob<TOptions>(
     { toolId, files: upload.files, options },
-    { limits, logContext: { tier: identity?.tier, batchId } },
+    {
+      limits,
+      logContext: {
+        tier: identity?.tier,
+        batchId,
+        ...(requestId ? { requestId } : {}),
+      },
+    },
   );
 
   if (result.status === "failed") {

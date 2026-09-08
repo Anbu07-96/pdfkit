@@ -1133,15 +1133,42 @@ HTTP adapter:
 
 ## Production Observability and Health
 
-- **Health Probe Endpoint** — `GET /api/health` returns HTTP 200 with structured
+- **Liveness** — `GET /api/health` returns HTTP 200 with structured
   JSON (`status: "ok"`, `timestamp`, `uptimeSeconds`, `version`). Independent of
   PDF processing and WASM/pdfium initialization; does not expose internal secrets.
+- **Readiness (Phase 63)** — `GET /api/health/ready` verifies the configured
+  dependencies (PostgreSQL ping when `DATABASE_URL` is set, Redis ping when
+  `PDFKIT_REDIS_URL`/`REDIS_URL` is set, tool registry) and answers
+  `ok`/`degraded` (HTTP 200) or `unavailable` (HTTP 503) with per-check
+  latency. Results are cached 5 s so probes stay cheap. Unconfigured optional
+  dependencies are reported honestly as `unconfigured` — never as failures.
 - **Structured JSON Logging** — `src/lib/monitoring/logger.ts` emits privacy-safe
   structured JSON entries in production (`event: "job_completed"`, `tool`, `outcome`,
   `files`, `bytes`, `ms`, `code`). Never logs passwords, file names, document
   contents, or secrets. Phase 62 adds `rate_limited` (with `retryAfterSeconds`),
   `quota_rejected` and `request_timeout` events, and job logs may carry `tier` and
   a bulk `batchId` correlation id (correlation only — never authorization).
+- **Telemetry & metrics (Phase 63)** — every processing request carries a
+  server-generated `x-pdfkit-request-id` response header; a typed telemetry
+  pipeline (`src/lib/monitoring/telemetry.ts`) feeds a strictly bounded,
+  provider-neutral metrics layer (`src/lib/monitoring/metrics/`): request
+  rates per minute/hour, p50/p95/p99 job durations, success rate, error
+  categories, 429/503/504 counts, byte throughput, quota rejections by tier,
+  RSS/heap. Bulk batches report lifecycle transitions
+  (`batch_started/completed/cancelled/budget_stopped/quota_stopped`) through
+  the validated `POST /api/bulk/telemetry` beacon. Full design:
+  `docs/production-observability.md`.
+- **Admin metrics endpoint (Phase 63)** — `GET /api/admin/metrics` returns the
+  full snapshot. **Fail closed**: disabled (404) unless
+  `PDFKIT_ADMIN_METRICS_TOKEN` is configured; then requires the token
+  (constant-time comparison) and is rate-limited under its own scope.
+  Aggregates only — no user identities, IPs, file names or document data.
+- **Load validation (Phase 63)** — deterministic multi-user scenarios
+  (10/25/50 concurrent users, concurrent bulk batches, shared-IP saturation,
+  tier isolation) run against the real handlers in
+  `src/lib/hardening/multi-user.load.test.ts`. Measured results and
+  identified bottlenecks: `docs/load-validation-results.md`. No production
+  capacity is claimed from in-process tests.
 - **Sentry Error Reporting** — `sentry.server.config.ts` and `src/lib/monitoring/sentry.ts`
   integrate Sentry for server-side error reporting when `SENTRY_DSN` is configured.
   Sanitizes request bodies, headers, and credentials defensively before transmission.

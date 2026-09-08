@@ -131,6 +131,13 @@ export interface RunBulkBatchOptions {
    * failures; it resumes automatically when the connection returns.
    */
   getOnline?: () => boolean;
+  /**
+   * Caller-supplied batch correlation id (Phase 63). Must match the server's
+   * validated pattern; otherwise a fresh id is generated. Lets the workspace
+   * send batch-lifecycle telemetry beacons under the same id the per-file
+   * requests carry. Correlation only — never trusted for decisions.
+   */
+  batchId?: string;
 }
 
 const RATE_LIMIT_COOLDOWN_MS = 60_000;
@@ -386,6 +393,7 @@ export async function runBulkBatch({
   fetchImpl = fetch,
   sleep = defaultSleep,
   getOnline = defaultGetOnline,
+  batchId: requestedBatchId,
 }: RunBulkBatchOptions): Promise<BulkBatchRun> {
   const results = new Map<string, BulkFileResult>();
   const budgets: BulkBudgets = initialBudgets ?? {
@@ -396,7 +404,10 @@ export async function runBulkBatch({
   let stopReason: BulkStopReason | undefined;
   let lastStart = 0;
   let settled = 0;
-  const batchId = generateBatchId();
+  const batchId =
+    requestedBatchId && /^[a-zA-Z0-9][a-zA-Z0-9-]{7,63}$/.test(requestedBatchId)
+      ? requestedBatchId
+      : generateBatchId();
   const startedAt = Date.now();
 
   const emit = (result: BulkFileResult) => {

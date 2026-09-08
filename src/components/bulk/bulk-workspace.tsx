@@ -28,6 +28,7 @@ import {
 } from "@/lib/bulk/runner";
 import { buildBatchZipBlob } from "@/lib/bulk/zip";
 import { batchCsvFileName, buildBatchCsv } from "@/lib/bulk/csv";
+import { sendBatchTelemetryBeacon } from "@/lib/bulk/telemetry-client";
 import { classifyBulkError } from "@/lib/bulk/errors";
 import {
   resolveBulkBatchCaps,
@@ -356,6 +357,20 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
     setBatchPhase(null);
     setSettled(0);
 
+    // The batch id is generated here so the lifecycle telemetry beacons and
+    // every per-file request header share one correlation id. It is metadata
+    // for logs only — the server never trusts it for decisions.
+    const batchId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `b-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    sendBatchTelemetryBeacon({
+      event: "batch_started",
+      operation: operation.id,
+      batchId,
+      fileCount: entries.length,
+    });
+
     let refreshCounter = 0;
     const run = await runBulkBatch({
       operation,
@@ -363,6 +378,7 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
       caps,
       signal: controller.signal,
       initialBudgets,
+      batchId,
       onFileStatus: (result) => {
         setResults((previous) => {
           const next = new Map(previous);
@@ -400,6 +416,55 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
     setBatchPhase(null);
     abortRef.current = null;
     void loadUsage();
+
+    // One terminal lifecycle beacon (Phase 63): metadata only, fire-and-forget.
+    if (!run.stopReason) {
+      sendBatchTelemetryBeacon({
+        event: "batch_completed",
+        operation: operation.id,
+        batchId: run.batchId,
+        fileCount: run.results.length,
+        succeeded: run.results.filter((r) => r.status === "succeeded").length,
+        failed: run.results.filter((r) => r.status === "failed").length,
+        skipped: run.results.filter(
+          (r) => r.status === "skipped-quota" || r.status === "skipped-budget",
+        ).length,
+        cancelled: run.results.filter((r) => r.status === "cancelled").length,
+        elapsedMs: run.elapsedMs,
+      });
+    } else if (run.stopReason === "quota") {
+      sendBatchTelemetryBeacon({
+        event: "batch_quota_stopped",
+        operation: operation.id,
+        batchId: run.batchId,
+        settledFiles: run.results.filter(
+          (r) => r.status !== "queued" && r.status !== "cancelled",
+        ).length,
+        totalFiles: run.results.length,
+      });
+    } else if (
+      run.stopReason === "budget-pages" ||
+      run.stopReason === "budget-output" ||
+      run.stopReason === "budget-images"
+    ) {
+      sendBatchTelemetryBeacon({
+        event: "batch_budget_stopped",
+        operation: operation.id,
+        batchId: run.batchId,
+        settledFiles: run.results.filter((r) => r.status === "succeeded").length,
+        totalFiles: run.results.length,
+        reason: run.stopReason.replace("budget-", ""),
+      });
+    } else {
+      // cancelled or service-unavailable
+      sendBatchTelemetryBeacon({
+        event: "batch_cancelled",
+        operation: operation.id,
+        batchId: run.batchId,
+        settledFiles: run.results.filter((r) => r.status !== "queued").length,
+        totalFiles: run.results.length,
+      });
+    }
 
     const okCount = run.results.filter((r) => r.status === "succeeded").length;
     const notOkCount = run.results.filter(

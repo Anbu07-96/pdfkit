@@ -494,6 +494,42 @@ let activeRepositoryOverride: UsageRepository | null = null;
 const inMemoryFallbackRepo = new InMemoryUsageRepository();
 
 /**
+ * Database health probe for the readiness endpoint (Phase 63).
+ *
+ * Returns "unconfigured" when no DATABASE_URL is set (the in-memory usage
+ * repository is in use — normal in dev/test), "ok" after a successful
+ * `SELECT 1`, or "failed". Never throws and never leaks the connection
+ * string; bounded by Prisma's own connection timeout.
+ */
+export async function pingDatabase(): Promise<
+  { status: "unconfigured" } | { status: "ok"; latencyMs: number } | { status: "failed" }
+> {
+  const dbUrl = process.env.DATABASE_URL;
+  const forceInMemory = process.env.PDFKIT_USE_IN_MEMORY_USAGE_REPO === "true";
+  if (!dbUrl || forceInMemory) return { status: "unconfigured" };
+
+  try {
+    const startedAt = Date.now();
+    // The bundled Prisma client exposes model queries (not $queryRaw), so the
+    // probe is a guaranteed-empty unique lookup: a real round trip to the
+    // database with no data read and nothing cached.
+    await Promise.race([
+      getPrismaClient().dailyUsage.findUnique({
+        where: {
+          userId_periodDate: { userId: "__healthcheck__", periodDate: "1970-01-01" },
+        },
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("db ping timeout")), 3_000).unref?.(),
+      ),
+    ]);
+    return { status: "ok", latencyMs: Date.now() - startedAt };
+  } catch {
+    return { status: "failed" };
+  }
+}
+
+/**
  * Set an explicit repository instance (primarily used for unit testing).
  */
 export function setUsageRepositoryOverride(repo: UsageRepository | null): void {

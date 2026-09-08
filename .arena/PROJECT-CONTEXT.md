@@ -20,6 +20,7 @@
 - **Database & Metering**: PostgreSQL + Prisma (`prisma/schema.prisma`), provider-neutral repository abstraction (`src/lib/usage/`), daily job and byte quotas per account tier (`anonymous`, `free`, `pro`, `business`).
 - **Billing**: Razorpay integration (`src/lib/billing/`), checkout verification, signature-verified webhooks.
 - **Bulk Processing (Phase 61)**: Client-orchestrated batch runner (`src/lib/bulk/`) over the existing single-file endpoints — one file per request, sequentially paced; `/bulk` section with per-file status, cancel, retry, batch ZIP and quota preflight (`GET /api/usage`).
+- **Production Observability (Phase 63)**: Typed telemetry pipeline → bounded provider-neutral metrics (`src/lib/monitoring/metrics/`, `telemetry.ts`); `x-pdfkit-request-id` correlation; fail-closed `GET /api/admin/metrics` (token-gated, 404 when unconfigured); `GET /api/health/ready` readiness probe; validated bulk lifecycle beacons (`POST /api/bulk/telemetry`); multi-user load suite (`multi-user.load.test.ts`); docs: `production-observability.md`, `load-validation-results.md`.
 - **Bulk Observability (Phase 62)**: Honest `Retry-After` end-to-end, batch summary + CSV export (formula-injection guarded), friendly error categories, batch correlation id (log-only, never authorization), structured rate/quota/timeout events, bulk search integration, ZIP entry caps + Unicode filename preservation, deterministic load tests (`runner.load.test.ts`), and `docs/bulk-limit-review.md` (limits documented, not raised).
 
 ---
@@ -35,4 +36,6 @@
 ## 4. Documentation References
 - [README.md](../README.md) — Tool capability catalog, environment variables, scripts, bulk tools section, and error codes.
 - [ARCHITECTURE.md](../ARCHITECTURE.md) — Comprehensive layer-by-layer architectural design, memory scaling rules, bulk processing architecture (§5v, §5w), and security posture.
-- [docs/bulk-limit-review.md](../docs/bulk-limit-review.md) — Bulk limit review mechanism: every limit, why it is conservative, metrics, raise thresholds and reduce conditions.
+- [docs/bulk-limit-review.md](../docs/bulk-limit-review.md) — Bulk limit review mechanism: every limit, why it is conservative, metrics, raise thresholds, reduce conditions and failure signals.
+- [docs/production-observability.md](../docs/production-observability.md) — Phase 63 observability model, endpoints, admin security model, dashboard specification and deployment requirements.
+- [docs/load-validation-results.md](../docs/load-validation-results.md) — Phase 63 measured multi-user load results, bottlenecks and explicit production requirements/assumptions.

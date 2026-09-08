@@ -27,6 +27,13 @@ export interface LogJobEntry {
    * only — never for authorization, quota or security decisions.
    */
   batchId?: string;
+  /**
+   * Server-generated request correlation id (Phase 63). Ties the HTTP
+   * response, timeout event and job outcome lines of one request together.
+   */
+  requestId?: string;
+  /** Safe error category label (Phase 63), e.g. "rate-limited". */
+  errorCategory?: string;
 }
 
 export function logStructuredJob(entry: LogJobEntry): void {
@@ -42,6 +49,8 @@ export function logStructuredJob(entry: LogJobEntry): void {
     ...(entry.code ? { code: entry.code } : {}),
     ...(entry.tier ? { tier: entry.tier } : {}),
     ...(entry.batchId ? { batchId: entry.batchId } : {}),
+    ...(entry.requestId ? { requestId: entry.requestId } : {}),
+    ...(entry.errorCategory ? { errorCategory: entry.errorCategory } : {}),
   };
 
   if (process.env.NODE_ENV === "production" || process.env.STRUCTURED_LOGS === "true") {
@@ -52,7 +61,9 @@ export function logStructuredJob(entry: LogJobEntry): void {
         ` files=${entry.fileCount} bytes=${entry.totalBytes}` +
         ` ms=${entry.durationMs}${entry.code ? ` code=${entry.code}` : ""}` +
         `${entry.tier ? ` tier=${entry.tier}` : ""}` +
-        `${entry.batchId ? ` batchId=${entry.batchId}` : ""}`,
+        `${entry.batchId ? ` batchId=${entry.batchId}` : ""}` +
+        `${entry.requestId ? ` requestId=${entry.requestId}` : ""}` +
+        `${entry.errorCategory ? ` errorCategory=${entry.errorCategory}` : ""}`,
     );
   }
 }

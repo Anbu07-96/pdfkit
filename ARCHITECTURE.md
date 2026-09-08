@@ -1076,6 +1076,70 @@ no limits; it made the Phase 61 batch system observable and load-safe.
   single-flight concurrency, pacing, retry budgets, exact request counts,
   no duplicate submissions and ZIP validity.
 
+
+## 5x. Production Observability, Telemetry & Load Validation (Phase 63)
+
+**Measure the architecture before changing it.** Phase 63 changed no limits
+and no processing behavior; it made the running system observable and
+validated the current architecture under simulated multi-user load.
+
+- **Typed telemetry pipeline** (`src/lib/monitoring/telemetry.ts` +
+  `telemetry-events.ts`) — processing code emits typed metadata events
+  (`job_started/completed/failed`, `quota_rejected`, `rate_limited`,
+  `request_timeout`, `server_busy`, `http_response`). Events flow to two
+  sinks: the existing structured logger (Phase 62 shapes preserved) and a
+  bounded metrics provider. `job_started`/`http_response` are metrics-only
+  to avoid doubling log volume. Recording never throws.
+- **Provider-neutral metrics layer** (`src/lib/monitoring/metrics/`) — a
+  `MetricsProvider` interface with a strictly bounded in-memory default:
+  61-bucket minute ring, 25-bucket hour ring, 4,096-entry duration ring
+  (p50/p95/p99 over the newest window), ≤128-key sanitized maps, monotonic
+  counters. Raw events are never retained. Future PostgreSQL/Redis/Sentry
+  providers implement the interface without touching processing code
+  (`PDFKIT_METRICS_PROVIDER`; unknown values fail open with a warning).
+- **Request correlation** — `handleProcessingRequest` generates a
+  `req_<16hex>` id per request, returns it in `x-pdfkit-request-id`, and
+  attaches it to timeout/job telemetry; job logs also gained a safe
+  `errorCategory` field.
+- **`GET /api/admin/metrics`** — the full snapshot (traffic, durations,
+  errors by tool/code/category, statuses, bytes, quota rejections by tier,
+  bulk aggregates, RSS/heap/Node version). **Fail closed**: 404 when
+  `PDFKIT_ADMIN_METRICS_TOKEN` is unset; with it, constant-time token check
+  (401 otherwise) plus a dedicated `admin-metrics` rate-limit scope.
+- **`GET /api/health/ready`** — readiness distinct from liveness: pings the
+  configured database (`DATABASE_URL`) and Redis when present, verifies the
+  tool registry; verdict `ok`/`degraded` (200) or `unavailable` (503), 5 s
+  cache, never leaks connection strings. `pingDatabase` uses an
+  always-empty unique lookup because the bundled dev Prisma client is a
+  generated no-op stub (`scripts/generate-prisma-client.js`) — production
+  must run `prisma generate` (documented, not silently worked around).
+- **Bulk lifecycle beacons** — the browser runner (client-orchestrated
+  architecture unchanged) reports batch transitions through
+  `POST /api/bulk/telemetry`: strict validation (known event/operation,
+  batch-id allowlist, clamped counts, ≤2 KB), origin check, own rate-limit
+  scope. Client values remain untrusted aggregates — never authorization,
+  quota or security inputs. The runner accepts a caller-supplied `batchId`
+  (validated) so beacons and per-file requests share one correlation id.
+- **Multi-user load validation**
+  (`src/lib/hardening/multi-user.load.test.ts`) — scenarios A–F: 10/25/50
+  concurrent users (isolation, accounting, concurrency cap, bounded
+  metrics), 5 concurrent bulk batches across different operations
+  (41 files, no cross-batch contamination), shared-IP saturation (exact
+  60/min behavior with honest Retry-After), tier independence
+  (anonymous 10, free 50, pro 500, business 5000 metered separately), and
+  the watchdog (honest 504, no slot leak, private completion still
+  counted). All run the REAL route handlers, processors, quota metering
+  (in-memory repository) and limiter. Measured results and bottlenecks:
+  `docs/load-validation-results.md`; observability design and dashboard
+  spec: `docs/production-observability.md`. No production capacity claims.
+- **Bulk limits pinned by tests**
+  (`src/lib/bulk/bulk-limits.validation.test.ts`) — every current limit
+  (files/batch, upload bytes, 200 pages, 200 MB output, 400 images,
+  25 MB/file, 100 MB/request, 1.1 s pacing, 120 s timeout, 60/min) is
+  asserted from the enforcing code, so an accidental change breaks loudly.
+  `docs/bulk-limit-review.md` gained explicit failure signals per limit;
+  limits remain unchanged until production telemetry is collected.
+
 ---
 
 ## 6. Upload and the processing boundary

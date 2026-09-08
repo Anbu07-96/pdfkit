@@ -105,3 +105,21 @@ Before exposing PDFKit to real production traffic, the following infrastructure 
 - **`batchId` is correlation-only**: strictly validated server-side and attached to logs; it must never be used for authorization, quota or security decisions (enforced by design).
 - **Rate limiter `Retry-After` is per-IP**: a batch shares the IP bucket with the caller's other tabs/tools; the header reflects the shared bucket, not the batch alone.
 - **Limit review is a mechanism, not a raise**: `docs/bulk-limit-review.md` documents thresholds; no limits changed in Phase 62.
+
+---
+
+## 7. Phase 63 Additions & Notes
+
+### New infrastructure (previously missing)
+- **No metrics/aggregation existed** — resolved: bounded provider-neutral metrics layer + fail-closed `/api/admin/metrics` (see `docs/production-observability.md`).
+- **No readiness probe existed** — resolved: `GET /api/health/ready` (DB/Redis/registry; `ok`/`degraded`/`unavailable`).
+- **No request correlation id existed** — resolved: `x-pdfkit-request-id` on every processing response, attached to timeout/job telemetry.
+- **Batch lifecycle invisible server-side** — resolved: validated client beacons (`POST /api/bulk/telemetry`) for batch start/complete/cancel/budget/quota stops.
+
+### Known limitations (accepted, documented)
+- **Bundled Prisma client is a no-op stub in dev/CI** (`scripts/generate-prisma-client.js`, pre-existing): `pingDatabase` probes with an always-empty unique lookup, so a real round trip requires a production-generated client. Readiness reports `unconfigured` (honest) until `DATABASE_URL` + real `prisma generate` exist.
+- **In-memory metrics are per-process and reset on restart**: multi-instance deployments need a shared provider (interface ready; not implemented). Redis-backed rate limiting already shares state; metrics do not yet.
+- **Readiness cache is 5 s per instance**: a dependency failing between probes is invisible for ≤5 s. Deliberate: probes must stay cheap.
+- **Admin metrics has no human auth model**: token-only (no admin role exists in the account model). An operator SSO/admin role is future work; the endpoint fails closed meanwhile.
+- **Beacons are best-effort**: fire-and-forget from the browser; a lost beacon (offline, ad-blocker) undercounts batch completions. Per-file server-side correlation (`batchId` on job logs) remains the source of truth.
+- **Load tests are in-process**: no network/TLS/PostgreSQL/Redis; they prove correctness under concurrency, not production capacity (`docs/load-validation-results.md` states this explicitly).

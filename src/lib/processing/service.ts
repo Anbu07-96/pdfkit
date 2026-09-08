@@ -8,8 +8,9 @@ import { ProcessingError, toErrorResponseBody } from "@/lib/processing/errors";
 import { getProcessingLimits, type ProcessingLimits } from "@/lib/processing/limits";
 import { getProcessor } from "@/lib/processing/registry";
 import { validateProcessingInput } from "@/lib/processing/validation/pdf-input";
-import { logStructuredJob } from "@/lib/monitoring/logger";
 import { captureServerException } from "@/lib/monitoring/sentry";
+import { recordTelemetryEvent } from "@/lib/monitoring/telemetry";
+import { classifyBulkError } from "@/lib/bulk/errors";
 
 /**
  * The processing service: the single entry point between the API layer and the
@@ -33,7 +34,7 @@ export interface RunProcessingJobOptions {
    * trusted server code (resolved identity tier, validated batch id) and are
    * used for log correlation only — never for decisions.
    */
-  logContext?: { tier?: string; batchId?: string };
+  logContext?: { tier?: string; batchId?: string; requestId?: string };
 }
 
 export async function runProcessingJob<TOptions>(
@@ -47,6 +48,20 @@ export async function runProcessingJob<TOptions>(
   const fileCount = request.files.length;
   const totalBytes = request.files.reduce((total, file) => total + file.bytes.length, 0);
 
+  // Operational telemetry (Phase 63). Metadata only — never contents.
+  const telemetryContext = {
+    toolId: request.toolId,
+    ...(logContext?.tier ? { tier: logContext.tier } : {}),
+    ...(logContext?.batchId ? { batchId: logContext.batchId } : {}),
+    ...(logContext?.requestId ? { requestId: logContext.requestId } : {}),
+  };
+  recordTelemetryEvent({
+    type: "job_started",
+    ...telemetryContext,
+    fileCount,
+    inputBytes: totalBytes,
+  });
+
   try {
     const processor = getProcessor<TOptions>(request.toolId);
 
@@ -58,29 +73,36 @@ export async function runProcessingJob<TOptions>(
 
     const result = await processor.process(request, { limits });
 
-    logStructuredJob({
-      toolId: request.toolId,
-      outcome: "succeeded",
-      fileCount,
-      totalBytes,
+    recordTelemetryEvent({
+      type: "job_completed",
+      ...telemetryContext,
       durationMs: Date.now() - startedAt,
-      ...(logContext?.tier ? { tier: logContext.tier } : {}),
-      ...(logContext?.batchId ? { batchId: logContext.batchId } : {}),
+      fileCount,
+      inputBytes: totalBytes,
+      outputBytes:
+        result.status === "succeeded"
+          ? result.artifacts.reduce((total, artifact) => total + artifact.size, 0)
+          : 0,
+      ...(result.status === "succeeded" && result.meta?.pages !== undefined
+        ? { pages: Number(result.meta.pages) }
+        : {}),
+      ...(result.status === "succeeded" && result.meta?.extractedImagesCount !== undefined
+        ? { images: Number(result.meta.extractedImagesCount) }
+        : {}),
     });
 
     return result;
   } catch (error) {
     const body = toErrorResponseBody(error);
 
-    logStructuredJob({
-      toolId: request.toolId,
-      outcome: "failed",
-      fileCount,
-      totalBytes,
+    recordTelemetryEvent({
+      type: "job_failed",
+      ...telemetryContext,
       durationMs: Date.now() - startedAt,
-      code: body.error.code,
-      ...(logContext?.tier ? { tier: logContext.tier } : {}),
-      ...(logContext?.batchId ? { batchId: logContext.batchId } : {}),
+      fileCount,
+      inputBytes: totalBytes,
+      errorCode: body.error.code,
+      errorCategory: classifyBulkError(body.error.code).category,
     });
 
     if (!(error instanceof ProcessingError)) {

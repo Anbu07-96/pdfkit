@@ -8,7 +8,16 @@ it is, the metric to watch, the evidence threshold required to raise it, and
 the condition under which it should be reduced.
 
 Review cadence: after any incident touching a limit, and at least monthly once
-production telemetry exists (Phase 40 logger + Phase 62 events).
+production telemetry exists (Phase 40 logger + Phase 62 events, Phase 63
+metrics endpoint).
+
+> **Current limits remain unchanged until production telemetry has been
+> collected.** Phase 63 added the measurement infrastructure
+> (`/api/admin/metrics`, readiness probe, batch lifecycle beacons — see
+> `docs/production-observability.md`) and validated the current architecture
+> under simulated multi-user load (`docs/load-validation-results.md`). It
+> deliberately changed no limit: synthetic, in-process tests cannot prove a
+> raise is safe in production.
 
 ---
 
@@ -39,6 +48,11 @@ verification on the target hardware/browser matrix.
 
 **Reduce condition.** Client memory reports (crashes, tab discards) or a rise
 in `request_timeout` / abort rates that correlates with batch size.
+
+**Failure signal.** `batch_cancelled` beacons clustering at high file counts;
+`request_timeout` events per 100-file batch above ~2%; p95 batch duration
+(from `batch_completed.elapsedMs`) exceeding the session length users
+tolerate (bounce/abandonment).
 
 ---
 
@@ -71,6 +85,10 @@ no OOM events attributable to bulk.
 **Reduce condition.** Any OOM or watchdog `request_timeout` cluster traced to
 a large batch.
 
+**Failure signal.** OOM restarts; `system.rssBytes` in the admin snapshot
+trending toward the container limit; `request_timeout` events with
+`TOTAL_SIZE_EXCEEDED`-adjacent byte volumes.
+
 ---
 
 ## 3. Result/output budget per batch
@@ -100,6 +118,11 @@ security review — they are protection, not quota.
 
 **Reduce condition.** Any ZIP-build failure or client memory report at the
 current output cap.
+
+**Failure signal.** `batch_budget_stopped{reason:"output"|"pages"|"images"}`
+rate above ~10% of completed batches; ZIP-build failure toasts reported by
+users (correlate with `batch_completed` volume); `batch_cancelled` after long
+elapsed times.
 
 ---
 
@@ -134,6 +157,10 @@ retry budget instead of the rate limit — the budget exists to stop storms.
 1 + budget per file) or limiter saturation from bulk traffic displacing
 single-file users.
 
+**Failure signal.** `rate_limited` volume that dwarfs `http_response` 2xx
+volume; `retryAfterSeconds` values clustering at 60 (hard limiter ceiling);
+bulk `TOO_MANY_REQUESTS` job failures after retry exhaustion.
+
 ---
 
 ## 5. Quota interaction
@@ -155,14 +182,26 @@ change only through a plan/pricing decision, never through this load review.
 
 **Reduce condition.** Not applicable (economics-driven).
 
+**Failure signal.** `quota_rejected` spikes for a tier whose paid plan
+advertises sufficient quota (product bug, not a limit problem).
+
 ---
 
-## 6. What Phase 62 changed (and did not change)
+## 6. What Phases 62–63 changed (and did not change)
 
-Changed: observability around the limits (batch correlation ids, structured
-`rate_limited` / `quota_rejected` / `request_timeout` events, tier on job
-logs), honest Retry-After propagation, ZIP entry caps as protection, and this
-review mechanism.
+Phase 62 changed the observability around the limits (batch correlation ids,
+structured `rate_limited` / `quota_rejected` / `request_timeout` events, tier
+on job logs), honest Retry-After propagation, ZIP entry caps as protection,
+and this review mechanism.
 
-Not changed: every number in the tables above. They stay exactly as Phase 61
-shipped them until production data justifies movement through this document.
+Phase 63 added the measurement loop this document requires: the bounded
+metrics provider and `/api/admin/metrics` snapshot (request rates, p50/p95/p99
+durations, error categories, quota rejections by tier, RSS/heap), the
+`/api/health/ready` readiness probe, client-reported batch lifecycle beacons
+(`batch_started/completed/cancelled/budget_stopped/quota_stopped`), and the
+multi-user load validation that confirms the current architecture behaves
+correctly under concurrency (see `docs/load-validation-results.md`).
+
+Not changed: every number in the tables above — by Phase 61, 62 and 63
+alike. They stay exactly as shipped until production data justifies movement
+through this document.

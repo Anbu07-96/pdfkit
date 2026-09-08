@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import {
   handleProcessingRequest as handleProcessingRequestCore,
   jsonError,
@@ -16,7 +17,7 @@ import {
   tryAcquireDistributedSlot,
 } from "@/lib/hardening/distributed-protection";
 import { captureServerException } from "@/lib/monitoring/sentry";
-import { logStructuredEvent } from "@/lib/monitoring/logger";
+import { recordTelemetryEvent } from "@/lib/monitoring/telemetry";
 import { getUserIdentity } from "@/lib/auth/session";
 import { getUsageService } from "@/lib/usage/service";
 
@@ -24,17 +25,23 @@ import { getUsageService } from "@/lib/usage/service";
  * Hardened processing-route handler (Phase 28, Wave 1).
  *
  * Every `/api/tools/*` route goes through this wrapper instead of calling the
- * HTTP adapter directly. It adds three production guards around the unchanged
+ * HTTP adapter directly. It adds these production guards around the unchanged
  * adapter:
  *
  * 1. the numeric Content-Length gate (reject malformed headers up front);
- * 2. the optional concurrency cap (fail fast with 503, never queue silently);
- * 3. the request timeout (answer 504 after the budget without pretending the
+ * 2. the plan quota preflight gate (before reading the body);
+ * 3. the IP rate limit (reject abusive traffic fast with an honest
+ *    `Retry-After`);
+ * 4. the optional concurrency cap (fail fast with 503, never queue silently);
+ * 5. the request timeout (answer 504 after the budget without pretending the
  *    work was aborted — pdfium/pdf-lib jobs cannot be cancelled, so the job
  *    finishes privately and its slot is released when it actually ends).
  *
- * The handler itself stays thin: parsing, validation and delivery all remain
- * in `lib/processing/http.ts`.
+ * Phase 63 adds a per-request correlation id (`x-pdfkit-request-id` response
+ * header, attached to telemetry and job logs) and records one
+ * `http_response` telemetry event for every final response — the traffic and
+ * status-class metrics come from here, while job-level metrics come from the
+ * processing service.
  */
 
 export { methodNotAllowed };
@@ -42,6 +49,29 @@ export { methodNotAllowed };
 export async function handleProcessingRequest<TOptions = Record<string, unknown>>(
   request: Request,
   options: HandleProcessingRequestOptions<TOptions>,
+): Promise<Response> {
+  const startedAt = Date.now();
+  // Correlation id for logs/telemetry. Server-generated, carried in the
+  // response header so a user reporting a problem can quote it.
+  const requestId = `req_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+
+  const response = await handleGuardedRequest<TOptions>(request, options, requestId);
+
+  response.headers.set("x-pdfkit-request-id", requestId);
+  recordTelemetryEvent({
+    type: "http_response",
+    toolId: options.toolId,
+    requestId,
+    status: response.status,
+    durationMs: Date.now() - startedAt,
+  });
+  return response;
+}
+
+async function handleGuardedRequest<TOptions = Record<string, unknown>>(
+  request: Request,
+  options: HandleProcessingRequestOptions<TOptions>,
+  requestId: string,
 ): Promise<Response> {
   const config = getHardeningConfig();
 
@@ -60,15 +90,14 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
   const preflight = await getUsageService().evaluatePreflight(identity, requestedBytes);
 
   if (!preflight.allowed) {
-    // Operational telemetry (Phase 62): which guard fired and for which tier.
-    // No user-identifying data — the quota service owns identity.
-    logStructuredEvent("quota_rejected", {
+    // Operational telemetry (Phase 62/63): which guard fired and for which
+    // tier. No user-identifying data — the quota service owns identity.
+    recordTelemetryEvent({
+      type: "quota_rejected",
       toolId: options.toolId,
-      tier: preflight.tier,
-      reason: preflight.reason,
-      ...(requestedBytes !== undefined
-        ? { requestedBytes }
-        : {}),
+      tier: preflight.tier ?? "other",
+      reason: preflight.reason ?? "unknown",
+      ...(requestedBytes !== undefined ? { requestedBytes } : {}),
     });
 
     if (preflight.reason === "SERVICE_UNAVAILABLE") {
@@ -91,6 +120,7 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
   // 5. Concurrency cap — fail fast so overloads are visible to the caller (503 SERVER_BUSY).
   const acquired = await tryAcquireDistributedSlot(config.maxConcurrentJobs);
   if (!acquired) {
+    recordTelemetryEvent({ type: "server_busy", toolId: options.toolId });
     return jsonError(
       "SERVER_BUSY",
       "The server is processing other documents right now. Please try again in a moment.",
@@ -103,7 +133,7 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
   // real job ends — never when the timeout fires.
   let timer: ReturnType<typeof setTimeout> | undefined;
 
-  const jobOptions = { ...options, identity };
+  const jobOptions = { ...options, identity, requestId };
 
   const job: Promise<Response> = Promise.resolve()
     .then(() => handleProcessingRequestCore<TOptions>(request, jobOptions))
@@ -124,10 +154,12 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
 
   const timeout: Promise<Response> = new Promise((resolve) => {
     timer = setTimeout(() => {
-      // Operational telemetry (Phase 62): the caller gave up; the job keeps
+      // Operational telemetry (Phase 62/63): the caller gave up; the job keeps
       // running privately and still logs its own outcome when it ends.
-      logStructuredEvent("request_timeout", {
+      recordTelemetryEvent({
+        type: "request_timeout",
         toolId: options.toolId,
+        requestId,
         timeoutMs: config.requestTimeoutMs,
       });
       resolve(

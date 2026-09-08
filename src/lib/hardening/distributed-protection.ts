@@ -7,7 +7,7 @@ import {
   releaseJobSlot as localReleaseJobSlot,
   tryAcquireJobSlot as localTryAcquireJobSlot,
 } from "@/lib/hardening/guards";
-import { logStructuredEvent } from "@/lib/monitoring/logger";
+import { recordTelemetryEvent } from "@/lib/monitoring/telemetry";
 
 /**
  * Distributed Concurrency & Rate-Limiting Protection (Phase 41/55).
@@ -168,6 +168,40 @@ export async function releaseDistributedSlot(): Promise<void> {
   }
 }
 
+/**
+ * Redis health probe for the readiness endpoint (Phase 63).
+ *
+ * Returns "unconfigured" when no Redis URL is set (normal in dev/test and for
+ * single-instance deployments), "ok" after a successful PING, or "failed".
+ * Never throws, never leaks the connection string, and is bounded by a short
+ * timeout so probes stay cheap.
+ */
+export async function pingRedis(): Promise<
+  { status: "unconfigured" } | { status: "ok"; latencyMs: number } | { status: "failed" }
+> {
+  const redis = getRedisClient();
+  if (!redis) return { status: "unconfigured" };
+
+  try {
+    const startedAt = Date.now();
+    if (redis.status !== "ready") {
+      await redis.connect().catch(() => {
+        // Already connecting/connected or unreachable — fall through to PING,
+        // which will surface the real state (or failure) below.
+      });
+    }
+    await Promise.race([
+      redis.ping(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("ping timeout")), 1_500).unref?.(),
+      ),
+    ]);
+    return { status: "ok", latencyMs: Date.now() - startedAt };
+  } catch {
+    return { status: "failed" };
+  }
+}
+
 // In-memory rate limiting map for fallback mode
 const inMemoryRateLimits = new Map<string, { count: number; resetAt: number }>();
 
@@ -187,7 +221,8 @@ function rateLimitResponse(retryAfterMs?: number): Response {
     headers["retry-after"] = String(Math.min(seconds, 60));
   }
 
-  logStructuredEvent("rate_limited", {
+  recordTelemetryEvent({
+    type: "rate_limited",
     ...(headers["retry-after"]
       ? { retryAfterSeconds: Number(headers["retry-after"]) }
       : {}),
@@ -204,19 +239,25 @@ function rateLimitResponse(retryAfterMs?: number): Response {
 /**
  * Check distributed IP rate limit.
  * Returns null if allowed, or HTTP 429 Response if rate limit exceeded.
+ *
+ * `scope` separates buckets that must not share the processing budget (e.g.
+ * the bulk telemetry beacon). Undefined keeps the original shared key so
+ * existing deployments see no change.
  */
 export async function checkRateLimit(
   request: Request,
   rateLimitPerMinute: number,
+  scope?: string,
 ): Promise<Response | null> {
   if (rateLimitPerMinute <= 0) return null;
 
   const clientToken = anonymizeClientIp(request);
+  const scopedToken = scope ? `${scope}:${clientToken}` : clientToken;
   const redis = getRedisClient();
 
   if (redis) {
     try {
-      const key = `pdfkit:ratelimit:${clientToken}`;
+      const key = `pdfkit:ratelimit:${scopedToken}`;
       // -1 = allowed; >= 1 = rejected, with the window's remaining TTL in
       // seconds (see RATE_LIMIT_LUA).
       const result = await redis.eval(
@@ -238,10 +279,10 @@ export async function checkRateLimit(
 
   // Local fallback in-memory rate limiting
   const now = Date.now();
-  const entry = inMemoryRateLimits.get(clientToken);
+  const entry = inMemoryRateLimits.get(scopedToken);
 
   if (!entry || now > entry.resetAt) {
-    inMemoryRateLimits.set(clientToken, { count: 1, resetAt: now + 60_000 });
+    inMemoryRateLimits.set(scopedToken, { count: 1, resetAt: now + 60_000 });
     return null;
   }
 
