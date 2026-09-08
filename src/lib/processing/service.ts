@@ -28,11 +28,20 @@ import { captureServerException } from "@/lib/monitoring/sentry";
 
 export interface RunProcessingJobOptions {
   limits?: ProcessingLimits;
+  /**
+   * Optional operational log context (Phase 62). Values are supplied by
+   * trusted server code (resolved identity tier, validated batch id) and are
+   * used for log correlation only — never for decisions.
+   */
+  logContext?: { tier?: string; batchId?: string };
 }
 
 export async function runProcessingJob<TOptions>(
   request: ProcessingRequest<TOptions>,
-  { limits = getProcessingLimits() }: RunProcessingJobOptions = {},
+  {
+    limits = getProcessingLimits(),
+    logContext,
+  }: RunProcessingJobOptions = {},
 ): Promise<ProcessingResult> {
   const startedAt = Date.now();
   const fileCount = request.files.length;
@@ -55,6 +64,8 @@ export async function runProcessingJob<TOptions>(
       fileCount,
       totalBytes,
       durationMs: Date.now() - startedAt,
+      ...(logContext?.tier ? { tier: logContext.tier } : {}),
+      ...(logContext?.batchId ? { batchId: logContext.batchId } : {}),
     });
 
     return result;
@@ -68,6 +79,8 @@ export async function runProcessingJob<TOptions>(
       totalBytes,
       durationMs: Date.now() - startedAt,
       code: body.error.code,
+      ...(logContext?.tier ? { tier: logContext.tier } : {}),
+      ...(logContext?.batchId ? { batchId: logContext.batchId } : {}),
     });
 
     if (!(error instanceof ProcessingError)) {

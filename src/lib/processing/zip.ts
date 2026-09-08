@@ -31,7 +31,15 @@ export function sanitizeZipEntryName(name: string, fallback: string): string {
     .replace(/^\.+/, "")
     .trim();
 
-  const safe = withoutPath.replace(/[^A-Za-z0-9._()\-\u00c0-\u024f]/g, "_");
+  const safe = withoutPath.replace(
+    // Unicode letters, numbers and combining marks are preserved (Phase 62:
+    // CJK/Cyrillic/Greek filenames no longer degrade to underscores), while
+    // path separators, control characters and everything else unsafe stays
+    // replaced. Traversal is still impossible: separators are stripped before
+    // this runs and leading dots are already gone.
+    /[^._()\-\p{L}\p{N}\p{M}]/gu,
+    "_",
+  );
   if (safe.length === 0 || safe === "." || safe === "..") return fallback;
   return safe.slice(0, 120);
 }

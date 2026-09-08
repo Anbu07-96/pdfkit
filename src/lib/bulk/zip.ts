@@ -30,6 +30,16 @@ export interface SanitizedBatch {
 }
 
 /**
+ * Defense-in-depth entry caps (Phase 62). The server already bounds what one
+ * result may contain (≤200 extracted images, ≤50 rendered pages/outputs), so
+ * the legitimate maximum per batch is 100 × 200 = 20,000 entries. Anything
+ * beyond these caps means a malformed or hostile archive response, and the
+ * batch ZIP build fails loudly instead of trying to unpack it all.
+ */
+const MAX_ENTRIES_PER_ARCHIVE_RESULT = 2_000;
+const MAX_TOTAL_BATCH_ENTRIES = 25_000;
+
+/**
  * Reduce a name to a single safe file name: no directories, no traversal, no
  * control characters, no leading dots, no drive letters — the client-side
  * twin of the server's ZIP entry sanitiser.
@@ -42,7 +52,15 @@ export function sanitizeBatchEntryName(name: string, fallback: string): string {
     .replace(/^\.+/, "")
     .trim();
 
-  const safe = withoutPath.replace(/[^A-Za-z0-9._()\-\u00c0-\u024f]/g, "_");
+  const safe = withoutPath.replace(
+    // Unicode letters, numbers and combining marks are preserved (Phase 62:
+    // CJK/Cyrillic/Greek filenames no longer degrade to underscores), while
+    // path separators, control characters and everything else unsafe stays
+    // replaced. Traversal is still impossible: separators are stripped before
+    // this runs and leading dots are already gone.
+    /[^._()\-\p{L}\p{N}\p{M}]/gu,
+    "_",
+  );
   if (safe.length === 0 || safe === "." || safe === "..") return fallback;
   return safe.slice(0, 120);
 }
@@ -125,12 +143,22 @@ export async function buildBatchEntries(
 
     const folder = uniqueName(`${baseName(result.sourceName)}`, takenFolders);
     const inner = new Set<string>();
-    for (const [entryName, bytes] of Object.entries(unzipped)) {
+    const entryNames = Object.entries(unzipped);
+    if (entryNames.length > MAX_ENTRIES_PER_ARCHIVE_RESULT) {
+      throw new Error(
+        `Archive result for ${result.sourceName} contains too many entries (${entryNames.length}).`,
+      );
+    }
+    for (const [entryName, bytes] of entryNames) {
       const safeEntry = `${folder}/${uniqueName(
         sanitizeBatchEntryName(entryName, "file"),
         inner,
       )}`;
       files[safeEntry] = bytes;
+    }
+
+    if (Object.keys(files).length > MAX_TOTAL_BATCH_ENTRIES) {
+      throw new Error("The batch contains too many result entries to bundle.");
     }
   }
 

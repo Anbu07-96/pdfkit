@@ -6,6 +6,7 @@ export * from "./types";
 export { TOOL_CATEGORIES, TOOL_CATEGORY_IDS, getCategory, isToolCategoryId } from "./categories";
 export { TOOLS, POPULAR_TOOL_IDS } from "./catalog";
 export { searchTools, normalizeQuery, type SearchToolsOptions } from "./search";
+export { searchBulkOperations, type SearchBulkOptions } from "./search";
 
 const TOOLS_BY_ID = new Map<string, Tool>(TOOLS.map((tool) => [tool.id, tool]));
 

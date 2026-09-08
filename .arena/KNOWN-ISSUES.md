@@ -81,7 +81,27 @@ Before exposing PDFKit to real production traffic, the following infrastructure 
 - **Budget overshoot of one file**: budgets are checked *between* files, so the file that crosses a page/output/image budget still completes. Overshoot is bounded by one file's output, which the server already caps per file (≤50 pages, ≤6 MB/image, ≤200 images). Worst case equals two adversarial single-file jobs run back-to-back, which is possible today via manual use.
 - **Bulk office conversions are NOT offered**: Word→PDF, Excel→PDF and PowerPoint→PDF have no single-file engines (COMING_SOON; require LibreOffice/headless browser). The bulk landing page states this explicitly.
 - **Quota display cadence**: the bulk UI refreshes `GET /api/usage` on mount, every 5 settled files and at batch end — not per file — to stay under the shared per-IP rate limit. The server remains the source of truth and stops the batch with `QUOTA_EXCEEDED` regardless of what the UI shows.
-- **429 backoff is coarse**: on `TOO_MANY_REQUESTS` the runner waits 60 s (max 2 retries) because the server does not send `Retry-After`.
+- **Retry-After is delay-seconds only (Phase 62)**: the rate limiter now sends a real `Retry-After` (remaining window seconds, clamped 1–60 s) and the runner honors it, falling back to 60 s when absent. HTTP-date `Retry-After` forms are deliberately not interpreted (the limiter never sends them; guessing a timezone-correct delay would be fake precision).
 - **Anonymous bucket is shared**: unauthenticated visitors share the `anon` usage bucket per deployment instance (pre-existing Phase 43 behavior); a large anonymous batch may therefore find the quota already consumed.
 - **Extract Images is raster-only**: it extracts embedded raster XObjects (JPEG/PNG/Flate); vector graphics and images drawn as page content are not reconstructed. Pre-existing behavior, unchanged.
 - **Page-budget enforcement is reactive for raster ops**: page counts come from the server's `X-PDFKit-Pages` response header, so a batch learns a file's page count only after that file is processed (no per-file pre-inspection requests are made, by design, to halve request volume).
+
+---
+
+## 6. Phase 62 Additions & Notes
+
+### New mitigations (previously open gaps)
+- **429 backoff was coarse** — resolved: the limiter returns its real remaining window and the runner waits exactly that (clamped ≤120 s client-side), else 60 s; retry budgets (2×/file) still prevent storms.
+- **ZIP entry explosion** — resolved defense-in-depth: archive results are capped at 2,000 entries each and batches at 25,000 total entries.
+- **CSV formula injection** — resolved: cells beginning with `=`, `+`, `-` or `@` are prefixed with `'` (metadata-only CSV; never document contents).
+- **Non-Latin filenames degraded** — resolved: the entry sanitizer (client and server twins) now preserves Unicode letters/numbers/marks; CJK/Cyrillic/Greek names no longer become underscores. Path separators, control characters and traversal remain blocked.
+- **Budget-stop labelling inconsistency** — resolved: files after a budget stop are labelled `skipped-budget` (matching the first violator) instead of `cancelled`, so summary counts are honest.
+- **Bulk invisible to search** — resolved: `searchBulkOperations` answers bulk/batch/multiple-files phrasing; the tool catalog itself is untouched.
+
+### Known limitations (accepted, documented)
+- **Budget overshoot of one file** (unchanged from Phase 61): budgets are checked between files; the crossing file completes. Bounded by per-file server caps.
+- **Intra-file progress is unknowable**: progress is batch-level only ("file 3 of 10"). The server cannot report rasterisation progress, so none is invented.
+- **Offline detection is `navigator.onLine`**: coarse (a captive portal can read "online"). The runner pauses and resumes; it never burns through failures while offline.
+- **`batchId` is correlation-only**: strictly validated server-side and attached to logs; it must never be used for authorization, quota or security decisions (enforced by design).
+- **Rate limiter `Retry-After` is per-IP**: a batch shares the IP bucket with the caller's other tabs/tools; the header reflects the shared bucket, not the batch alone.
+- **Limit review is a mechanism, not a raise**: `docs/bulk-limit-review.md` documents thresholds; no limits changed in Phase 62.

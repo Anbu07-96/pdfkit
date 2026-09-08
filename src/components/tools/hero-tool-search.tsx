@@ -9,10 +9,12 @@ import { ToolStatusBadge } from "@/components/tools/tool-status-badge";
 import { useToolSearch } from "@/components/tools/use-tool-search";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
+import { searchBulkOperations } from "@/lib/tools";
 import { cn } from "@/lib/utils/cn";
 
-const SUGGESTIONS = ["merge", "compress", "jpg", "word", "ocr", "ai"];
+const SUGGESTIONS = ["merge", "compress", "jpg", "word", "bulk", "ocr"];
 const MAX_RESULTS = 6;
+const MAX_BULK_RESULTS = 2;
 
 /**
  * Hero search. Results appear immediately below the field; submitting the form
@@ -24,6 +26,14 @@ export function HeroToolSearch({ className }: { className?: string }) {
     limit: MAX_RESULTS,
   });
   const listId = React.useId();
+
+  // Bulk operations answer to their own terms ("bulk", "batch", "multiple")
+  // and are shown as a clearly-labelled group; they are not catalog tools.
+  const bulkResults = React.useMemo(
+    () => (hasQuery ? searchBulkOperations(query, { limit: MAX_BULK_RESULTS }) : []),
+    [query, hasQuery],
+  );
+  const nothingFound = isEmpty && bulkResults.length === 0;
 
   function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -50,7 +60,9 @@ export function HeroToolSearch({ className }: { className?: string }) {
 
       <p id={`${listId}-status`} role="status" aria-live="polite" className="sr-only">
         {hasQuery
-          ? `${results.length} ${results.length === 1 ? "tool" : "tools"} found for ${query}`
+          ? `${results.length + bulkResults.length} ${
+              results.length + bulkResults.length === 1 ? "result" : "results"
+            } found for ${query}`
           : ""}
       </p>
 
@@ -79,7 +91,7 @@ export function HeroToolSearch({ className }: { className?: string }) {
           className="mt-3 overflow-hidden rounded-xl border border-border bg-surface shadow-sm"
           id={listId}
         >
-          {isEmpty ? (
+          {nothingFound ? (
             <div className="flex flex-col items-center gap-2 px-5 py-8 text-center">
               <SearchX aria-hidden="true" className="size-5 text-subtle" />
               <p className="text-sm font-medium text-foreground">
@@ -119,6 +131,32 @@ export function HeroToolSearch({ className }: { className?: string }) {
                       plannedTier={tool.plannedTier}
                       className="hidden sm:inline-flex"
                     />
+                  </Link>
+                </li>
+              ))}
+              {bulkResults.map((operation) => (
+                <li key={`bulk-${operation.id}`}>
+                  <Link
+                    href={operation.route}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-muted",
+                      "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring",
+                    )}
+                  >
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary-soft-foreground">
+                      <ToolIcon name={operation.icon} className="size-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-foreground">
+                        {operation.name}
+                      </span>
+                      <span className="block truncate text-xs text-muted">
+                        {operation.description}
+                      </span>
+                    </span>
+                    <span className="hidden shrink-0 rounded-full bg-success-soft px-2 py-0.5 text-xs leading-5 font-medium text-success sm:inline-flex">
+                      Bulk
+                    </span>
                   </Link>
                 </li>
               ))}

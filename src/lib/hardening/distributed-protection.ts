@@ -7,6 +7,7 @@ import {
   releaseJobSlot as localReleaseJobSlot,
   tryAcquireJobSlot as localTryAcquireJobSlot,
 } from "@/lib/hardening/guards";
+import { logStructuredEvent } from "@/lib/monitoring/logger";
 
 /**
  * Distributed Concurrency & Rate-Limiting Protection (Phase 41/55).
@@ -107,9 +108,15 @@ if current == 1 then
   redis.call('expire', key, ttl)
 end
 if current > limit then
-  return 0
+  -- Return the window's remaining TTL so the caller can send an honest
+  -- Retry-After header instead of guessing.
+  local remaining = redis.call('ttl', key)
+  if remaining < 1 then
+    remaining = 1
+  end
+  return remaining
 end
-return 1
+return -1
 `;
 
 const CONCURRENCY_KEY = "pdfkit:concurrency:active";
@@ -165,6 +172,36 @@ export async function releaseDistributedSlot(): Promise<void> {
 const inMemoryRateLimits = new Map<string, { count: number; resetAt: number }>();
 
 /**
+ * Build the 429 response with an honest Retry-After header (Phase 62).
+ *
+ * `retryAfterMs` is the real remaining window when the limiter knows it
+ * (both the Redis and the in-memory limiter use a fixed 60 s window that
+ * starts with the first counted request, so the remaining time is exact);
+ * when unknown, no header is invented — callers fall back to their own
+ * conservative backoff.
+ */
+function rateLimitResponse(retryAfterMs?: number): Response {
+  const headers: Record<string, string> = {};
+  if (retryAfterMs !== undefined && Number.isFinite(retryAfterMs)) {
+    const seconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+    headers["retry-after"] = String(Math.min(seconds, 60));
+  }
+
+  logStructuredEvent("rate_limited", {
+    ...(headers["retry-after"]
+      ? { retryAfterSeconds: Number(headers["retry-after"]) }
+      : {}),
+  });
+
+  return jsonError(
+    "TOO_MANY_REQUESTS",
+    "Too many requests. Please wait a moment before trying again.",
+    undefined,
+    headers,
+  );
+}
+
+/**
  * Check distributed IP rate limit.
  * Returns null if allowed, or HTTP 429 Response if rate limit exceeded.
  */
@@ -180,12 +217,18 @@ export async function checkRateLimit(
   if (redis) {
     try {
       const key = `pdfkit:ratelimit:${clientToken}`;
-      const allowed = await redis.eval(RATE_LIMIT_LUA, 1, key, rateLimitPerMinute, 60);
-      if (Number(allowed) === 0) {
-        return jsonError(
-          "TOO_MANY_REQUESTS",
-          "Too many requests. Please wait a moment before trying again.",
-        );
+      // -1 = allowed; >= 1 = rejected, with the window's remaining TTL in
+      // seconds (see RATE_LIMIT_LUA).
+      const result = await redis.eval(
+        RATE_LIMIT_LUA,
+        1,
+        key,
+        rateLimitPerMinute,
+        60,
+      );
+      const value = Number(result);
+      if (value !== -1) {
+        return rateLimitResponse(value >= 1 ? value * 1000 : undefined);
       }
       return null;
     } catch (err) {
@@ -203,10 +246,7 @@ export async function checkRateLimit(
   }
 
   if (entry.count >= rateLimitPerMinute) {
-    return jsonError(
-      "TOO_MANY_REQUESTS",
-      "Too many requests. Please wait a moment before trying again.",
-    );
+    return rateLimitResponse(entry.resetAt - now);
   }
 
   entry.count += 1;

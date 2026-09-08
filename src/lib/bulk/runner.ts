@@ -49,7 +49,30 @@ export interface BulkFileResult {
   images?: number;
   /** Typed failure detail (failed files only). */
   error?: { code?: string; message: string };
+  /**
+   * Wall-clock milliseconds from this file's first dispatch attempt to its
+   * final settle (including backoffs and retries), when it ran.
+   */
+  durationMs?: number;
 }
+
+/**
+ * Coarse batch phase events for honest progress UI (Phase 62). The runner
+ * never invents intra-file progress — the server does not provide it — so
+ * phases describe *batch-level* truth only: which file is running, when the
+ * runner is waiting (pacing, backoff, offline) and why the batch stopped.
+ */
+export type BulkBatchPhase =
+  | { kind: "file-start"; index: number; total: number; name: string }
+  | { kind: "pacing"; waitMs: number }
+  | {
+      kind: "backoff";
+      reason: "rate-limit" | "server-busy" | "network";
+      waitMs: number;
+    }
+  | { kind: "waiting-online" }
+  | { kind: "batch-stopped"; reason: BulkStopReason }
+  | { kind: "batch-done" };
 
 export type BulkStopReason =
   | "cancelled"
@@ -71,6 +94,14 @@ export interface BulkBatchRun {
   /** Why the batch stopped early, when it did. */
   stopReason?: BulkStopReason;
   budgets: BulkBudgets;
+  /**
+   * Batch correlation id (UUID) that was sent as `x-pdfkit-batch-id` on every
+   * request, so server-side structured logs can be correlated to this batch.
+   * Server-validated and used for logging only.
+   */
+  batchId: string;
+  /** Batch wall-clock duration in milliseconds. */
+  elapsedMs: number;
 }
 
 export interface RunBulkBatchOptions {
@@ -82,6 +113,8 @@ export interface RunBulkBatchOptions {
   onFileStatus?: (result: BulkFileResult) => void;
   /** Fired after each file settles, with the running budget totals. */
   onProgress?: (progress: { settled: number; total: number } & BulkBudgets) => void;
+  /** Fired on batch-level phase changes (progress/backoff/stop events). */
+  onPhase?: (phase: BulkBatchPhase) => void;
   /**
    * Budget totals carried over from a previous run in the same session (used
    * when retrying failed files), so the browser-side output cap bounds the
@@ -92,6 +125,12 @@ export interface RunBulkBatchOptions {
   fetchImpl?: typeof fetch;
   /** Injectable for tests (default `setTimeout`). */
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+  /**
+   * Injectable online check (default `navigator.onLine`). While offline the
+   * batch pauses before dispatching the next file instead of burning through
+   * failures; it resumes automatically when the connection returns.
+   */
+  getOnline?: () => boolean;
 }
 
 const RATE_LIMIT_COOLDOWN_MS = 60_000;
@@ -99,6 +138,13 @@ const SERVER_BUSY_RETRY_MS = 10_000;
 const MAX_RATE_LIMIT_RETRIES = 2;
 const MAX_SERVER_BUSY_RETRIES = 3;
 const MAX_NETWORK_RETRIES = 1;
+/**
+ * Upper bound for a single 429 backoff, even when the server asks for more
+ * via Retry-After. A hostile or broken value must never stall a batch for
+ * minutes; after the wait the normal retry budget still applies.
+ */
+const MAX_RETRY_AFTER_MS = 120_000;
+const OFFLINE_POLL_MS = 2_000;
 
 function defaultSleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -129,6 +175,22 @@ function intHeader(response: Response, name: string): number | undefined {
   if (!raw) return undefined;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/**
+ * Parse a `Retry-After` header (delay-seconds form only, which is what
+ * PDFKit's rate limiter sends). Returns the delay in milliseconds, clamped to
+ * a sane range, or `undefined` when the header is absent or not a usable
+ * number — the caller then falls back to its own conservative backoff.
+ * HTTP-date values are deliberately not interpreted: the limiter never sends
+ * them, and guessing a timezone-correct delay would be fake precision.
+ */
+export function parseRetryAfterMs(response: Response): number | undefined {
+  const raw = response.headers.get("retry-after");
+  if (!raw) return undefined;
+  const seconds = Number.parseInt(raw.trim(), 10);
+  if (!Number.isFinite(seconds) || seconds <= 0) return undefined;
+  return Math.min(seconds * 1000, MAX_RETRY_AFTER_MS);
 }
 
 interface ErrorBody {
@@ -176,6 +238,8 @@ async function processOneFile(
     signal: AbortSignal;
     fetchImpl: typeof fetch;
     sleep: (ms: number, signal: AbortSignal) => Promise<void>;
+    batchId: string;
+    onBackoff?: (reason: "rate-limit" | "server-busy" | "network", waitMs: number) => void;
   },
 ): Promise<
   | { outcome: "succeeded"; blob: Blob; fileName: string; pages?: number; images?: number }
@@ -189,6 +253,16 @@ async function processOneFile(
   let busyRetries = 0;
   let networkRetries = 0;
 
+  /** Abortable wait that reports cancellation instead of throwing. */
+  const wait = async (ms: number): Promise<boolean> => {
+    try {
+      await options.sleep(ms, options.signal);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   // Each loop iteration is one attempt; backoffs sleep (abortable) and retry.
   for (;;) {
     let response: Response;
@@ -197,6 +271,7 @@ async function processOneFile(
         method: "POST",
         body: form,
         signal: options.signal,
+        headers: { "x-pdfkit-batch-id": options.batchId },
       });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
@@ -204,15 +279,13 @@ async function processOneFile(
       }
       if (networkRetries < MAX_NETWORK_RETRIES) {
         networkRetries += 1;
-        try {
-          await options.sleep(2_000, options.signal);
-        } catch {
-          return { outcome: "cancelled" };
-        }
+        options.onBackoff?.("network", 2_000);
+        if (!(await wait(2_000))) return { outcome: "cancelled" };
         continue;
       }
       return {
         outcome: "failed",
+        code: "NETWORK_ERROR",
         message: "The file could not be sent. Check your connection and try again.",
       };
     }
@@ -251,11 +324,11 @@ async function processOneFile(
         };
       }
       rateLimitRetries += 1;
-      try {
-        await options.sleep(RATE_LIMIT_COOLDOWN_MS, options.signal);
-      } catch {
-        return { outcome: "cancelled" };
-      }
+      // Honour the server's Retry-After when it sends one (clamped); fall
+      // back to the conservative full-window cooldown when it does not.
+      const waitMs = parseRetryAfterMs(response) ?? RATE_LIMIT_COOLDOWN_MS;
+      options.onBackoff?.("rate-limit", waitMs);
+      if (!(await wait(waitMs))) return { outcome: "cancelled" };
       continue;
     }
     if (failure.code === "SERVER_BUSY") {
@@ -267,11 +340,8 @@ async function processOneFile(
         };
       }
       busyRetries += 1;
-      try {
-        await options.sleep(SERVER_BUSY_RETRY_MS, options.signal);
-      } catch {
-        return { outcome: "cancelled" };
-      }
+      options.onBackoff?.("server-busy", SERVER_BUSY_RETRY_MS);
+      if (!(await wait(SERVER_BUSY_RETRY_MS))) return { outcome: "cancelled" };
       continue;
     }
 
@@ -283,6 +353,26 @@ async function processOneFile(
   }
 }
 
+/** Default online check: `navigator.onLine` in the browser, always online elsewhere. */
+function defaultGetOnline(): boolean {
+  // Node 21+ exposes a global `navigator` without `onLine`; treat any
+  // environment lacking a real `onLine` as online so batches never stall.
+  if (typeof navigator === "undefined" || typeof navigator.onLine === "undefined") {
+    return true;
+  }
+  return navigator.onLine;
+}
+
+/** Generate a batch correlation id (UUID v4 where available). */
+function generateBatchId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  // Deterministic-enough fallback for exotic environments; still matches the
+  // server's validated pattern (alnum start, alnum+hyphen, 8-64 chars).
+  return `b-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 /** Run a whole batch. See the module comment for the invariants. */
 export async function runBulkBatch({
   operation,
@@ -291,9 +381,11 @@ export async function runBulkBatch({
   signal,
   onFileStatus,
   onProgress,
+  onPhase,
   initialBudgets,
   fetchImpl = fetch,
   sleep = defaultSleep,
+  getOnline = defaultGetOnline,
 }: RunBulkBatchOptions): Promise<BulkBatchRun> {
   const results = new Map<string, BulkFileResult>();
   const budgets: BulkBudgets = initialBudgets ?? {
@@ -304,6 +396,8 @@ export async function runBulkBatch({
   let stopReason: BulkStopReason | undefined;
   let lastStart = 0;
   let settled = 0;
+  const batchId = generateBatchId();
+  const startedAt = Date.now();
 
   const emit = (result: BulkFileResult) => {
     results.set(result.id, result);
@@ -321,13 +415,24 @@ export async function runBulkBatch({
     emit(base(entry));
   }
 
-  for (const entry of files) {
+  for (const [index, entry] of files.entries()) {
     if (stopReason) {
       const current = results.get(entry.id);
       if (current && current.status === "queued") {
+        // Label remaining files by *why* the batch stopped, so summary
+        // counts stay honest (Phase 62): quota stops skip on quota, budget
+        // stops skip on budget, everything else is a cancellation.
+        const stopStatus: BulkFileStatus =
+          stopReason === "quota"
+            ? "skipped-quota"
+            : stopReason === "budget-pages" ||
+                stopReason === "budget-output" ||
+                stopReason === "budget-images"
+              ? "skipped-budget"
+              : "cancelled";
         emit({
           ...current,
-          status: stopReason === "quota" ? "skipped-quota" : "cancelled",
+          status: stopStatus,
         });
       }
       continue;
@@ -360,9 +465,25 @@ export async function runBulkBatch({
       continue;
     }
 
+    // Offline pause: never burn through failures while the connection is
+    // down; wait (abortably) until the browser reports online again.
+    while (!getOnline()) {
+      onPhase?.({ kind: "waiting-online" });
+      try {
+        await sleep(OFFLINE_POLL_MS, signal);
+      } catch {
+        stopReason = "cancelled";
+        const current = results.get(entry.id)!;
+        emit({ ...current, status: "cancelled" });
+        break;
+      }
+    }
+    if (stopReason) continue;
+
     // Pacing: keep the batch under the per-IP rate limit even on fast failures.
     const waitFor = lastStart + BULK_REQUEST_PACING_MS - Date.now();
     if (waitFor > 0) {
+      onPhase?.({ kind: "pacing", waitMs: waitFor });
       try {
         await sleep(waitFor, signal);
       } catch {
@@ -374,15 +495,25 @@ export async function runBulkBatch({
     }
     lastStart = Date.now();
 
+    const fileStartedAt = Date.now();
     emit({ ...results.get(entry.id)!, status: "processing" });
+    onPhase?.({
+      kind: "file-start",
+      index: index + 1,
+      total: files.length,
+      name: entry.file.name,
+    });
 
     const outcome = await processOneFile(operation, entry, {
       signal,
       fetchImpl,
       sleep,
+      batchId,
+      onBackoff: (reason, waitMs) => onPhase?.({ kind: "backoff", reason, waitMs }),
     });
 
     settled += 1;
+    const durationMs = Date.now() - fileStartedAt;
 
     if (outcome.outcome === "succeeded") {
       budgets.outputBytes += outcome.blob.size;
@@ -395,12 +526,14 @@ export async function runBulkBatch({
         fileName: outcome.fileName,
         pages: outcome.pages,
         images: outcome.images,
+        durationMs,
       });
     } else if (outcome.outcome === "quota") {
       stopReason = "quota";
       emit({
         ...results.get(entry.id)!,
         status: "skipped-quota",
+        durationMs,
       });
     } else if (outcome.outcome === "service-unavailable") {
       stopReason = "service-unavailable";
@@ -408,24 +541,33 @@ export async function runBulkBatch({
         ...results.get(entry.id)!,
         status: "failed",
         error: { code: "USAGE_SERVICE_UNAVAILABLE", message: outcome.message },
+        durationMs,
       });
     } else if (outcome.outcome === "cancelled") {
       stopReason = "cancelled";
-      emit({ ...results.get(entry.id)!, status: "cancelled" });
+      emit({ ...results.get(entry.id)!, status: "cancelled", durationMs });
     } else {
       emit({
         ...results.get(entry.id)!,
         status: "failed",
         error: { code: outcome.code, message: outcome.message },
+        durationMs,
       });
     }
 
     onProgress?.({ settled, total: files.length, ...budgets });
   }
 
+  if (stopReason) {
+    onPhase?.({ kind: "batch-stopped", reason: stopReason });
+  }
+  onPhase?.({ kind: "batch-done" });
+
   return {
     results: files.map((entry) => results.get(entry.id)!).filter(Boolean),
     stopReason,
     budgets,
+    batchId,
+    elapsedMs: Date.now() - startedAt,
   };
 }

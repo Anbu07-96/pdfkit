@@ -6,9 +6,11 @@ import {
   CircleSlash,
   Download,
   FileArchive,
+  FileSpreadsheet,
   Layers,
   Loader2,
   RefreshCw,
+  WifiOff,
   XCircle,
 } from "lucide-react";
 import * as React from "react";
@@ -20,10 +22,13 @@ import { UploadZone, type SelectedFile } from "@/components/upload/upload-zone";
 import {
   runBulkBatch,
   type BulkBudgets,
+  type BulkBatchPhase,
   type BulkFileResult,
   type BulkStopReason,
 } from "@/lib/bulk/runner";
 import { buildBatchZipBlob } from "@/lib/bulk/zip";
+import { batchCsvFileName, buildBatchCsv } from "@/lib/bulk/csv";
+import { classifyBulkError } from "@/lib/bulk/errors";
 import {
   resolveBulkBatchCaps,
   type BulkBatchCaps,
@@ -33,11 +38,13 @@ import { formatBytes } from "@/lib/utils/format";
 import { cn } from "@/lib/utils/cn";
 
 /**
- * Bulk Tools workspace (Phase 61).
+ * Bulk Tools workspace (Phases 61–62).
  *
  * One shared workspace for every bulk operation: select many files, watch each
- * file's status live, cancel, retry failures, download individual results or
- * everything as one ZIP — with the batch's quota needs shown up front.
+ * file's status live (with honest, batch-level progress — the server does not
+ * report intra-file progress, so none is invented), cancel, retry failures,
+ * download individual results or everything as one ZIP, export a CSV summary,
+ * and see exactly what the batch needs and what quota remains.
  *
  * Every file is sent to the existing single-file endpoint as its own request
  * (see `lib/bulk/runner.ts`), so quota metering, rate limiting and validation
@@ -97,6 +104,18 @@ const STOP_REASONS: Record<BulkStopReason, { title: string; description: string 
 
 /** The most conservative caps, used until the real quota snapshot arrives. */
 const FALLBACK_CAPS = resolveBulkBatchCaps("anonymous", 10, 50 * 1024 * 1024);
+
+function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  if (ms < 1000) return `${ms} ms`;
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)} s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds % 60);
+  if (minutes < 60) return `${minutes}m ${rest}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}
 
 async function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
@@ -164,6 +183,49 @@ function statusBadge(result: BulkFileResult): {
   }
 }
 
+/** Honest, batch-level progress line for the current phase (Part 4). */
+function progressLine(
+  phase: BulkBatchPhase | null,
+  counts: { settled: number; total: number },
+): { icon: React.ReactNode; text: string } {
+  if (phase?.kind === "waiting-online") {
+    return {
+      icon: <WifiOff aria-hidden="true" className="size-4 shrink-0" />,
+      text: "You appear to be offline — the batch resumes automatically when the connection returns.",
+    };
+  }
+  if (phase?.kind === "pacing") {
+    return {
+      icon: <Loader2 aria-hidden="true" className="size-4 shrink-0 animate-spin" />,
+      text: "Waiting briefly before the next file, to stay under the request rate limit.",
+    };
+  }
+  if (phase?.kind === "backoff") {
+    const seconds = Math.max(1, Math.round(phase.waitMs / 1000));
+    const reason =
+      phase.reason === "rate-limit"
+        ? `Rate limited by the server — retrying this file in ${seconds}s`
+        : phase.reason === "server-busy"
+          ? `Server busy — retrying this file in ${seconds}s`
+          : `Connection problem — retrying this file in ${seconds}s`;
+    return {
+      icon: <Loader2 aria-hidden="true" className="size-4 shrink-0 animate-spin" />,
+      text: `${reason}. The batch is paused, not lost.`,
+    };
+  }
+  if (phase?.kind === "file-start") {
+    const remaining = counts.total - counts.settled;
+    return {
+      icon: <Loader2 aria-hidden="true" className="size-4 shrink-0 animate-spin" />,
+      text: `Processing file ${phase.index} of ${phase.total} · ${counts.settled} done · ${remaining} remaining`,
+    };
+  }
+  return {
+    icon: <Loader2 aria-hidden="true" className="size-4 shrink-0 animate-spin" />,
+    text: `Preparing the batch… ${counts.settled} of ${counts.total} files processed`,
+  };
+}
+
 export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
   const [files, setFiles] = React.useState<SelectedFile[]>([]);
   const [usage, setUsage] = React.useState<UsageSnapshot | null>(null);
@@ -178,8 +240,15 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
     imagesUsed: 0,
   });
   const [stopReason, setStopReason] = React.useState<BulkStopReason | null>(null);
+  const [batchPhase, setBatchPhase] = React.useState<BulkBatchPhase | null>(null);
+  const [settled, setSettled] = React.useState(0);
+  const [lastRun, setLastRun] = React.useState<{
+    elapsedMs: number;
+    batchId: string;
+  } | null>(null);
   const [zipping, setZipping] = React.useState(false);
   const abortRef = React.useRef<AbortController | null>(null);
+  const runningRef = React.useRef(false);
   const sessionBudgetsRef = React.useRef<BulkBudgets>({
     pagesUsed: 0,
     outputBytes: 0,
@@ -234,13 +303,43 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
     };
   }, []);
 
+  // Guard against accidental refresh/navigation while a batch is running
+  // (Phase 62, Part 6). Nothing is persisted, so a refresh would silently
+  // discard the batch — prompting is the honest protection. It can never
+  // cause duplicate processing: there is no stored state to replay.
+  React.useEffect(() => {
+    runningRef.current = phase === "running";
+  }, [phase]);
+
+  React.useEffect(() => {
+    function onBeforeUnload(event: BeforeUnloadEvent) {
+      if (!runningRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, []);
+
   const totalInputBytes = files.reduce((total, file) => total + file.size, 0);
+  const settledResults = [...results.values()].filter(
+    (result) =>
+      result.status === "succeeded" ||
+      result.status === "failed" ||
+      result.status === "cancelled",
+  );
   const succeeded = [...results.values()].filter((r) => r.status === "succeeded");
   const failed = [...results.values()].filter((r) => r.status === "failed");
-  const skipped =
-    [...results.values()].filter((r) => r.status === "skipped-quota" || r.status === "skipped-budget").length;
+  const cancelled = [...results.values()].filter((r) => r.status === "cancelled");
+  const skipped = [...results.values()].filter(
+    (r) => r.status === "skipped-quota" || r.status === "skipped-budget",
+  );
   const cancellable = [...results.values()].filter(
-    (r) => r.status === "failed" || r.status === "skipped-quota" || r.status === "skipped-budget" || r.status === "cancelled",
+    (r) =>
+      r.status === "failed" ||
+      r.status === "skipped-quota" ||
+      r.status === "skipped-budget" ||
+      r.status === "cancelled",
   );
   const running = phase === "running";
 
@@ -254,6 +353,8 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
     abortRef.current = controller;
     setPhase("running");
     setStopReason(null);
+    setBatchPhase(null);
+    setSettled(0);
 
     let refreshCounter = 0;
     const run = await runBulkBatch({
@@ -269,7 +370,9 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
           return next;
         });
       },
+      onPhase: (nextPhase) => setBatchPhase(nextPhase),
       onProgress: (progress) => {
+        setSettled(progress.settled);
         setBudgets({
           pagesUsed: progress.pagesUsed,
           outputBytes: progress.outputBytes,
@@ -292,7 +395,9 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
 
     sessionBudgetsRef.current = { ...run.budgets };
     setStopReason(run.stopReason ?? null);
+    setLastRun({ elapsedMs: run.elapsedMs, batchId: run.batchId });
     setPhase("done");
+    setBatchPhase(null);
     abortRef.current = null;
     void loadUsage();
 
@@ -322,18 +427,16 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
 
   async function handleRetry() {
     if (running) return;
-    const retryEntries = files.filter(
-      (file) => {
-        const result = results.get(file.id);
-        return (
-          result !== undefined &&
-          (result.status === "failed" ||
-            result.status === "skipped-quota" ||
-            result.status === "skipped-budget" ||
-            result.status === "cancelled")
-        );
-      },
-    );
+    const retryEntries = files.filter((file) => {
+      const result = results.get(file.id);
+      return (
+        result !== undefined &&
+        (result.status === "failed" ||
+          result.status === "skipped-quota" ||
+          result.status === "skipped-budget" ||
+          result.status === "cancelled")
+      );
+    });
     if (retryEntries.length === 0) return;
     // Keep successful results; retry only the unfinished ones, with the
     // session's budgets carried over so the browser-side caps stay honest.
@@ -367,6 +470,23 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
     }
   }
 
+  function handleExportCsv() {
+    const ordered = files
+      .map((file) => results.get(file.id))
+      .filter((result): result is BulkFileResult => Boolean(result));
+    if (ordered.length === 0) return;
+
+    const csv = buildBatchCsv({
+      operation: operation.id,
+      results: ordered,
+    });
+    // BOM so spreadsheet apps decode the UTF-8 filenames correctly.
+    const blob = new Blob([`\uFEFF${csv}`], {
+      type: "text/csv;charset=utf-8",
+    });
+    void downloadBlob(blob, batchCsvFileName(operation.id));
+  }
+
   function handleStartOver() {
     abortRef.current?.abort();
     abortRef.current = null;
@@ -375,6 +495,9 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
     setBudgets({ pagesUsed: 0, outputBytes: 0, imagesUsed: 0 });
     sessionBudgetsRef.current = { pagesUsed: 0, outputBytes: 0, imagesUsed: 0 };
     setStopReason(null);
+    setBatchPhase(null);
+    setSettled(0);
+    setLastRun(null);
     setPhase("select");
     void loadUsage();
   }
@@ -388,6 +511,19 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
   }
   budgetNotes.push(`${formatBytes(caps.maxOutputBytesPerBatch, 0)} of results held per batch`);
 
+  const completedDurations = succeeded
+    .map((result) => result.durationMs)
+    .filter((value): value is number => value !== undefined);
+  const avgDurationMs =
+    completedDurations.length > 0
+      ? completedDurations.reduce((total, value) => total + value, 0) /
+        completedDurations.length
+      : undefined;
+  const inputBytesProcessed = settledResults.reduce(
+    (total, result) => total + result.size,
+    0,
+  );
+
   return (
     <div className="flex flex-col gap-5">
       <UploadZone
@@ -400,6 +536,7 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
           setResults(new Map());
           setStopReason(null);
           setPhase("select");
+          setLastRun(null);
         }}
         multiple
         maxFiles={caps.maxFilesPerBatch}
@@ -505,6 +642,13 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
           </Button>
         ) : null}
 
+        {!running && phase === "done" && results.size > 0 ? (
+          <Button variant="secondary" size="lg" onClick={handleExportCsv}>
+            <FileSpreadsheet aria-hidden="true" className="size-4" />
+            Export results as CSV
+          </Button>
+        ) : null}
+
         {!running && (files.length > 0 || phase === "done") ? (
           <Button variant="ghost" size="lg" onClick={handleStartOver}>
             Start over
@@ -514,11 +658,38 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
 
       <p role="status" aria-live="polite" className="sr-only">
         {running
-          ? `Processing batch: ${succeeded.length + failed.length + skipped} of ${files.length} files settled.`
+          ? `Processing batch: ${settled} of ${files.length} files settled.`
           : phase === "done"
-            ? `Batch finished: ${succeeded.length} succeeded, ${failed.length} failed, ${skipped} skipped.`
+            ? `Batch finished: ${succeeded.length} succeeded, ${failed.length} failed, ${skipped.length} skipped.`
             : ""}
       </p>
+
+      {/* Live batch progress (honest, batch-level only) */}
+      {running && files.length > 0 ? (
+        <div
+          className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4"
+          data-testid="bulk-progress"
+        >
+          {progressLine(batchPhase, { settled, total: files.length }).icon}
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              {progressLine(batchPhase, { settled, total: files.length }).text}
+            </p>
+            <p className="mt-1 text-xs text-subtle">
+              {settled} of {files.length} files processed
+              {settled > 0
+                ? ` (${Math.round((settled / files.length) * 100)}% of files)`
+                : ""}
+              {avgDurationMs !== undefined && settled < files.length
+                ? ` · roughly ${formatDuration(
+                    (avgDurationMs * (files.length - settled)) / 1,
+                  )} remaining (estimate)`
+                : ""}
+              . Cancelling stops the next file; results already received are kept.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {/* Stop reason */}
       {phase !== "running" && stopReason ? (
@@ -528,12 +699,82 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
         />
       ) : null}
 
+      {/* Batch completion summary (Part 1) */}
+      {!running && phase === "done" && results.size > 0 ? (
+        <div
+          className="rounded-xl border border-border bg-surface p-4 text-sm"
+          data-testid="bulk-summary"
+        >
+          <h3 className="font-medium text-foreground">Batch summary</h3>
+          <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
+            <div>
+              <dt className="text-xs text-subtle">Files</dt>
+              <dd className="font-medium text-foreground">{results.size}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-subtle">Completed</dt>
+              <dd className="font-medium text-success">{succeeded.length}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-subtle">Failed</dt>
+              <dd className="font-medium text-danger">{failed.length}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-subtle">Cancelled</dt>
+              <dd className="font-medium text-foreground">{cancelled.length}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-subtle">Skipped</dt>
+              <dd className="font-medium text-foreground">{skipped.length}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-subtle">Input processed</dt>
+              <dd className="font-medium text-foreground">
+                {formatBytes(inputBytesProcessed)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-subtle">Results held</dt>
+              <dd className="font-medium text-foreground">
+                {formatBytes(budgets.outputBytes)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-subtle">Elapsed</dt>
+              <dd className="font-medium text-foreground">
+                {lastRun ? formatDuration(lastRun.elapsedMs) : "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-subtle">Avg per completed file</dt>
+              <dd className="font-medium text-foreground">
+                {avgDurationMs !== undefined ? formatDuration(avgDurationMs) : "—"}
+              </dd>
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <dt className="text-xs text-subtle">Quota left today</dt>
+              <dd className="font-medium text-foreground">
+                {usage
+                  ? `${usage.jobsRemaining} of ${usage.dailyJobLimit} jobs · ${formatBytes(usage.bytesRemaining)}`
+                  : "Unavailable"}
+              </dd>
+            </div>
+          </dl>
+          {lastRun ? (
+            <p className="mt-3 text-xs text-subtle">
+              Batch reference {lastRun.batchId} — included in server logs for
+              diagnostics only; it contains no information about your files.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       {/* Batch progress + per-file list */}
       {results.size > 0 ? (
         <section aria-label="Batch progress" className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-medium text-foreground">
-              {succeeded.length} succeeded · {failed.length} failed · {skipped} skipped
+              {succeeded.length} succeeded · {failed.length} failed · {skipped.length} skipped
               {operation.pageBudget
                 ? ` · ${budgets.pagesUsed}/${caps.maxPagesPerBatch} pages`
                 : ""}
@@ -549,6 +790,12 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
           <ul className="flex max-h-96 flex-col gap-2 overflow-y-auto">
             {[...results.values()].map((result) => {
               const badge = statusBadge(result);
+              const classification =
+                result.status === "failed"
+                  ? classifyBulkError(result.error?.code)
+                  : result.status === "cancelled"
+                    ? null
+                    : null;
               return (
                 <li
                   key={result.id}
@@ -576,13 +823,22 @@ export function BulkWorkspace({ operation, limits }: BulkWorkspaceProps) {
                           {result.images !== undefined ? <span>· {result.images} images</span> : null}
                         </>
                       ) : null}
-                      {result.status === "failed" && result.error ? (
-                        <>
-                          <span>·</span>
-                          <span className="text-error">{result.error.message}</span>
-                        </>
+                      {result.durationMs !== undefined ? (
+                        <span>· {formatDuration(result.durationMs)}</span>
                       ) : null}
                     </p>
+                    {result.status === "failed" && result.error ? (
+                      <p className="mt-1 text-xs text-muted">
+                        <span className="font-medium text-danger">
+                          {classification?.label ?? "Failed"}
+                        </span>
+                        <span className="text-subtle"> — </span>
+                        <span className="text-error">{result.error.message}</span>
+                        {classification && !classification.retryable ? (
+                          <span className="text-subtle"> ({classification.retryHint})</span>
+                        ) : null}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <Badge tone={badge.tone}>

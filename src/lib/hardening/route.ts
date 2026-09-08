@@ -16,6 +16,7 @@ import {
   tryAcquireDistributedSlot,
 } from "@/lib/hardening/distributed-protection";
 import { captureServerException } from "@/lib/monitoring/sentry";
+import { logStructuredEvent } from "@/lib/monitoring/logger";
 import { getUserIdentity } from "@/lib/auth/session";
 import { getUsageService } from "@/lib/usage/service";
 
@@ -59,6 +60,17 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
   const preflight = await getUsageService().evaluatePreflight(identity, requestedBytes);
 
   if (!preflight.allowed) {
+    // Operational telemetry (Phase 62): which guard fired and for which tier.
+    // No user-identifying data — the quota service owns identity.
+    logStructuredEvent("quota_rejected", {
+      toolId: options.toolId,
+      tier: preflight.tier,
+      reason: preflight.reason,
+      ...(requestedBytes !== undefined
+        ? { requestedBytes }
+        : {}),
+    });
+
     if (preflight.reason === "SERVICE_UNAVAILABLE") {
       return jsonError(
         "USAGE_SERVICE_UNAVAILABLE",
@@ -112,6 +124,12 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
 
   const timeout: Promise<Response> = new Promise((resolve) => {
     timer = setTimeout(() => {
+      // Operational telemetry (Phase 62): the caller gave up; the job keeps
+      // running privately and still logs its own outcome when it ends.
+      logStructuredEvent("request_timeout", {
+        toolId: options.toolId,
+        timeoutMs: config.requestTimeoutMs,
+      });
       resolve(
         jsonError(
           "REQUEST_TIMEOUT",

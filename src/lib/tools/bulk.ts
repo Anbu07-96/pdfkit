@@ -196,7 +196,15 @@ export const BULK_OPERATIONS: readonly BulkOperation[] = [
     outputKind: "archive",
     pageBudget: false,
     imageBudget: true,
-    keywords: ["batch", "embedded", "pictures", "multiple", "save images"],
+    keywords: [
+      "batch",
+      "embedded",
+      "pictures",
+      "multiple",
+      "save images",
+      "extraction",
+      "image extraction",
+    ],
     howItWorks: [
       "Add the PDFs that contain embedded images.",
       "Images are extracted on the server, one file at a time, with live status per file.",

@@ -376,3 +376,324 @@ describe("runBulkBatch", () => {
     });
   });
 });
+
+describe("runBulkBatch — Phase 62 additions", () => {
+  it("honours Retry-After on 429 instead of the fixed cooldown", async () => {
+    const operation = getBulkOperation("pdf-to-word")!;
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const fetchImpl = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              error: { code: "TOO_MANY_REQUESTS", message: "Too many requests." },
+            }),
+            {
+              status: 429,
+              headers: {
+                "content-type": "application/json",
+                "retry-after": "7",
+              },
+            },
+          ),
+        ),
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve(binaryResponse(new Uint8Array([1]))),
+      );
+
+    const run = await runBulkBatch({
+      operation,
+      files: [{ id: "f1", file: makeFile("f1.pdf") }],
+      caps: CAPS,
+      signal: new AbortController().signal,
+      fetchImpl,
+      sleep,
+    });
+
+    expect(run.results[0].status).toBe("succeeded");
+    // The 429 backoff waited exactly the server-requested 7 seconds (plus
+    // at most the pacing wait, which is ≤ 1100 ms).
+    const waits = sleep.mock.calls.map((call) => call[0]);
+    expect(waits).toContain(7_000);
+    for (const wait of waits) {
+      expect(wait).toBeLessThanOrEqual(7_000 + BULK_REQUEST_PACING_MS);
+    }
+  });
+
+  it("falls back to the conservative cooldown when 429 has no Retry-After", async () => {
+    const operation = getBulkOperation("pdf-to-word")!;
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const fetchImpl = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        Promise.resolve(
+          jsonResponse(
+            { error: { code: "TOO_MANY_REQUESTS", message: "Too many requests." } },
+            429,
+          ),
+        ),
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve(binaryResponse(new Uint8Array([1]))),
+      );
+
+    const run = await runBulkBatch({
+      operation,
+      files: [{ id: "f1", file: makeFile("f1.pdf") }],
+      caps: CAPS,
+      signal: new AbortController().signal,
+      fetchImpl,
+      sleep,
+    });
+
+    expect(run.results[0].status).toBe("succeeded");
+    expect(sleep).toHaveBeenCalledWith(60_000, expect.any(AbortSignal));
+  });
+
+  it("clamps an absurd Retry-After value", async () => {
+    const operation = getBulkOperation("pdf-to-word")!;
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const fetchImpl = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: { code: "TOO_MANY_REQUESTS", message: "Too many requests." },
+          }),
+          {
+            status: 429,
+            headers: { "content-type": "application/json", "retry-after": "86400" },
+          },
+        ),
+      ),
+    );
+
+    const run = await runBulkBatch({
+      operation,
+      files: [{ id: "f1", file: makeFile("f1.pdf") }],
+      caps: CAPS,
+      signal: new AbortController().signal,
+      fetchImpl,
+      sleep,
+    });
+
+    // A hostile value must not stall the batch: waits are clamped and the
+    // retry budget (2) still applies.
+    for (const call of sleep.mock.calls) {
+      expect(call[0]).toBeLessThanOrEqual(120_000);
+    }
+    expect(run.results[0].status).toBe("failed");
+    expect(run.results[0].error?.code).toBe("TOO_MANY_REQUESTS");
+  });
+
+  it("gives up after the retry limit even with Retry-After", async () => {
+    const operation = getBulkOperation("pdf-to-word")!;
+    const fetchImpl = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: { code: "TOO_MANY_REQUESTS", message: "Too many requests." },
+          }),
+          {
+            status: 429,
+            headers: { "content-type": "application/json", "retry-after": "1" },
+          },
+        ),
+      ),
+    );
+
+    const run = await runBulkBatch({
+      operation,
+      files: [{ id: "f1", file: makeFile("f1.pdf") }],
+      caps: CAPS,
+      signal: new AbortController().signal,
+      fetchImpl,
+      sleep: async () => {},
+    });
+
+    // 1 initial attempt + 2 retries.
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(run.results[0].status).toBe("failed");
+  });
+
+  it("cancellation during a 429 backoff aborts the batch cleanly", async () => {
+    const operation = getBulkOperation("pdf-to-word")!;
+    const controller = new AbortController();
+    const fetchImpl = vi.fn().mockImplementation(() => {
+      controller.abort();
+      return Promise.reject(new DOMException("Aborted", "AbortError"));
+    });
+
+    const run = await runBulkBatch({
+      operation,
+      files: [1, 2].map((n) => ({ id: `f${n}`, file: makeFile(`f${n}.pdf`) })),
+      caps: CAPS,
+      signal: controller.signal,
+      fetchImpl,
+      sleep: async () => {},
+    });
+
+    expect(run.stopReason).toBe("cancelled");
+    expect(run.results.map((r) => r.status)).toEqual(["cancelled", "cancelled"]);
+  });
+
+  it("emits honest batch-level phase events", async () => {
+    const operation = getBulkOperation("pdf-to-word")!;
+    const phases: string[] = [];
+
+    const run = await runBulkBatch({
+      operation,
+      files: [1, 2].map((n) => ({ id: `f${n}`, file: makeFile(`f${n}.pdf`) })),
+      caps: CAPS,
+      signal: new AbortController().signal,
+      fetchImpl: vi.fn().mockImplementation(() =>
+        Promise.resolve(binaryResponse(new Uint8Array([1]))),
+      ),
+      sleep: async () => {},
+      onPhase: (phase) => phases.push(phase.kind),
+    });
+
+    // File starts and the final done marker; no invented per-file percentages.
+    expect(phases.filter((kind) => kind === "file-start")).toHaveLength(2);
+    expect(phases).toContain("pacing");
+    expect(phases[phases.length - 1]).toBe("batch-done");
+    expect(run.batchId).toMatch(/^[a-zA-Z0-9][a-zA-Z0-9-]{7,63}$/);
+    expect(run.elapsedMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("emits backoff phase events with their reason", async () => {
+    const operation = getBulkOperation("pdf-to-word")!;
+    const phases: unknown[] = [];
+
+    await runBulkBatch({
+      operation,
+      files: [{ id: "f1", file: makeFile("f1.pdf") }],
+      caps: CAPS,
+      signal: new AbortController().signal,
+      fetchImpl: vi
+        .fn()
+        .mockImplementationOnce(() =>
+          Promise.resolve(
+            jsonResponse(
+              { error: { code: "TOO_MANY_REQUESTS", message: "slow down" } },
+              429,
+            ),
+          ),
+        )
+        .mockImplementationOnce(() =>
+          Promise.resolve(binaryResponse(new Uint8Array([1]))),
+        ),
+      sleep: async () => {},
+      onPhase: (phase) => phases.push(phase),
+    });
+
+    const backoff = phases.find(
+      (phase) => (phase as { kind?: string }).kind === "backoff",
+    ) as { kind: string; reason: string; waitMs: number } | undefined;
+    expect(backoff).toBeDefined();
+    expect(backoff?.reason).toBe("rate-limit");
+    expect(backoff?.waitMs).toBe(60_000);
+  });
+
+  it("pauses while offline and resumes when the connection returns", async () => {
+    const operation = getBulkOperation("pdf-to-word")!;
+    const phases: string[] = [];
+    let online = false;
+    const sleep = vi.fn().mockImplementation(async () => {
+      // The connection comes back while polling.
+      online = true;
+    });
+
+    const run = await runBulkBatch({
+      operation,
+      files: [1, 2].map((n) => ({ id: `f${n}`, file: makeFile(`f${n}.pdf`) })),
+      caps: CAPS,
+      signal: new AbortController().signal,
+      fetchImpl: vi.fn().mockImplementation(() =>
+        Promise.resolve(binaryResponse(new Uint8Array([1]))),
+      ),
+      sleep,
+      getOnline: () => online,
+      onPhase: (phase) => phases.push(phase.kind),
+    });
+
+    expect(phases).toContain("waiting-online");
+    expect(run.results.map((r) => r.status)).toEqual(["succeeded", "succeeded"]);
+  });
+
+  it("can be cancelled while waiting to come back online", async () => {
+    const operation = getBulkOperation("pdf-to-word")!;
+    const controller = new AbortController();
+
+    const run = await runBulkBatch({
+      operation,
+      files: [{ id: "f1", file: makeFile("f1.pdf") }],
+      caps: CAPS,
+      signal: controller.signal,
+      fetchImpl: vi.fn(),
+      sleep: vi.fn().mockImplementation(async () => {
+        controller.abort();
+        throw new DOMException("Aborted", "AbortError");
+      }),
+      getOnline: () => false,
+    });
+
+    expect(run.stopReason).toBe("cancelled");
+    expect(run.results[0].status).toBe("cancelled");
+  });
+
+  it("records per-file durations for settled files", async () => {
+    const operation = getBulkOperation("pdf-to-word")!;
+    const run = await runBulkBatch({
+      operation,
+      files: [
+        { id: "ok", file: makeFile("ok.pdf") },
+        {
+          id: "bad",
+          file: makeFile("bad.pdf"),
+        },
+      ],
+      caps: CAPS,
+      signal: new AbortController().signal,
+      fetchImpl: vi.fn().mockImplementation((_url: unknown, init?: RequestInit) =>
+        Promise.resolve(
+          (init?.body as FormData).get("files") instanceof File &&
+            (init?.body as FormData).get("files") instanceof File
+            ? // Distinguish by file name via a second read is overkill; succeed all.
+              binaryResponse(new Uint8Array([1]))
+            : binaryResponse(new Uint8Array([1])),
+        ),
+      ),
+      sleep: async () => {},
+    });
+
+    for (const result of run.results) {
+      expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    }
+    expect(run.elapsedMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("sends the batch correlation id header on every request", async () => {
+    const operation = getBulkOperation("pdf-to-word")!;
+    const fetchImpl = vi.fn().mockImplementation(() =>
+      Promise.resolve(binaryResponse(new Uint8Array([1]))),
+    );
+
+    const run = await runBulkBatch({
+      operation,
+      files: [1, 2].map((n) => ({ id: `f${n}`, file: makeFile(`f${n}.pdf`) })),
+      caps: CAPS,
+      signal: new AbortController().signal,
+      fetchImpl,
+      sleep: async () => {},
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    for (const call of fetchImpl.mock.calls) {
+      expect((call[1] as RequestInit).headers).toMatchObject({
+        "x-pdfkit-batch-id": run.batchId,
+      });
+    }
+  });
+});

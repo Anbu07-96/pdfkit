@@ -19,6 +19,14 @@ export interface LogJobEntry {
   totalBytes: number;
   durationMs: number;
   code?: string;
+  /** Account tier of the caller, when known (Phase 62 observability). */
+  tier?: string;
+  /**
+   * Client-generated batch correlation id (bulk tools). Strictly validated
+   * (alnum + hyphens) before it reaches here and used for log correlation
+   * only — never for authorization, quota or security decisions.
+   */
+  batchId?: string;
 }
 
 export function logStructuredJob(entry: LogJobEntry): void {
@@ -32,6 +40,8 @@ export function logStructuredJob(entry: LogJobEntry): void {
     bytes: entry.totalBytes,
     ms: entry.durationMs,
     ...(entry.code ? { code: entry.code } : {}),
+    ...(entry.tier ? { tier: entry.tier } : {}),
+    ...(entry.batchId ? { batchId: entry.batchId } : {}),
   };
 
   if (process.env.NODE_ENV === "production" || process.env.STRUCTURED_LOGS === "true") {
@@ -40,7 +50,40 @@ export function logStructuredJob(entry: LogJobEntry): void {
     console.info(
       `[processing] tool=${entry.toolId} outcome=${entry.outcome}` +
         ` files=${entry.fileCount} bytes=${entry.totalBytes}` +
-        ` ms=${entry.durationMs}${entry.code ? ` code=${entry.code}` : ""}`,
+        ` ms=${entry.durationMs}${entry.code ? ` code=${entry.code}` : ""}` +
+        `${entry.tier ? ` tier=${entry.tier}` : ""}` +
+        `${entry.batchId ? ` batchId=${entry.batchId}` : ""}`,
     );
+  }
+}
+
+/**
+ * Privacy-safe structured event for operational telemetry (Phase 62).
+ *
+ * Same rules as `logStructuredJob`: field names and values are supplied by
+ * trusted server code only. Callers must never pass document contents, file
+ * names, passwords, tokens or raw request data — scalar operational facts
+ * only (codes, counts, durations, tiers, sanitized correlation ids).
+ */
+export function logStructuredEvent(
+  event: string,
+  fields: Record<string, string | number | boolean | undefined>,
+): void {
+  const clean: Record<string, string | number | boolean> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined) clean[key] = value;
+  }
+
+  const payload = {
+    timestamp: new Date().toISOString(),
+    level: "info",
+    event,
+    ...clean,
+  };
+
+  if (process.env.NODE_ENV === "production" || process.env.STRUCTURED_LOGS === "true") {
+    console.info(JSON.stringify(payload));
+  } else {
+    console.info(`[event] ${event} ${JSON.stringify(clean)}`);
   }
 }

@@ -100,3 +100,41 @@ describe("hardened route with Phase 41 protection", () => {
     expect(response.status).toBe(429);
   });
 });
+
+describe("checkRateLimit — Retry-After (Phase 62)", () => {
+  it("sets an honest Retry-After header from the real limiter window", async () => {
+    const req = postRequest({ "x-forwarded-for": "9.9.9.9" });
+    for (let i = 0; i < 5; i++) {
+      await checkRateLimit(req, 5);
+    }
+    const blocked = await checkRateLimit(req, 5);
+    expect(blocked).not.toBeNull();
+    expect(blocked!.status).toBe(429);
+
+    const retryAfter = blocked!.headers.get("retry-after");
+    expect(retryAfter).not.toBeNull();
+    // A real, honest value: bounded to the limiter window (60 s) and clamped
+    // to at least one second.
+    const seconds = Number(retryAfter);
+    expect(seconds).toBeGreaterThanOrEqual(1);
+    expect(seconds).toBeLessThanOrEqual(60);
+
+    const body = (await blocked!.json()) as {
+      error: { code: string; message: string };
+    };
+    expect(body.error.code).toBe("TOO_MANY_REQUESTS");
+    // The retry guidance lives in the standard header, not the body.
+    expect(JSON.stringify(body)).not.toMatch(/retry/i);
+  });
+
+  it("uses distinct buckets per client IP", async () => {
+    const reqA = postRequest({ "x-forwarded-for": "11.11.11.11" });
+    const reqB = postRequest({ "x-forwarded-for": "22.22.22.22" });
+    for (let i = 0; i < 5; i++) {
+      await checkRateLimit(reqA, 5);
+    }
+    expect(await checkRateLimit(reqA, 5)).not.toBeNull();
+    // A different client is unaffected.
+    expect(await checkRateLimit(reqB, 5)).toBeNull();
+  });
+});

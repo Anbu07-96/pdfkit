@@ -1010,6 +1010,72 @@ in-memory artifacts. The count is also reported via the
 `X-PDFKit-Extracted-Images` header, which the bulk runner uses for the batch
 image budget.
 
+## 5w. Bulk Observability & Production Load Readiness (Phase 62)
+
+**Same architecture, honest signals.** Phase 62 changed no architecture and
+no limits; it made the Phase 61 batch system observable and load-safe.
+
+- **Batch correlation** — every request in a batch carries
+  `x-pdfkit-batch-id` (generated client-side as a UUID). `readBatchIdHeader`
+  (`src/lib/processing/http.ts`) validates it against
+  `^[a-zA-Z0-9][a-zA-Z0-9-]{7,63}$` and drops anything else; the value is
+  attached to job logs (`batchId` field, with the caller's `tier`) for
+  correlation only. It is **never** used for authorization, quota or any
+  security decision — client values remain untrusted.
+- **Honest Retry-After** — the rate limiter (`src/lib/hardening/
+  distributed-protection.ts`) returns the real remaining seconds of its
+  window (Redis path: the Lua script returns the key's TTL on reject;
+  in-memory path: `resetAt - now`), clamped to 1–60 s. When the value is
+  unknown, no header is sent — nothing is faked. The runner parses
+  delay-seconds only (HTTP-date forms are deliberately not interpreted),
+  clamps to ≤120 s, and falls back to a 60 s cooldown. Retry budgets
+  (2 × rate-limit, 3 × busy, 1 × network per file) still bound every
+  backoff, so no header value can stall or storm a batch.
+- **Structured events** — `logStructuredEvent` in the existing logger emits
+  `rate_limited` (with `retryAfterSeconds`), `quota_rejected` (`toolId`,
+  `tier`, `reason`, `requestedBytes`) and `request_timeout` (`toolId`,
+  `timeoutMs`). No second logging system; nothing logs document contents,
+  tokens or secrets.
+- **Error classification** — `src/lib/bulk/errors.ts` maps server error codes
+  to twelve user-facing categories with `retryable` flags and retry hints.
+  Permanent validation failures (invalid PDF, unsupported, too large, batch
+  limit) are never auto-retried; transient ones (rate limited, busy, timeout,
+  network, cancelled) are. Unknown codes map honestly to "unknown" without
+  leaking internals.
+- **Batch summary & CSV** — the workspace shows a completion summary
+  (counts, bytes, elapsed, average, remaining quota) and exports an RFC 4180
+  CSV (`src/lib/bulk/csv.ts`) with a formula-injection guard (leading `'` on
+  `=+-@` cells) and a UTF-8 BOM. CSV carries metadata only — never document
+  contents.
+- **Honest progress** — `BulkBatchPhase` events (file-start, pacing, backoff,
+  waiting-online, batch-stopped, batch-done) drive a live banner with
+  whole-file counts and percentages. Intra-file progress is never invented.
+  While offline the runner pauses before dispatching (2 s abortable polls)
+  instead of burning failures. A `beforeunload` guard warns while running;
+  nothing replayable is persisted, so a refresh cannot duplicate processing.
+- **ZIP hardening** — `buildBatchEntries` caps archive results at 2,000
+  entries per result and the batch at 25,000 total entries (archive-bomb
+  defense-in-depth), and the entry sanitizer now preserves Unicode letters,
+  numbers and marks (`\p{L}\p{N}\p{M}`) so CJK/Cyrillic/Greek filenames
+  survive; path separators, control characters and traversal remain blocked,
+  mirroring the server sanitizer exactly.
+- **Bulk search** — `searchBulkOperations` (`src/lib/tools/search.ts`) makes
+  the bulk section discoverable ("bulk pdf", "batch pdf to word", "multiple
+  files") with the same AND-over-terms semantics as the tool search. The
+  tool catalog itself is untouched and stays honest: `AVAILABLE` tools only.
+- **Stop-reason honesty** — after a budget stop, remaining files are labelled
+  `skipped-budget` (matching the first violator) rather than `cancelled`, so
+  summary counts distinguish user cancels from budget skips.
+- **Limit review** — `docs/bulk-limit-review.md` documents each limit, why it
+  is conservative, the metric to observe, the threshold to raise and the
+  condition to reduce. No limits were raised in Phase 62.
+- **Load tests** — `src/lib/bulk/runner.load.test.ts` runs 12 deterministic
+  simulated-fetch scenarios (10/50/100-file batches, mixed failures,
+  sustained 429/503, cancellation, quota/page/output/image budget stops,
+  large and many-small files, raster-heavy extraction) asserting
+  single-flight concurrency, pacing, retry budgets, exact request counts,
+  no duplicate submissions and ZIP validity.
+
 ---
 
 ## 6. Upload and the processing boundary

@@ -50,14 +50,34 @@ function asResponseBody(bytes: Uint8Array): BodyInit {
   return bytes as Uint8Array<ArrayBuffer>;
 }
 
+/**
+ * Read and validate the optional bulk batch correlation header (Phase 62).
+ *
+ * The value is client-generated, so it is treated as untrusted input: it must
+ * match a strict allowlist (alphanumerics and hyphens, 8-64 chars, alnum
+ * first) or it is ignored entirely. It is only ever attached to structured
+ * logs — never used for authorization, quota or any security decision.
+ */
+export function readBatchIdHeader(request: Request): string | undefined {
+  const raw = request.headers.get("x-pdfkit-batch-id");
+  if (!raw) return undefined;
+  return BATCH_ID_PATTERN.test(raw) ? raw : undefined;
+}
+
+const BATCH_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-]{7,63}$/;
+
 export function jsonError(
   code: ProcessingErrorCode,
   message: string,
   details?: string[],
+  headers?: Record<string, string>,
 ): Response {
   return Response.json(
     { error: { code, message, ...(details?.length ? { details } : {}) } },
-    { status: httpStatusForCode(code), headers: JSON_HEADERS },
+    {
+      status: httpStatusForCode(code),
+      headers: { ...JSON_HEADERS, ...headers },
+    },
   );
 }
 
@@ -219,10 +239,14 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
   // (Phase 61 audit: this is exactly what happened before the fix).
   const totalProcessedBytes = upload.files.reduce((sum, file) => sum + file.size, 0);
 
+  // Batch correlation (Phase 62): a strictly-validated client id, used for
+  // log correlation only. Never trusted for any decision.
+  const batchId = readBatchIdHeader(request);
+
   // Hand over to the processing service (validation happens inside).
   const result = await runProcessingJob<TOptions>(
     { toolId, files: upload.files, options },
-    { limits },
+    { limits, logContext: { tier: identity?.tier, batchId } },
   );
 
   if (result.status === "failed") {

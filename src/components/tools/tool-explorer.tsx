@@ -2,6 +2,7 @@
 
 import { SearchX } from "lucide-react";
 import * as React from "react";
+import { BulkOperationCard } from "@/components/bulk/bulk-operation-card";
 import { ToolCard } from "@/components/tools/tool-card";
 import {
   useToolSearch,
@@ -10,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { EmptyState } from "@/components/ui/states";
-import { TOOL_CATEGORIES } from "@/lib/tools";
+import { TOOL_CATEGORIES, searchBulkOperations } from "@/lib/tools";
 import { cn } from "@/lib/utils/cn";
 
 export interface ToolExplorerProps {
@@ -38,6 +39,14 @@ export function ToolExplorer({
 }: ToolExplorerProps) {
   const { query, setQuery, category, setCategory, results, hasQuery, isEmpty, reset } =
     useToolSearch({ initialQuery, initialCategory });
+
+  // Bulk operations answer to their own search terms and render as a
+  // clearly-labelled group below the catalog tools (Phase 62). They are not
+  // catalog entries, so catalog honesty tests are unaffected.
+  const bulkResults = React.useMemo(
+    () => (hasQuery ? searchBulkOperations(query) : []),
+    [query, hasQuery],
+  );
 
   // Keep the address bar in sync without triggering a navigation.
   React.useEffect(() => {
@@ -94,7 +103,7 @@ export function ToolExplorer({
         {hasQuery ? `${countLabel} matching “${query.trim()}”` : `${countLabel} in the catalog`}
       </p>
 
-      {isEmpty ? (
+      {isEmpty && bulkResults.length === 0 ? (
         <EmptyState
           className="mt-4"
           icon={<SearchX />}
@@ -113,6 +122,22 @@ export function ToolExplorer({
           ))}
         </ul>
       )}
+
+      {bulkResults.length > 0 ? (
+        <section aria-labelledby="bulk-search-results" className="mt-8">
+          <h2
+            id="bulk-search-results"
+            className="text-sm font-semibold text-foreground"
+          >
+            Bulk tools — process many files at once
+          </h2>
+          <ul className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {bulkResults.map((operation) => (
+              <BulkOperationCard key={operation.id} operation={operation} />
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   );
 }

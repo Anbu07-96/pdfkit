@@ -20,6 +20,7 @@
 - **Database & Metering**: PostgreSQL + Prisma (`prisma/schema.prisma`), provider-neutral repository abstraction (`src/lib/usage/`), daily job and byte quotas per account tier (`anonymous`, `free`, `pro`, `business`).
 - **Billing**: Razorpay integration (`src/lib/billing/`), checkout verification, signature-verified webhooks.
 - **Bulk Processing (Phase 61)**: Client-orchestrated batch runner (`src/lib/bulk/`) over the existing single-file endpoints — one file per request, sequentially paced; `/bulk` section with per-file status, cancel, retry, batch ZIP and quota preflight (`GET /api/usage`).
+- **Bulk Observability (Phase 62)**: Honest `Retry-After` end-to-end, batch summary + CSV export (formula-injection guarded), friendly error categories, batch correlation id (log-only, never authorization), structured rate/quota/timeout events, bulk search integration, ZIP entry caps + Unicode filename preservation, deterministic load tests (`runner.load.test.ts`), and `docs/bulk-limit-review.md` (limits documented, not raised).
 
 ---
 
@@ -33,4 +34,5 @@
 
 ## 4. Documentation References
 - [README.md](../README.md) — Tool capability catalog, environment variables, scripts, bulk tools section, and error codes.
-- [ARCHITECTURE.md](../ARCHITECTURE.md) — Comprehensive layer-by-layer architectural design, memory scaling rules, bulk processing architecture (§5v), and security posture.
+- [ARCHITECTURE.md](../ARCHITECTURE.md) — Comprehensive layer-by-layer architectural design, memory scaling rules, bulk processing architecture (§5v, §5w), and security posture.
+- [docs/bulk-limit-review.md](../docs/bulk-limit-review.md) — Bulk limit review mechanism: every limit, why it is conservative, metrics, raise thresholds and reduce conditions.

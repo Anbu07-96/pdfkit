@@ -73,3 +73,19 @@ describe("createZipArchive", () => {
     expect(() => createZipArchive([])).toThrowError(/No documents were produced/);
   });
 });
+
+describe("sanitizeZipEntryName — Unicode (Phase 62)", () => {
+  it("preserves CJK, Cyrillic and Greek letters", () => {
+    expect(sanitizeZipEntryName("文档.pdf", "f.pdf")).toBe("文档.pdf");
+    expect(sanitizeZipEntryName("отчёт.pdf", "f.pdf")).toBe("отчёт.pdf");
+    expect(sanitizeZipEntryName("αγωγή.pdf", "f.pdf")).toBe("αγωγή.pdf");
+  });
+
+  it("still blocks traversal and control characters with Unicode enabled", () => {
+    expect(sanitizeZipEntryName("../../../文档.pdf", "f.pdf")).toBe("文档.pdf");
+    expect(sanitizeZipEntryName("文\u0000档.pdf", "f.pdf")).toBe("文档.pdf");
+    expect(sanitizeZipEntryName("..", "f.pdf")).toBe("f.pdf");
+    // A name made entirely of path segments and dots cannot traverse.
+    expect(sanitizeZipEntryName("./../.", "f.pdf")).toBe("f.pdf");
+  });
+});

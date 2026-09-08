@@ -1,5 +1,6 @@
 import { TOOL_CATEGORIES } from "./categories";
 import { TOOLS } from "./catalog";
+import { BULK_OPERATIONS, type BulkOperation } from "./bulk";
 import type { Tool, ToolCategoryId } from "./types";
 
 /** Lower-cased, trimmed, whitespace-collapsed query. */
@@ -103,5 +104,84 @@ export function searchTools(
   scored.sort((a, b) => b.score - a.score || a.index - b.index);
 
   const results = scored.map((entry) => entry.tool);
+  return typeof limit === "number" ? results.slice(0, limit) : results;
+}
+
+/* ------------------------------------------------------------------ */
+/* Bulk operation search (Phase 62)                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Build the text a bulk operation is matched against: name, description and
+ * keywords, plus a few fixed terms every bulk operation should answer to.
+ */
+function bulkHaystack(operation: BulkOperation): string {
+  return [
+    operation.name,
+    operation.description,
+    operation.keywords.join(" "),
+    operation.supportedFileTypes.join(" "),
+    // Fixed terms so "bulk", "batch" and "multiple" always match, and so
+    // "batch pdf to word" finds the bulk PDF → Word operation.
+    "bulk batch multiple files many at once",
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function scoreBulkOperation(operation: BulkOperation, term: string): number {
+  const name = operation.name.toLowerCase();
+  if (name === term) return 100;
+  if (name.startsWith(term)) return 80;
+  if (name.includes(term)) return 60;
+  if (operation.keywords.some((keyword) => keyword.toLowerCase().includes(term))) {
+    return 40;
+  }
+  if (operation.description.toLowerCase().includes(term)) return 30;
+  if (bulkHaystack(operation).includes(term)) return 10;
+  return 0;
+}
+
+export interface SearchBulkOptions {
+  /** Maximum number of results. */
+  limit?: number;
+}
+
+/**
+ * Search the bulk operations with the same AND-over-terms semantics as
+ * `searchTools`, so "pdf word bulk" and "batch pdf to word" both resolve to
+ * the Bulk PDF to Word operation.
+ *
+ * Bulk operations are deliberately NOT folded into `searchTools`: they are
+ * not catalog tools (they have no processor of their own), and the catalog's
+ * AVAILABLE/COMING_SOON honesty tests must keep passing unchanged. Callers
+ * render them as a clearly-labelled separate group.
+ */
+export function searchBulkOperations(
+  query: string,
+  options: SearchBulkOptions = {},
+): BulkOperation[] {
+  const { limit } = options;
+  const normalized = normalizeQuery(query);
+  if (!normalized) {
+    const all = [...BULK_OPERATIONS];
+    return typeof limit === "number" ? all.slice(0, limit) : all;
+  }
+
+  const terms = normalized.split(" ");
+  const scored: { operation: BulkOperation; score: number; index: number }[] = [];
+
+  BULK_OPERATIONS.forEach((operation, index) => {
+    let total = 0;
+    for (const term of terms) {
+      const score = scoreBulkOperation(operation, term);
+      if (score === 0) return;
+      total += score;
+    }
+    if (total > 0) scored.push({ operation, score: total, index });
+  });
+
+  scored.sort((a, b) => b.score - a.score || a.index - b.index);
+  const results = scored.map((entry) => entry.operation);
   return typeof limit === "number" ? results.slice(0, limit) : results;
 }

@@ -222,3 +222,167 @@ describe("BulkWorkspace", () => {
     releaseFetch?.();
   });
 });
+
+describe("BulkWorkspace — Phase 62 summary, CSV and classified errors", () => {
+  it("shows an honest batch summary panel after completion", async () => {
+    const user = userEvent.setup();
+    renderWorkspace(okFetch());
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, [
+      new File([new Uint8Array(1024)], "one.pdf", { type: "application/pdf" }),
+    ]);
+    await user.click(await screen.findByRole("button", { name: /^process 1 file$/i }));
+
+    const summary = await screen.findByTestId("bulk-summary");
+    expect(summary.textContent).toContain("Files");
+    expect(summary.textContent).toContain("Completed");
+    expect(summary.textContent).toContain("Elapsed");
+    expect(summary.textContent).toContain("Avg per completed file");
+    expect(summary.textContent).toContain("Quota left today");
+    // Batch reference id is shown for diagnostics.
+    expect(summary.textContent).toMatch(/batch reference/i);
+  });
+
+  it("shows batch-level progress, never an invented per-file percentage", async () => {
+    const user = userEvent.setup();
+    let releaseFetch: (() => void) | undefined;
+    const fetchMock = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/usage") {
+        return new Response(JSON.stringify(usageResponse()), {
+          status: 200,
+          headers: { "content-type": "application/json" } as Record<string, string>,
+        });
+      }
+      await new Promise<void>((resolve) => {
+        releaseFetch = resolve;
+      });
+      return new Response(new Uint8Array([1]), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <ToastProvider>
+        <BulkWorkspace operation={operation} limits={{ maxFileSize: 25 * 1024 * 1024 }} />
+      </ToastProvider>,
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, [
+      new File([new Uint8Array(1024)], "one.pdf", { type: "application/pdf" }),
+      new File([new Uint8Array(1024)], "two.pdf", { type: "application/pdf" }),
+    ]);
+    await user.click(await screen.findByRole("button", { name: /^process 2 files$/i }));
+
+    const progress = await screen.findByTestId("bulk-progress");
+    expect(progress.textContent).toMatch(/0 of 2 files processed/);
+    // Honest: percentage refers to whole files only.
+    expect(progress.textContent).not.toMatch(/%\s*\)/);
+    releaseFetch?.();
+  });
+
+  it("offers a CSV export of the batch results after completion", async () => {
+    const user = userEvent.setup();
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click");
+    renderWorkspace(okFetch());
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, [
+      new File([new Uint8Array(1024)], "one.pdf", { type: "application/pdf" }),
+    ]);
+    await user.click(await screen.findByRole("button", { name: /^process 1 file$/i }));
+
+    const csvButton = await screen.findByRole("button", {
+      name: /export results as csv/i,
+    });
+    await user.click(csvButton);
+    expect(clickSpy).toHaveBeenCalled();
+    clickSpy.mockRestore();
+  });
+
+  it("labels failures with a friendly category and retry guidance", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/usage") {
+        return new Response(JSON.stringify(usageResponse()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(
+        JSON.stringify({
+          error: { code: "TOO_MANY_REQUESTS", message: "Too many requests." },
+        }),
+        {
+          status: 429,
+          headers: {
+            "content-type": "application/json",
+            "retry-after": "1",
+          },
+        },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <ToastProvider>
+        <BulkWorkspace operation={operation} limits={{ maxFileSize: 25 * 1024 * 1024 }} />
+      </ToastProvider>,
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, [
+      new File([new Uint8Array(1024)], "slow.pdf", { type: "application/pdf" }),
+    ]);
+    await user.click(await screen.findByRole("button", { name: /^process 1 file$/i }));
+
+    // The classification label for rate limiting, not a raw error dump.
+    // The runner honours the 1-second Retry-After, exhausts its retry budget
+    // and settles the file as failed.
+    expect(await screen.findByText(/rate limited/i, {}, { timeout: 10_000 })).toBeInTheDocument();
+    expect(screen.queryByText(/TOO_MANY_REQUESTS/)).toBeNull();
+    // Retry remains available for transient failures.
+    await waitFor(
+      () => {
+        expect(
+          screen.getByRole("button", { name: /^retry 1 unfinished$/i }),
+        ).toBeEnabled();
+      },
+      { timeout: 10_000 },
+    );
+  });
+
+  it("does not offer retry hints as auto-retry for permanent validation errors", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/usage") {
+        return new Response(JSON.stringify(usageResponse()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(
+        JSON.stringify({
+          error: { code: "INVALID_PDF", message: "Not a readable PDF." },
+        }),
+        { status: 400, headers: { "content-type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <ToastProvider>
+        <BulkWorkspace operation={operation} limits={{ maxFileSize: 25 * 1024 * 1024 }} />
+      </ToastProvider>,
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, [
+      new File([new Uint8Array(1024)], "bad.pdf", { type: "application/pdf" }),
+    ]);
+    await user.click(await screen.findByRole("button", { name: /^process 1 file$/i }));
+
+    // Friendly category name appears…
+    expect(await screen.findByText(/invalid file/i)).toBeInTheDocument();
+    // …with a hint about what to do instead, since the file itself is the
+    // problem and auto-retry would not help.
+    expect(screen.getByText(/fix or replace the file, then retry/i)).toBeInTheDocument();
+  });
+});

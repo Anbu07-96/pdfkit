@@ -1071,6 +1071,49 @@ Budgets are checked between files, so the file that crosses a budget still
 completes — the overshoot is bounded by one file's output, which the server
 already caps per file.
 
+### Phase 62 — observability, UX and load readiness
+
+No limits or architecture changed; the batch experience became observable and
+honest:
+
+- **Batch summary** — after a run the workspace shows total / completed /
+  failed / cancelled / skipped counts, input and output bytes, elapsed time,
+  average per completed file and remaining daily quota.
+- **CSV export** — "Export results as CSV" produces an RFC 4180 file
+  (`<operation>-batch-results.csv`, UTF-8 with BOM) with one row per file:
+  filename, operation, status, output filename, input/output bytes, duration,
+  error code and error message. Cells starting with `=`, `+`, `-` or `@` are
+  prefixed with `'` to neutralise spreadsheet formula injection. The CSV
+  contains metadata only — never document contents.
+- **Honest Retry-After** — the rate limiter returns a real `Retry-After`
+  (the remaining seconds of its window, clamped 1–60 s; no header when the
+  value is unknown) and the runner honours it, falling back to a 60 s
+  cooldown. Retry budgets (2 × per file) still bound every backoff, so a
+  hostile header value cannot stall or storm a batch.
+- **Friendly error categories** — failures are labelled (invalid file,
+  unsupported format, file too large, batch limit, daily quota, rate limited,
+  server busy, timeout, processing failed, cancelled, unknown) with retry
+  hints; permanent validation errors are never auto-retried, and no internal
+  detail is exposed.
+- **Honest progress** — the live banner reports "Processing file 3 of 10"
+  style counts, whole-file percentages, pacing/backoff states, an offline
+  pause, and a beforeunload guard while running. There is no invented
+  intra-file progress. A refresh never duplicates processing: nothing
+  replayable is persisted (no document contents in storage).
+- **Batch correlation id** — every request in a batch carries an
+  `x-pdfkit-batch-id` header (strictly validated server-side, log correlation
+  only — never used for authorization, quota or security decisions).
+- **Bulk search** — the tool search now answers "bulk pdf", "batch pdf to
+  word", "multiple files" etc. through a dedicated bulk-operation search; the
+  tool catalog itself is unchanged and stays honest.
+- **Structured events** — `rate_limited` (with `retryAfterSeconds`),
+  `quota_rejected`, and `request_timeout` events plus `tier`/`batchId` fields
+  on job logs, all through the existing logger. Nothing logs document
+  contents, tokens or secrets.
+- **Limit review** — `docs/bulk-limit-review.md` records every bulk limit,
+  why it is conservative, the metric to watch, the threshold to raise it and
+  the condition to reduce it. No limits were raised.
+
 ## Production hardening
 
 Every `/api/tools/*` route goes through one hardened wrapper
@@ -1096,7 +1139,9 @@ HTTP adapter:
 - **Structured JSON Logging** — `src/lib/monitoring/logger.ts` emits privacy-safe
   structured JSON entries in production (`event: "job_completed"`, `tool`, `outcome`,
   `files`, `bytes`, `ms`, `code`). Never logs passwords, file names, document
-  contents, or secrets.
+  contents, or secrets. Phase 62 adds `rate_limited` (with `retryAfterSeconds`),
+  `quota_rejected` and `request_timeout` events, and job logs may carry `tier` and
+  a bulk `batchId` correlation id (correlation only — never authorization).
 - **Sentry Error Reporting** — `sentry.server.config.ts` and `src/lib/monitoring/sentry.ts`
   integrate Sentry for server-side error reporting when `SENTRY_DSN` is configured.
   Sanitizes request bodies, headers, and credentials defensively before transmission.

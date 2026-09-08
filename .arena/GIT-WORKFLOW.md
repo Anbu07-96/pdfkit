@@ -49,4 +49,4 @@
    - If repository state conflicts with documentation, **git repository state wins**. Update the `.arena/` documentation to match actual code reality.
 
 9. **Phase Progression**:
-   - **Phase 45 must NOT be started automatically.** Wait for explicit user instructions before beginning new phases.
+   - **New phases must NOT be started automatically.** Wait for explicit user instructions before beginning new phases (current completed phase: 62).
