@@ -1140,6 +1140,39 @@ validated the current architecture under simulated multi-user load.
   `docs/bulk-limit-review.md` gained explicit failure signals per limit;
   limits remain unchanged until production telemetry is collected.
 
+## 5y. Staging Infrastructure Validation (Phase 64)
+
+**Prove the shared-state architecture, then stop touching it.** Phase 64
+changed no limits and no processing behavior; it made the existing
+PostgreSQL/Redis architecture real, testable and fail-closed:
+
+- **Real Prisma client, no engine binaries** — the client now generates with
+  `engineType = "client"` (WASM query compiler) and runs on the pure-JS
+  `@prisma/adapter-pg` driver adapter. The development stub client is
+  unambiguously marked (`PrismaClient.PDFKIT_STUB`), never overwrites a real
+  generated client, and the repository **refuses to start** if `DATABASE_URL`
+  is configured while only the stub is bundled — a deployment can no longer
+  silently run a no-op database.
+- **Migration repair (genuinely required)** — the email-verification flow and
+  `PersistedUserAccount` reference five `UserAccount` columns the initial
+  migration never created; the stub's hand-written types masked the mismatch.
+  Migration `20260909000000_add_account_verification_fields` adds them
+  (additive only). Anonymous usage also now ensures its parent `UserAccount`
+  row (`DailyUsage_userId_fkey`) — previously anonymous metering crashed on
+  real PostgreSQL while the in-memory repository masked it.
+- **Fail-closed shared protections** — `PDFKIT_REDIS_REQUIRED=true` declares
+  Redis mandatory: unavailable Redis → visible 503 responses and 503
+  readiness, never a silent per-process downgrade that would multiply the
+  rate limit and concurrency cap by the instance count. A cold ioredis
+  connection bug (first command bypassing the global budget) was found by the
+  real-Redis tests and fixed with a bounded readiness wait.
+- **Validated against real infrastructure in-sandbox** — embedded PostgreSQL
+  16 (npm binaries) + Redis 7.2.5 + two production `next start` instances:
+  21/21 multi-instance harness checks, 19/19 integration tests, 1616 unit
+  tests, all gates. The full evidence matrix, security review and honest
+  limitations: `docs/distributed-infrastructure-validation.md`; operational
+  guide: `docs/staging-deployment.md`.
+
 ---
 
 ## 6. Upload and the processing boundary

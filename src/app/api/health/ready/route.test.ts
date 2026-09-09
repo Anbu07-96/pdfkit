@@ -22,6 +22,7 @@ vi.mock("@/lib/usage/repository", () => ({
 }));
 vi.mock("@/lib/hardening/distributed-protection", () => ({
   pingRedis: pingRedisMock,
+  isRedisRequired: () => process.env.PDFKIT_REDIS_REQUIRED === "true",
 }));
 
 import { GET, resetReadinessCacheForTests } from "@/app/api/health/ready/route";
@@ -132,5 +133,43 @@ describe("GET /api/health/ready", () => {
     const { POST } = await import("@/app/api/health/ready/route");
     const response = POST();
     expect(response.status).toBe(405);
+  });
+
+  it("Phase 64: treats unconfigured Redis as failed when PDFKIT_REDIS_REQUIRED=true", async () => {
+    vi.stubEnv("PDFKIT_REDIS_REQUIRED", "true");
+    pingDatabaseMock.mockResolvedValueOnce({ status: "ok", latencyMs: 1 });
+    resetReadinessCacheForTests();
+
+    const response = await GET();
+    // Declared-mandatory Redis that is unconfigured is a deployment error:
+    // the instance must leave the load-balancer rotation.
+    expect(response.status).toBe(503);
+    const body = (await response.json()) as {
+      status: string;
+      checks: { redis: { status: string } };
+    };
+    expect(body.status).toBe("unavailable");
+    expect(body.checks.redis.status).toBe("failed");
+  });
+
+  it("Phase 64: reports the sanitized environment label", async () => {
+    vi.stubEnv("PDFKIT_ENVIRONMENT", "staging-eu-1");
+    pingDatabaseMock.mockResolvedValueOnce({ status: "ok", latencyMs: 1 });
+    resetReadinessCacheForTests();
+
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { environment: string };
+    expect(body.environment).toBe("staging-eu-1");
+  });
+
+  it("Phase 64: unsanitizable environment labels are reported as unknown, not echoed", async () => {
+    vi.stubEnv("PDFKIT_ENVIRONMENT", "staging://weird\\value");
+    resetReadinessCacheForTests();
+
+    const response = await GET();
+    const body = (await response.json()) as { environment: string };
+    expect(body.environment).toBe("unknown");
+    expect(JSON.stringify(body).includes("weird")).toBe(false);
   });
 });

@@ -47,15 +47,28 @@ export class UsageService {
   ): Promise<UsageRecord> {
     const periodDate = getCurrentQuotaPeriodDate();
 
-    // If user is authenticated, ensure their UserAccount row exists or is updated
-    if (identity.isAuthenticated && identity.userId !== "anon") {
+    // Ensure the UserAccount parent row exists for EVERY identity that gets
+    // usage recorded. On real PostgreSQL, DailyUsage.userId has a foreign key
+    // to UserAccount(userId) — skipping this for anonymous identities makes
+    // recordUsage fail (the in-memory repository masked this; found in the
+    // Phase 64 audit). The upsert is idempotent; the "anon" row is a stable
+    // singleton. Sync errors remain non-fatal for metering.
+    if (identity.userId) {
       try {
         await this.repo.upsertUserAccount({
           userId: identity.userId,
-          email: identity.email,
-          name: identity.name,
-          tier: identity.tier,
-          status: identity.status,
+          ...(identity.isAuthenticated && identity.userId !== "anon"
+            ? {
+                email: identity.email,
+                name: identity.name,
+                tier: identity.tier,
+                status: identity.status,
+              }
+            : {
+                // Anonymous placeholder account: no PII, stable identity.
+                tier: identity.tier,
+                status: "anonymous",
+              }),
         });
       } catch (err) {
         console.error("[usage] Non-fatal account metadata sync error", err);

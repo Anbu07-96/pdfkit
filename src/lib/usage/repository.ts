@@ -1,6 +1,7 @@
 import "server-only";
 
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { ProcessingError } from "@/lib/processing/errors";
 import type { UserAccountTier } from "@/lib/auth/types";
 import type {
@@ -11,10 +12,49 @@ import type {
 
 let globalPrisma: PrismaClient | null = null;
 
+/**
+ * True when the bundled Prisma client is the development no-op stub written
+ * by `scripts/generate-prisma-client.js` (dev/test without a database).
+ *
+ * Phase 64 fail-closed rule: a deployment that configures `DATABASE_URL`
+ * (i.e. expects real PostgreSQL persistence) must NEVER silently run the
+ * no-op client — every metered job would be "recorded" by doing nothing.
+ * `getPrismaClient()` refuses to start in that state with an actionable
+ * error naming the fix, and no secret values.
+ */
+export function isStubPrismaClient(): boolean {
+  const constructor = PrismaClient as unknown as { PDFKIT_STUB?: boolean };
+  return constructor.PDFKIT_STUB === true;
+}
+
 function getPrismaClient(): PrismaClient {
-  if (!globalPrisma) {
-    globalPrisma = new PrismaClient();
+  if (globalPrisma) return globalPrisma;
+
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) {
+    throw new Error(
+      "[usage] PrismaUsageRepository requires DATABASE_URL. " +
+        "Unset DATABASE_URL uses the in-memory repository (development/test).",
+    );
   }
+
+  // The stub client (dev-only) must never stand in for the real client once a
+  // database is configured — that would silently drop all usage metering.
+  if (isStubPrismaClient()) {
+    throw new Error(
+      "[usage] DATABASE_URL is configured but the bundled Prisma client is the " +
+        "development stub. Generate the real client with `npx prisma generate` " +
+        "(see docs/staging-deployment.md) and restart. Refusing to run with a " +
+        "no-op database implementation.",
+    );
+  }
+
+  // Phase 64: the client runs on the WASM query compiler with the pure-JS
+  // PostgreSQL driver adapter — no Rust engine binary is executed
+  // (schema.prisma: engineType = "client").
+  globalPrisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: dbUrl }),
+  });
   return globalPrisma;
 }
 
@@ -226,24 +266,53 @@ export class PrismaUsageRepository implements UsageRepository {
     bytesDelta: number;
   }): Promise<UsageRecord> {
     try {
-      const record = await this.prisma.dailyUsage.upsert({
-        where: {
-          userId_periodDate: {
+      const upsertUsage = () =>
+        this.prisma.dailyUsage.upsert({
+          where: {
+            userId_periodDate: {
+              userId: params.userId,
+              periodDate: params.periodDate,
+            },
+          },
+          create: {
             userId: params.userId,
             periodDate: params.periodDate,
+            jobCount: params.jobCountDelta,
+            processedBytes: BigInt(params.bytesDelta),
           },
-        },
-        create: {
-          userId: params.userId,
-          periodDate: params.periodDate,
-          jobCount: params.jobCountDelta,
-          processedBytes: BigInt(params.bytesDelta),
-        },
-        update: {
-          jobCount: { increment: params.jobCountDelta },
-          processedBytes: { increment: BigInt(params.bytesDelta) },
-        },
-      });
+          update: {
+            jobCount: { increment: params.jobCountDelta },
+            processedBytes: { increment: BigInt(params.bytesDelta) },
+          },
+        });
+
+      // Phase 64 FK invariant: DailyUsage.userId references UserAccount(userId).
+      // Any caller of the repository (not just UsageService) must be able to
+      // record usage; on the first-ever usage row for a user the parent
+      // account may not exist yet, which PostgreSQL rejects (P2003). Fast
+      // path: try the upsert directly; on FK violation, ensure the parent
+      // exists (idempotent placeholder, service data is never clobbered)
+      // and retry once. Concurrency-safe: parallel ensure-upserts resolve on
+      // the unique userId key.
+      let record;
+      try {
+        record = await upsertUsage();
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          "code" in err &&
+          (err as { code?: string }).code === "P2003"
+        ) {
+          await this.prisma.userAccount.upsert({
+            where: { userId: params.userId },
+            create: { userId: params.userId },
+            update: {},
+          });
+          record = await upsertUsage();
+        } else {
+          throw err;
+        }
+      }
 
       return {
         userId: record.userId,

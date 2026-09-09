@@ -234,4 +234,94 @@ describe("Phase 43 — Database Usage Quotas & Metering", () => {
       ]);
     });
   });
+
+  describe("Phase 64 — Anonymous Usage Persistence (FK regression)", () => {
+    it("creates the parent UserAccount row for anonymous identities before recording usage", async () => {
+      // On real PostgreSQL, DailyUsage.userId has a foreign key to
+      // UserAccount(userId). Previously the account upsert ran only for
+      // authenticated identities, so anonymous recordUsage failed on a real
+      // database (the in-memory repository masked this). The service must
+      // ensure the parent row exists for EVERY identity.
+      const anonIdentity = {
+        userId: "anon",
+        isAuthenticated: false,
+
+        email: null,
+        name: null,
+        tier: "anonymous" as const,
+        status: "anonymous" as const,
+      };
+
+      await service.recordJobSuccess(anonIdentity, 4096);
+
+      const account = await repo.getUserAccount("anon");
+      expect(account).not.toBeNull();
+      expect(account!.userId).toBe("anon");
+      expect(account!.tier).toBe("anonymous");
+      expect(account!.email).toBeNull();
+      expect(account!.name).toBeNull();
+
+      const usage = await repo.getUsage("anon", getCurrentQuotaPeriodDate());
+      expect(usage!.jobCount).toBe(1);
+      expect(Number(usage!.processedBytes)).toBe(4096);
+    });
+
+    it("upserts the anonymous account idempotently (no PII, stable singleton)", async () => {
+      const anonIdentity = {
+        userId: "anon",
+        isAuthenticated: false,
+
+        email: null,
+        name: null,
+        tier: "anonymous" as const,
+        status: "anonymous" as const,
+      };
+
+      const upsertSpy = vi.spyOn(repo, "upsertUserAccount");
+      await service.recordJobSuccess(anonIdentity, 100);
+      await service.recordJobSuccess(anonIdentity, 100);
+      await service.recordJobSuccess(anonIdentity, 100);
+
+      // Every recording ensures the parent row (upsert = idempotent).
+      expect(upsertSpy).toHaveBeenCalledTimes(3);
+      for (const call of upsertSpy.mock.calls) {
+        expect(call[0].userId).toBe("anon");
+        expect(call[0].email).toBeUndefined();
+        expect(call[0].name).toBeUndefined();
+      }
+      // The anonymous account exists exactly once via the unique userId key.
+      const account = await repo.getUserAccount("anon");
+      expect(account!.userId).toBe("anon");
+
+      const usage = await repo.getUsage("anon", getCurrentQuotaPeriodDate());
+      expect(usage!.jobCount).toBe(3);
+    });
+
+    it("does not overwrite authenticated account metadata when recording anonymous usage", async () => {
+      await repo.upsertUserAccount({
+        userId: "user-registered-1",
+        email: "someone@example.com",
+        name: "Someone",
+        tier: "pro",
+        status: "active",
+      });
+
+      const registeredIdentity = {
+        userId: "user-registered-1",
+        isAuthenticated: true,
+
+        email: "someone@example.com",
+        name: "Someone",
+        tier: "pro" as const,
+        status: "active" as const,
+      };
+      await service.recordJobSuccess(registeredIdentity, 2048);
+
+      const account = await repo.getUserAccount("user-registered-1");
+      expect(account!.email).toBe("someone@example.com");
+      expect(account!.tier).toBe("pro");
+      expect(account!.name).toBe("Someone");
+    });
+  });
 });
+

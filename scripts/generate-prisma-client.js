@@ -1,14 +1,57 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
+/**
+ * Development fallback Prisma client stub (Phase 64 rework).
+ *
+ * Why this exists: PDFKit must typecheck and run its unit test suite in
+ * environments where `prisma generate` cannot run (no network access to
+ * binaries.prisma.sh, no DATABASE_URL). This script writes a minimal no-op
+ * PrismaClient + types into node_modules/.prisma/client for that case.
+ *
+ * Phase 64 safety rules:
+ *   1. If a REAL generated client is already present (someone ran
+ *      `npx prisma generate`), it is NEVER overwritten — previous behavior
+ *      silently replaced the real client with a no-op stub on every
+ *      `npm install`, which would disable all database persistence in
+ *      production while appearing healthy.
+ *   2. The stub is unambiguously marked (static `PrismaClient.PDFKIT_STUB`
+ *      and the `PDFKIT-STUB-CLIENT` marker file). Runtime code
+ *      (src/lib/usage/repository.ts) refuses to use it when DATABASE_URL is
+ *      configured, so a mis-configured deployment fails loudly at startup
+ *      instead of silently dropping usage metering.
+ *   3. `PDFKIT_SKIP_PRISMA_STUB=1` skips writing the stub entirely.
+ */
 const fs = require('fs');
 const path = require('path');
 
 const targetDir = path.join(__dirname, '..', 'node_modules', '.prisma', 'client');
+
+if (process.env.PDFKIT_SKIP_PRISMA_STUB === '1') {
+  console.log('Prisma stub generation skipped (PDFKIT_SKIP_PRISMA_STUB=1).');
+  process.exit(0);
+}
+
+const stubMarkerFile = path.join(targetDir, 'PDFKIT-STUB-CLIENT');
+const realIndex = path.join(targetDir, 'index.js');
+
+if (fs.existsSync(realIndex) && !fs.existsSync(stubMarkerFile)) {
+  // A real `prisma generate` output is present — keep it.
+  console.log(
+    'Real Prisma client detected (node_modules/.prisma/client) — keeping it; stub not written.',
+  );
+  process.exit(0);
+}
+
 fs.mkdirSync(targetDir, { recursive: true });
 
 const indexJs = `"use strict";
+// PDFKIT-STUB-CLIENT — development no-op fallback; NOT a real Prisma client.
+// Written by scripts/generate-prisma-client.js when no real client exists.
 Object.defineProperty(exports, "__esModule", { value: true });
 
 class PrismaClient {
+  // Marker checked by src/lib/usage/repository.ts: a deployment that sets
+  // DATABASE_URL must never run this stub (fail-closed at startup).
+  static PDFKIT_STUB = true;
   constructor(options) {
     this.options = options || {};
   }
@@ -146,6 +189,8 @@ export interface DailyUsageUpdateInput {
 }
 
 export declare class PrismaClient {
+  /** Development stub marker — true only for the no-op fallback client. */
+  static readonly PDFKIT_STUB: true;
   constructor(options?: any);
   $connect(): Promise<void>;
   $disconnect(): Promise<void>;
@@ -188,4 +233,9 @@ fs.writeFileSync(path.join(targetDir, 'index.js'), indexJs);
 fs.writeFileSync(path.join(targetDir, 'default.js'), indexJs);
 fs.writeFileSync(path.join(targetDir, 'index.d.ts'), indexDts);
 fs.writeFileSync(path.join(targetDir, 'default.d.ts'), indexDts);
-console.log('Prisma client types generated successfully.');
+fs.writeFileSync(stubMarkerFile, 'development no-op stub client\n');
+console.log(
+  'Prisma client stub written (development fallback). ' +
+    'Run `npx prisma generate` before any deployment that sets DATABASE_URL ' +
+    '(see docs/staging-deployment.md).',
+);

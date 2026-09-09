@@ -1,7 +1,8 @@
 import "server-only";
 
 import { pingDatabase } from "@/lib/usage/repository";
-import { pingRedis } from "@/lib/hardening/distributed-protection";
+import { isRedisRequired, pingRedis } from "@/lib/hardening/distributed-protection";
+import { readEnvironmentLabel } from "@/lib/config/environment";
 import { getImplementedToolIds } from "@/lib/processing/registry";
 
 export const runtime = "nodejs";
@@ -24,11 +25,14 @@ export const dynamic = "force-dynamic";
  *
  * Verdict: 200 `ok` (or `degraded` when optional dependencies are
  * unconfigured but the instance can still process), 503 `unavailable` when a
- * *configured* dependency is failing.
+ * *configured* dependency is failing — or when `PDFKIT_REDIS_REQUIRED=true`
+ * and Redis is unconfigured/failing (multi-instance deployments declare
+ * Redis mandatory; per-process fallback would multiply the global limits).
+ * `environment` is the sanitized PDFKIT_ENVIRONMENT/NODE_ENV label.
  *
  * Results are cached for 5 seconds so probes stay cheap under scraping.
  * The payload never includes secrets, connection strings or IPs — only check
- * names, statuses and latency milliseconds.
+ * names, statuses, latency milliseconds and the sanitized environment label.
  */
 
 const JSON_HEADERS = {
@@ -48,6 +52,7 @@ interface ReadinessResult {
   status: "ok" | "degraded" | "unavailable";
   timestamp: string;
   uptimeSeconds: number;
+  environment: string;
   checks: {
     database: CheckResult;
     redis: CheckResult;
@@ -75,6 +80,14 @@ async function runChecks(): Promise<ReadinessResult> {
   const redisCheck: CheckResult =
     redis.status === "ok" ? { status: "ok", latencyMs: redis.latencyMs } : { status: redis.status };
 
+  // Phase 64: `PDFKIT_REDIS_REQUIRED=true` declares Redis as mandatory
+  // global state (multi-instance staging/production). An unconfigured Redis
+  // in that mode is a deployment error, not a "degraded" nicety — report it
+  // as failed so orchestrators pull the instance out of rotation.
+  if (redisCheck.status === "unconfigured" && isRedisRequired()) {
+    redisCheck.status = "failed";
+  }
+
   // A configured dependency failing makes the instance not ready. Optional
   // dependencies that are simply not configured only degrade the verdict.
   const anyFailed =
@@ -88,6 +101,7 @@ async function runChecks(): Promise<ReadinessResult> {
     status: anyFailed ? "unavailable" : anyUnconfigured ? "degraded" : "ok",
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.floor((Date.now() - processStartTime) / 1000),
+    environment: readEnvironmentLabel(),
     checks: { database: databaseCheck, redis: redisCheck, processing },
   };
 }

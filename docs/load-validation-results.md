@@ -79,3 +79,21 @@ Single-job CPU cost dominates wall time at this scale (pdf-lib parse/save).
   synthetic PDFs (1–11 pages); large-document behavior is covered by the
   Phase 62 suite (25 MB files), not re-measured here.
 - No claim is made about a specific number of concurrent production users.
+
+
+---
+
+## Phase 64 addendum — infrastructure validation is correctness, not capacity
+
+Phase 64 validated the multi-instance behavior of the shared infrastructure
+(real PostgreSQL 16 + Redis 7.2.5 + two production instances) with controlled
+traffic: global 60/min IP budget, global concurrency cap with slot reclamation,
+exact cross-instance quota accounting, and fail-closed outage behavior
+(21/21 harness checks; evidence in
+`docs/distributed-infrastructure-validation.md`).
+
+These runs are **not** load measurements and add nothing to the Phase 63
+capacity picture: traffic volumes were single-digit to low-double-digit
+requests, chosen to prove invariants (exactness, globality, fail-safety), not
+throughput. The Phase 63 statement stands unchanged: no production capacity
+claim is made from in-process or sandbox tests.

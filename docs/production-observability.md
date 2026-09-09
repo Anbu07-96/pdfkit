@@ -124,19 +124,37 @@ behind the same token check (or an operator SSO once an admin role exists).
 | Admin metrics access | `PDFKIT_ADMIN_METRICS_TOKEN` | Long random string; **unset = endpoint disabled (404)** |
 | Environment label | `PDFKIT_ENVIRONMENT` | Sanitized identifier in snapshots (e.g. `production-eu-1`) |
 | Provider selection | `PDFKIT_METRICS_PROVIDER` | Only `in-memory` exists today; unknown values fail open with a warning |
-| Database (readiness + quotas) | `DATABASE_URL` | PostgreSQL + `prisma generate` with the real client (the dev/CI client is a no-op stub — see `scripts/generate-prisma-client.js`) |
+| Database (readiness + quotas) | `DATABASE_URL` | PostgreSQL + `npx prisma generate` (real, engine-free client; see below) |
 | Redis (readiness + distributed protection) | `PDFKIT_REDIS_URL` / `REDIS_URL` | Unset = in-memory fallback (single instance only) |
+| Mandatory Redis (multi-instance) | `PDFKIT_REDIS_REQUIRED=true` | Unavailable Redis → 503 fail-closed responses AND 503 readiness; never a silent per-process downgrade (Phase 64) |
 
-Important honesty note: the bundled Prisma client in dev/CI is a generated
-no-op stub so tests need no database. Production MUST generate the real
-client (`prisma generate`) and verify the readiness probe reports
-`database: ok`. Until then the probe reports `unconfigured` (dev) — or
-`failed` (503) if a configured database is unreachable.
+**Phase 64 update — the dev/CI Prisma stub is now fail-closed, not silent.**
+The stub (written only when no real client exists, marked
+`PrismaClient.PDFKIT_STUB`) still lets tests run without a database, but a
+deployment that sets `DATABASE_URL` while only the stub is bundled **refuses
+to start persistence** with an error naming the fix. `npx prisma generate`
+produces the real client on the WASM query compiler with the pure-JS `pg`
+driver adapter — no engine binaries. A pre-deploy environment validator
+(`NODE_ENV=production node scripts/validate-environment.mjs`) checks the full
+variable set and names variables only, never values.
 
 **Readiness verdicts**: `ok` = all configured dependencies healthy;
 `degraded` = optional dependencies unconfigured but the instance can process
 (dev/single-instance mode); `unavailable` (503) = a configured dependency is
-failing — the load balancer should remove the instance.
+failing — or `PDFKIT_REDIS_REQUIRED=true` and Redis is unconfigured/unreachable
+— the load balancer should remove the instance. The payload additionally
+carries a sanitized `environment` label (Phase 64).
+
+**Phase 64 admin-token hardening**: token comparison hashes both sides
+(SHA-256) before `timingSafeEqual`, so neither content nor length is
+observable through timing. The endpoint keeps its own rate-limit scope
+(30/min); with required Redis unavailable it fails closed for everyone (503)
+— token checks never bypass the limiter.
+
+**Staging smoke (Phase 64)**: `PDFKIT_BASE_URL=... npm run smoke:staging`
+verifies liveness, readiness (with dependency statuses), one real job, 422 on
+invalid input, metrics protection and a visible rate limit with honest
+`Retry-After`. See docs/staging-deployment.md §8.
 
 ## 6. Privacy findings (audited)
 

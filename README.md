@@ -1136,12 +1136,14 @@ HTTP adapter:
 - **Liveness** — `GET /api/health` returns HTTP 200 with structured
   JSON (`status: "ok"`, `timestamp`, `uptimeSeconds`, `version`). Independent of
   PDF processing and WASM/pdfium initialization; does not expose internal secrets.
-- **Readiness (Phase 63)** — `GET /api/health/ready` verifies the configured
+- **Readiness (Phase 63/64)** — `GET /api/health/ready` verifies the configured
   dependencies (PostgreSQL ping when `DATABASE_URL` is set, Redis ping when
   `PDFKIT_REDIS_URL`/`REDIS_URL` is set, tool registry) and answers
   `ok`/`degraded` (HTTP 200) or `unavailable` (HTTP 503) with per-check
-  latency. Results are cached 5 s so probes stay cheap. Unconfigured optional
-  dependencies are reported honestly as `unconfigured` — never as failures.
+  latency plus a sanitized `environment` label. Results are cached 5 s so
+  probes stay cheap. Unconfigured optional dependencies are reported honestly
+  as `unconfigured` — never as failures; with `PDFKIT_REDIS_REQUIRED=true`,
+  unconfigured/failing Redis makes the instance not ready (503).
 - **Structured JSON Logging** — `src/lib/monitoring/logger.ts` emits privacy-safe
   structured JSON entries in production (`event: "job_completed"`, `tool`, `outcome`,
   `files`, `bytes`, `ms`, `code`). Never logs passwords, file names, document
@@ -1169,6 +1171,22 @@ HTTP adapter:
   `src/lib/hardening/multi-user.load.test.ts`. Measured results and
   identified bottlenecks: `docs/load-validation-results.md`. No production
   capacity is claimed from in-process tests.
+- **Staging infrastructure validation (Phase 64)** — the shared-state
+  architecture is proven against REAL PostgreSQL 16 and Redis 7.2.5 with two
+  production instances sharing them: global 60/min IP budget (not 120), a
+  global concurrency cap with lease-TTL slot reclamation, exact cross-instance
+  quota accounting (no lost increments), visible readiness and fail-closed
+  behavior during Redis/DB outages, and recovery. Runs locally via
+  `node scripts/infra/multi-instance-validate.mjs`; integration suites
+  (`postgres.integration.test.ts`, `redis.integration.test.ts`) activate with
+  `PDFKIT_TEST_DATABASE_URL`/`PDFKIT_TEST_REDIS_URL`. A staging pre-deploy
+  environment validator (`scripts/validate-environment.mjs`) names variable
+  names only, never values. Evidence matrix and known limitations:
+  `docs/distributed-infrastructure-validation.md`; deployment guide:
+  `docs/staging-deployment.md`. The development Prisma stub can no longer
+  masquerade as a real client — with `DATABASE_URL` set, the app refuses to
+  start persistence until `npx prisma generate` has produced the real
+  (engine-free, WASM query compiler) client.
 - **Sentry Error Reporting** — `sentry.server.config.ts` and `src/lib/monitoring/sentry.ts`
   integrate Sentry for server-side error reporting when `SENTRY_DSN` is configured.
   Sanitizes request bodies, headers, and credentials defensively before transmission.
@@ -1513,3 +1531,16 @@ A tool's status changes to `AVAILABLE` only when its processing genuinely works.
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — structure, decisions, design system,
   tool catalog and the processing boundary
+- [docs/staging-deployment.md](./docs/staging-deployment.md) — staging guide:
+  Prisma client generation, migrations, PostgreSQL/Redis provisioning,
+  environment variables and validation, readiness interpretation, smoke test,
+  rollback, security checklist
+- [docs/distributed-infrastructure-validation.md](./docs/distributed-infrastructure-validation.md) —
+  Phase 64 evidence: real PostgreSQL/Redis test suites, multi-instance
+  harness results, security review, re-run instructions, known limitations
+- [docs/production-observability.md](./docs/production-observability.md) —
+  observability design (readiness, telemetry, admin metrics)
+- [docs/load-validation-results.md](./docs/load-validation-results.md) —
+  Phase 63 load validation measurements
+- [docs/bulk-limit-review.md](./docs/bulk-limit-review.md) — bulk limits and
+  their failure signals

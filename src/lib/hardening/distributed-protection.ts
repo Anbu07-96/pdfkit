@@ -55,6 +55,29 @@ function getRedisClient(): Redis | null {
   }
 }
 
+/**
+ * Phase 64 fix (found by the real-Redis integration tests): with
+ * lazyConnect + enableOfflineQueue:false, the FIRST command on a cold client
+ * (fresh boot, reconnect) rejects immediately and silently falls back to
+ * per-process protection — so the very first requests after a deploy could
+ * bypass the global budget. Wait (bounded) for the connection instead; the
+ * caller still falls back safely if Redis does not come up in time.
+ */
+async function ensureRedisReady(redis: Redis): Promise<void> {
+  if (redis.status === "ready") return;
+  await new Promise<void>((resolve) => {
+    const timeout = setTimeout(resolve, 1_000);
+    const done = () => {
+      clearTimeout(timeout);
+      resolve();
+    };
+    redis.once("ready", done);
+    if (redis.status === "wait" || redis.status === "close" || redis.status === "end") {
+      redis.connect().catch(done);
+    }
+  });
+}
+
 /** Compute an anonymized 16-character SHA-256 token for client rate limiting with proxy IP hardening. */
 export function anonymizeClientIp(request: Request): string {
   const cfIp = request.headers.get("cf-connecting-ip")?.trim();
@@ -123,8 +146,23 @@ const CONCURRENCY_KEY = "pdfkit:concurrency:active";
 const DEFAULT_LEASE_TTL = 600; // 10 minutes auto-expiration for stale leases
 
 /**
+ * Phase 64: when `PDFKIT_REDIS_REQUIRED=true` the deployment declares that
+ * Redis-backed protections (IP rate limit, global concurrency cap) MUST have
+ * global state — e.g. multi-instance staging/production. If Redis is
+ * unavailable in that mode, requests fail safely (503 / slot denied) instead
+ * of silently downgrading to per-process protection, which would multiply
+ * the effective limits by the instance count. Dev (unset/false) keeps the
+ * documented per-process fallback.
+ */
+export function isRedisRequired(): boolean {
+  return process.env.PDFKIT_REDIS_REQUIRED === "true";
+}
+
+/**
  * Try to acquire a concurrency slot across distributed instances.
- * Falls back to local in-memory guard if Redis is not configured or unavailable.
+ * Falls back to local in-memory guard if Redis is not configured or unavailable —
+ * unless `PDFKIT_REDIS_REQUIRED=true`, in which case a Redis failure denies the
+ * slot (fail-closed: the global cap cannot be verified).
  */
 export async function tryAcquireDistributedSlot(
   maxConcurrentJobs: number,
@@ -132,10 +170,17 @@ export async function tryAcquireDistributedSlot(
 ): Promise<boolean> {
   const redis = getRedisClient();
   if (!redis) {
+    if (isRedisRequired()) {
+      console.error(
+        "[hardening] PDFKIT_REDIS_REQUIRED=true but Redis is not configured — denying job slot (fail-closed)",
+      );
+      return false;
+    }
     return localTryAcquireJobSlot(maxConcurrentJobs);
   }
 
   try {
+    await ensureRedisReady(redis);
     const result = await redis.eval(
       ACQUIRE_LUA,
       1,
@@ -145,6 +190,13 @@ export async function tryAcquireDistributedSlot(
     );
     return Number(result) === 1;
   } catch (err) {
+    if (isRedisRequired()) {
+      console.error(
+        "[hardening] PDFKIT_REDIS_REQUIRED=true and Redis acquire failed — denying job slot (fail-closed)",
+        err instanceof Error ? err.message : err,
+      );
+      return false;
+    }
     console.warn("[hardening] Distributed acquire failed, falling back to local guard", err);
     return localTryAcquireJobSlot(maxConcurrentJobs);
   }
@@ -161,6 +213,7 @@ export async function releaseDistributedSlot(): Promise<void> {
   }
 
   try {
+    await ensureRedisReady(redis);
     await redis.eval(RELEASE_LUA, 1, CONCURRENCY_KEY);
   } catch (err) {
     console.warn("[hardening] Distributed release failed, falling back to local release", err);
@@ -257,6 +310,7 @@ export async function checkRateLimit(
 
   if (redis) {
     try {
+      await ensureRedisReady(redis);
       const key = `pdfkit:ratelimit:${scopedToken}`;
       // -1 = allowed; >= 1 = rejected, with the window's remaining TTL in
       // seconds (see RATE_LIMIT_LUA).
@@ -273,12 +327,34 @@ export async function checkRateLimit(
       }
       return null;
     } catch (err) {
+      if (isRedisRequired()) {
+        // Fail safe: the global IP budget cannot be verified; admitting the
+        // request would rely on per-process state and multiply the limit by
+        // the instance count. Visible 503, no secrets in the payload.
+        console.error(
+          "[hardening] PDFKIT_REDIS_REQUIRED=true and rate limit check failed — rejecting (fail-closed)",
+          err instanceof Error ? err.message : err,
+        );
+        return jsonError(
+          "USAGE_SERVICE_UNAVAILABLE",
+          "Rate protection is temporarily unavailable. Please retry shortly.",
+        );
+      }
       console.warn("[hardening] Distributed rate limit check failed, using local fallback", err);
     }
+  } else if (isRedisRequired()) {
+    console.error(
+      "[hardening] PDFKIT_REDIS_REQUIRED=true but Redis is not configured — rejecting (fail-closed)",
+    );
+    return jsonError(
+      "USAGE_SERVICE_UNAVAILABLE",
+      "Rate protection is temporarily unavailable. Please retry shortly.",
+    );
   }
 
   // Local fallback in-memory rate limiting
   const now = Date.now();
+  pruneInMemoryRateLimits(now);
   const entry = inMemoryRateLimits.get(scopedToken);
 
   if (!entry || now > entry.resetAt) {
@@ -292,4 +368,28 @@ export async function checkRateLimit(
 
   entry.count += 1;
   return null;
+}
+
+/**
+ * Phase 64 security hardening: the fallback map is keyed by anonymized client
+ * token and entries were only ever replaced, never removed — a long-running
+ * process would accumulate one entry per distinct client token forever
+ * (unbounded memory growth in fallback mode). Opportunistic bounded sweep:
+ * cheap (no-op under 5k entries), keeps the map proportional to live windows.
+ */
+const IN_MEMORY_LIMIT_MAX_ENTRIES = 5_000;
+
+function pruneInMemoryRateLimits(now: number): void {
+  if (inMemoryRateLimits.size <= IN_MEMORY_LIMIT_MAX_ENTRIES) return;
+  for (const [key, entry] of inMemoryRateLimits) {
+    if (now > entry.resetAt) inMemoryRateLimits.delete(key);
+  }
+  // Hard cap even when many windows are still live: drop oldest-expiring
+  // entries beyond the cap (worst case a client's fallback counter restarts —
+  // the Redis path is the authoritative limiter whenever it is configured).
+  if (inMemoryRateLimits.size > IN_MEMORY_LIMIT_MAX_ENTRIES * 2) {
+    const sorted = [...inMemoryRateLimits.entries()].sort((a, b) => a[1].resetAt - b[1].resetAt);
+    const excess = inMemoryRateLimits.size - IN_MEMORY_LIMIT_MAX_ENTRIES;
+    for (let i = 0; i < excess; i++) inMemoryRateLimits.delete(sorted[i][0]);
+  }
 }

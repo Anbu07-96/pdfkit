@@ -1,6 +1,6 @@
 import "server-only";
 
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { checkRateLimit } from "@/lib/hardening/distributed-protection";
 import { getHardeningConfig } from "@/lib/hardening/config";
 import { activeJobCount } from "@/lib/hardening/guards";
@@ -46,11 +46,15 @@ function unauthorized(): Response {
   );
 }
 
-/** Constant-time token comparison; both sides must be equal length first. */
+/**
+ * Constant-time token comparison. Phase 64 security review: comparing
+ * lengths first would leak the expected token's length through timing; both
+ * sides are SHA-256 hashed to fixed-size digests before timingSafeEqual, so
+ * neither content nor length is observable.
+ */
 function tokensMatch(expected: string, provided: string): boolean {
-  const a = Buffer.from(expected, "utf8");
-  const b = Buffer.from(provided, "utf8");
-  if (a.length !== b.length) return false;
+  const a = createHash("sha256").update(expected, "utf8").digest();
+  const b = createHash("sha256").update(provided, "utf8").digest();
   return timingSafeEqual(a, b);
 }
 

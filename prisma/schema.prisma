@@ -5,6 +5,13 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
+  // Phase 64: the client runs on the WASM query compiler with a pure-JS
+  // PostgreSQL driver adapter (@prisma/adapter-pg) — no Rust engine binary
+  // is generated, downloaded or executed (driver adapters are GA in 6.16).
+  // This keeps PDFKit's zero-native-binary architecture and lets
+  // `prisma generate` run in offline environments (the old library engine
+  // required binaries.prisma.sh).
+  engineType = "client"
 }
 
 model UserAccount {
@@ -14,6 +21,16 @@ model UserAccount {
   name                   String?
   tier                   String       @default("free")
   status                 String       @default("active")
+  // Phase 64 migration 20260909000000: these columns are required by the
+  // email-verification flow (src/lib/auth/verification.ts) and the
+  // PersistedUserAccount contract. The initial migration predated them; the
+  // hand-written dev stub client declared them in its types, which masked
+  // the schema mismatch until a real `prisma generate` ran.
+  accountTrustStatus     String       @default("unverified")
+  authProvider           String?      @default("credentials")
+  emailVerified          DateTime?
+  verificationToken      String?      @unique
+  verificationExpires    DateTime?
   billingProvider        String?      @default("razorpay")
   razorpayCustomerId     String?      @unique
   razorpaySubscriptionId String?      @unique
