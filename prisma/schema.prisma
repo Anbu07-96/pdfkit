@@ -17,7 +17,11 @@ generator client {
 model UserAccount {
   id                     String       @id @default(cuid())
   userId                 String       @unique
-  email                  String?
+  // Phase 65: unique email + password hash — credentials authentication
+  // requires both (registration previously stored no password at all and any
+  // policy-valid password signed in as any address).
+  email                  String?      @unique
+  passwordHash           String?
   name                   String?
   tier                   String       @default("free")
   status                 String       @default("active")

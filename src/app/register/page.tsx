@@ -42,6 +42,30 @@ export default function RegisterPage() {
     setSuccess(null);
 
     try {
+      // Phase 65: create the account first (server stores a scrypt password
+      // hash + verification token). Registration previously signed in
+      // directly without ever storing credentials.
+      const registerRes = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: cleanEmail, password: cleanPassword }),
+      });
+
+      if (!registerRes.ok) {
+        const body = (await registerRes.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        if (registerRes.status === 409) {
+          setError("An account with this email already exists. Try signing in instead.");
+        } else {
+          setError(
+            body?.error?.message ??
+              "Could not create account with these credentials. Ensure your email is a non-disposable address and password contains letters and numbers.",
+          );
+        }
+        return;
+      }
+
       const res = await signIn("credentials", {
         email: cleanEmail,
         password: cleanPassword,
@@ -50,7 +74,7 @@ export default function RegisterPage() {
       });
 
       if (res?.error) {
-        setError("Could not create account with these credentials. Ensure your email is a non-disposable address and password contains letters and numbers.");
+        setError("Account created, but automatic sign-in failed. Please sign in manually.");
       } else if (res?.url) {
         setSuccess("Account created successfully. Redirecting to your account dashboard...");
         setTimeout(() => {

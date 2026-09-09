@@ -5,6 +5,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { ProcessingError } from "@/lib/processing/errors";
 import type { UserAccountTier } from "@/lib/auth/types";
 import type {
+  PersistedAccountAuth,
   PersistedUserAccount,
   UsageRecord,
   UsageRepository,
@@ -64,7 +65,7 @@ function getPrismaClient(): PrismaClient {
  */
 export class InMemoryUsageRepository implements UsageRepository {
   private usages = new Map<string, UsageRecord>();
-  private accounts = new Map<string, PersistedUserAccount>();
+  private accounts = new Map<string, PersistedUserAccount & { passwordHash?: string | null }>();
   private razorpayEvents = new Map<string, string>();
 
   private usageKey(userId: string, periodDate: string): string {
@@ -117,6 +118,22 @@ export class InMemoryUsageRepository implements UsageRepository {
     return null;
   }
 
+  async getUserAccountAuthByEmail(email: string): Promise<PersistedAccountAuth | null> {
+    const normalized = email.trim().toLowerCase();
+    for (const account of this.accounts.values()) {
+      if (account.email === normalized) {
+        return {
+          userId: account.userId,
+          email: account.email,
+          passwordHash: account.passwordHash ?? null,
+          tier: account.tier,
+          status: account.status,
+        };
+      }
+    }
+    return null;
+  }
+
   async getUserAccountByRazorpayCustomerId(customerId: string): Promise<PersistedUserAccount | null> {
     for (const account of this.accounts.values()) {
       if (account.razorpayCustomerId === customerId) {
@@ -149,6 +166,8 @@ export class InMemoryUsageRepository implements UsageRepository {
     billingProvider?: string | null;
     razorpayCustomerId?: string | null;
     razorpaySubscriptionId?: string | null;
+    /** scrypt hash — set at registration/Password change; never cleared by metadata syncs (Phase 65). */
+    passwordHash?: string | null;
   }): Promise<PersistedUserAccount> {
     const existing = this.accounts.get(account.userId);
     const now = new Date();
@@ -194,7 +213,13 @@ export class InMemoryUsageRepository implements UsageRepository {
       updatedAt: now,
     };
 
-    this.accounts.set(account.userId, updated);
+    this.accounts.set(account.userId, {
+      ...updated,
+      passwordHash:
+        account.passwordHash !== undefined
+          ? account.passwordHash
+          : existing?.passwordHash ?? null,
+    });
     return { ...updated };
   }
 
@@ -358,6 +383,28 @@ export class PrismaUsageRepository implements UsageRepository {
     }
   }
 
+  async getUserAccountAuthByEmail(email: string): Promise<PersistedAccountAuth | null> {
+    try {
+      const acc = await this.prisma.userAccount.findUnique({
+        where: { email: email.trim().toLowerCase() },
+      });
+
+      if (!acc) return null;
+
+      // Deliberately narrow: only the fields credentials authorize() needs
+      // (Phase 65). Never serialized to clients.
+      return {
+        userId: acc.userId,
+        email: acc.email,
+        passwordHash: acc.passwordHash,
+        tier: acc.tier,
+        status: acc.status,
+      };
+    } catch (error) {
+      this.handleDbError(error);
+    }
+  }
+
   async getUserAccountByVerificationToken(token: string): Promise<PersistedUserAccount | null> {
     try {
       const acc = await this.prisma.userAccount.findUnique({
@@ -465,6 +512,8 @@ export class PrismaUsageRepository implements UsageRepository {
     billingProvider?: string | null;
     razorpayCustomerId?: string | null;
     razorpaySubscriptionId?: string | null;
+    /** scrypt hash — set at registration/Password change; never cleared by metadata syncs (Phase 65). */
+    passwordHash?: string | null;
   }): Promise<PersistedUserAccount> {
     try {
       const acc = await this.prisma.userAccount.upsert({
@@ -479,6 +528,7 @@ export class PrismaUsageRepository implements UsageRepository {
           authProvider: account.authProvider ?? "credentials",
           emailVerified: account.emailVerified ?? null,
           verificationToken: account.verificationToken ?? null,
+          passwordHash: account.passwordHash ?? null,
           verificationExpires: account.verificationExpires ?? null,
           billingProvider: account.billingProvider ?? "razorpay",
           razorpayCustomerId: account.razorpayCustomerId ?? null,
@@ -507,6 +557,7 @@ export class PrismaUsageRepository implements UsageRepository {
           ...(account.razorpaySubscriptionId !== undefined
             ? { razorpaySubscriptionId: account.razorpaySubscriptionId }
             : {}),
+          ...(account.passwordHash !== undefined ? { passwordHash: account.passwordHash } : {}),
         },
       });
 
@@ -634,6 +685,7 @@ export function getUsageRepository(): UsageRepository {
       getUsage: async () => unconfiguredErr(),
       recordUsage: async () => unconfiguredErr(),
       getUserAccount: async () => unconfiguredErr(),
+      getUserAccountAuthByEmail: async () => unconfiguredErr(),
       getUserAccountByVerificationToken: async () => unconfiguredErr(),
       getUserAccountByRazorpayCustomerId: async () => unconfiguredErr(),
       getUserAccountByRazorpaySubscriptionId: async () => unconfiguredErr(),

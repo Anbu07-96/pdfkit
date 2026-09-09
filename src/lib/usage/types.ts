@@ -65,6 +65,18 @@ export interface UserUsageSummary {
 /**
  * Account metadata persisted in the usage database.
  */
+/**
+ * Narrow credentials-auth lookup result (Phase 65). Deliberately excludes
+ * everything except what authorize() needs — never serialized to clients.
+ */
+export interface PersistedAccountAuth {
+  userId: string;
+  email: string | null;
+  passwordHash: string | null;
+  tier: string;
+  status: string;
+}
+
 export interface PersistedUserAccount {
   id: string;
   userId: string;
@@ -115,6 +127,12 @@ export interface UsageRepository {
   getUserAccountByVerificationToken(token: string): Promise<PersistedUserAccount | null>;
 
   /**
+   * Credentials-auth lookup by (unique) email. Returns only the fields
+   * authorize() needs — see PersistedAccountAuth (Phase 65).
+   */
+  getUserAccountAuthByEmail(email: string): Promise<PersistedAccountAuth | null>;
+
+  /**
    * Get account metadata by Razorpay Customer ID.
    */
   getUserAccountByRazorpayCustomerId(customerId: string): Promise<PersistedUserAccount | null>;
@@ -141,6 +159,8 @@ export interface UsageRepository {
     billingProvider?: string | null;
     razorpayCustomerId?: string | null;
     razorpaySubscriptionId?: string | null;
+    /** scrypt hash — set at registration/password change (Phase 65). */
+    passwordHash?: string | null;
   }): Promise<PersistedUserAccount>;
 
   /**

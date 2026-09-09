@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "next-auth";
 import type { AdapterUser } from "next-auth/adapters";
 import { authOptions, getAuthProviders } from "@/lib/auth/config";
@@ -6,6 +6,11 @@ import {
   validateAndNormalizeEmail,
   validatePassword,
 } from "@/lib/auth/validation";
+import { hashPassword } from "@/lib/auth/password";
+import {
+  InMemoryUsageRepository,
+  setUsageRepositoryOverride,
+} from "@/lib/usage/repository";
 
 interface ProviderWithOptions {
   id: string;
@@ -121,7 +126,27 @@ describe("Phase 54 — Auth Hardening, Provider Removal & Anti-Bot Security", ()
     });
   });
 
-  describe("Credentials Provider Integration", () => {
+  describe("Credentials Provider Integration (Phase 65: real password verification)", () => {
+    let repo: InMemoryUsageRepository;
+
+    beforeEach(async () => {
+      repo = new InMemoryUsageRepository();
+      setUsageRepositoryOverride(repo);
+      await repo.upsertUserAccount({
+        userId: "usr_realuser1",
+        email: "alice.smith@gmail.com",
+        name: "alice.smith",
+        tier: "free",
+        status: "active",
+        passwordHash: await hashPassword("SecurePass2026"),
+      });
+    });
+
+    afterEach(() => {
+      setUsageRepositoryOverride(null);
+      vi.unstubAllEnvs();
+    });
+
     it("rejects login with disposable email", async () => {
       expect(
         await authorize!({
@@ -131,25 +156,77 @@ describe("Phase 54 — Auth Hardening, Provider Removal & Anti-Bot Security", ()
       ).toBeNull();
     });
 
-    it("rejects login with weak common password", async () => {
+    it("rejects login when no account exists for the email", async () => {
       expect(
         await authorize!({
-          email: "alice@gmail.com",
-          password: "password123",
+          email: "nobody@gmail.com",
+          password: "SecurePass2026",
         }),
       ).toBeNull();
     });
 
-    it("normalizes uppercase email on successful login", async () => {
+    it("rejects the CORRECT-format but WRONG password (stored hash is the truth)", async () => {
+      expect(
+        await authorize!({
+          email: "alice.smith@gmail.com",
+          password: "AlsoSecure2027",
+        }),
+      ).toBeNull();
+    });
+
+    it("rejects a suspended account even with the right password", async () => {
+      await repo.upsertUserAccount({
+        userId: "usr_suspended1",
+        email: "bob@gmail.com",
+        tier: "free",
+        status: "suspended",
+        passwordHash: await hashPassword("SecurePass2026"),
+      });
+      expect(
+        await authorize!({
+          email: "bob@gmail.com",
+          password: "SecurePass2026",
+        }),
+      ).toBeNull();
+    });
+
+    it("normalizes uppercase email on successful login and returns the stored tier", async () => {
+      await repo.upsertUserAccount({
+        userId: "usr_proeditor",
+        email: "carol@gmail.com",
+        tier: "pro",
+        status: "active",
+        passwordHash: await hashPassword("SecurePass2026"),
+      });
+
       const user = await authorize!({
-        email: "  Alice.Smith@Gmail.COM  ",
+        email: "  Carol@Gmail.COM  ",
         password: "SecurePass2026",
       });
 
       expect(user).not.toBeNull();
-      expect(user?.email).toBe("alice.smith@gmail.com");
-      expect(user?.name).toBe("alice.smith");
-      expect((user as User & { tier?: string })?.tier).toBe("free");
+      expect(user?.id).toBe("usr_proeditor");
+      expect(user?.email).toBe("carol@gmail.com");
+      expect(user?.name).toBe("carol");
+      expect((user as User & { tier?: string })?.tier).toBe("pro");
+    });
+
+    it("locks the account after repeated wrong passwords (existing tracker now guards real failures)", async () => {
+      for (let i = 0; i < 6; i++) {
+        expect(
+          await authorize!({
+            email: "alice.smith@gmail.com",
+            password: "WrongPassword2026",
+          }),
+        ).toBeNull();
+      }
+      // Locked now — even the CORRECT password is rejected.
+      expect(
+        await authorize!({
+          email: "alice.smith@gmail.com",
+          password: "SecurePass2026",
+        }),
+      ).toBeNull();
     });
   });
 

@@ -390,7 +390,13 @@ export async function runBulkBatch({
   onProgress,
   onPhase,
   initialBudgets,
-  fetchImpl = fetch,
+  // Phase 65 browser-E2E finding: the default must be BOUND. `fetch` invoked
+  // method-style (`options.fetchImpl(...)`) runs Window.fetch with a wrong
+  // `this`, which throws "Illegal invocation" in real browsers — every bulk
+  // file failed with NETWORK_ERROR after one retry. Node's undici fetch (unit
+  // tests) has no `this` requirement, which is why tests stayed green.
+  // Binding to globalThis makes the call-site style irrelevant.
+  fetchImpl = fetch.bind(globalThis),
   sleep = defaultSleep,
   getOnline = defaultGetOnline,
   batchId: requestedBatchId,

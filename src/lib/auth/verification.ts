@@ -77,7 +77,9 @@ export async function sendVerificationEmail(
 
   const smtpHost = process.env.SMTP_HOST;
   if (!smtpHost) {
-    console.info(`[auth-email] Verification link generated for ${email}: ${verifyUrl}`);
+    // No email address in logs (Phase 65 privacy review): the link token is
+    // a single-use secret that expires in 24h; the address itself is PII.
+    console.info(`[auth-email] Verification link generated (SMTP not configured): ${verifyUrl}`);
     return true;
   }
 

@@ -4,13 +4,14 @@ import GoogleProvider from "next-auth/providers/google";
 import AzureADProvider from "next-auth/providers/azure-ad";
 import {
   validateAndNormalizeEmail,
-  validatePassword,
 } from "@/lib/auth/validation";
 import {
   checkLoginLockout,
   clearFailedLogin,
   recordFailedLogin,
 } from "@/lib/auth/failed-login-tracker";
+import { verifyPassword } from "@/lib/auth/password";
+import { getUsageRepository } from "@/lib/usage/repository";
 
 /**
  * Resolves active NextAuth providers dynamically based on environment variables.
@@ -41,13 +42,35 @@ export function getAuthProviders() {
         // Check server-side lockout
         const lockout = checkLoginLockout(normalizedEmail);
         if (lockout.isLocked) {
-          console.warn(`[auth] Login attempt rejected for locked out email: ${normalizedEmail}`);
+          console.warn("[auth] Login attempt rejected for a locked out email address");
           return null;
         }
 
-        const passwordResult = validatePassword(credentials.password, credentials.email);
-        if (!passwordResult.isValid) {
+        // Phase 65: verify against the STORED scrypt hash. Previously any
+        // policy-valid password minted a session for any address (email-only
+        // access). Policy validation now happens at registration; here the
+        // stored hash is the truth.
+        let account = null;
+        try {
+          account = await getUsageRepository().getUserAccountAuthByEmail(normalizedEmail);
+        } catch (err) {
+          console.error("[auth] Account lookup failed", err instanceof Error ? err.message : err);
+          return null;
+        }
+
+        if (!account) {
           recordFailedLogin(normalizedEmail);
+          return null;
+        }
+
+        const passwordOk = await verifyPassword(credentials.password, account.passwordHash);
+        if (!passwordOk) {
+          recordFailedLogin(normalizedEmail);
+          return null;
+        }
+
+        if (account.status === "suspended") {
+          console.warn("[auth] Login rejected for suspended account");
           return null;
         }
 
@@ -55,10 +78,10 @@ export function getAuthProviders() {
         clearFailedLogin(normalizedEmail);
 
         return {
-          id: `usr_${Buffer.from(normalizedEmail).toString("hex").slice(0, 12)}`,
+          id: account.userId,
           email: normalizedEmail,
           name: normalizedEmail.split("@")[0] || "User",
-          tier: "free",
+          tier: account.tier,
         };
       },
     }),

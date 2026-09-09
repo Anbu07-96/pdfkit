@@ -78,24 +78,67 @@ async function ensureRedisReady(redis: Redis): Promise<void> {
   });
 }
 
+/**
+ * Phase 65 client-IP trust policy.
+ *
+ * Which request headers may identify the client is a DEPLOYMENT decision, not
+ * a code default: `CF-Connecting-IP`/`X-Real-IP` are only meaningful when the
+ * deployment actually sits behind Cloudflare/nginx AND the proxy strips
+ * client-supplied copies. Blindly trusting them (the pre-Phase-65 behavior)
+ * let any direct-to-app client rotate a fake header per request and bypass
+ * the IP rate limit entirely.
+ *
+ * `PDFKIT_CLIENT_IP_HEADERS` configures the ordered list of trusted headers
+ * (lower-case, comma-separated):
+ *   - unset (default): `x-forwarded-for` — the standard header every managed
+ *     proxy (Render/Railway/Fly/AWS LB/nginx/Cloudflare) appends to; the
+ *     LAST entry is used because appending proxies add the real client IP at
+ *     the end after any client-supplied prefix.
+ *   - `cf-connecting-ip,x-forwarded-for`: behind Cloudflare.
+ *   - `x-real-ip,x-forwarded-for`: behind an nginx that sets X-Real-IP and
+ *     strips inbound copies.
+ *   - `none`: no proxy in front — all clients share one fallback bucket
+ *     (fail-closed: the rate limit becomes global, never per-attacker).
+ */
+const FALLBACK_CLIENT_IP = "127.0.0.1";
+
+function readTrustedClientIpHeaders(): string[] {
+  const raw = process.env.PDFKIT_CLIENT_IP_HEADERS;
+  if (raw === undefined || raw === "") return ["x-forwarded-for"];
+  return raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s.length > 0 && s !== "none");
+}
+
 /** Compute an anonymized 16-character SHA-256 token for client rate limiting with proxy IP hardening. */
 export function anonymizeClientIp(request: Request): string {
-  const cfIp = request.headers.get("cf-connecting-ip")?.trim();
-  const realIp = request.headers.get("x-real-ip")?.trim();
-  const forwarded = request.headers.get("x-forwarded-for") ?? "";
+  let rawCandidate: string | null = null;
 
-  // Reverse proxies like Render/Railway/Cloudflare append the real client IP to the end or set CF-Connecting-IP / X-Real-IP
-  const forwardedIps = forwarded
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  for (const header of readTrustedClientIpHeaders()) {
+    let value: string | null = null;
+    if (header === "x-forwarded-for") {
+      // Last entry: appended by the nearest trusted proxy — a client may
+      // PREPEND anything it likes, the proxy-added tail wins.
+      const forwarded = request.headers.get("x-forwarded-for") ?? "";
+      const entries = forwarded
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      value = entries[entries.length - 1] ?? null;
+    } else {
+      value = request.headers.get(header)?.trim() || null;
+    }
+    if (value) {
+      rawCandidate = value;
+      break;
+    }
+  }
 
-  // Pick CF-Connecting-IP > X-Real-IP > last X-Forwarded-For entry > first X-Forwarded-For entry > fallback
-  const rawCandidate =
-    cfIp || realIp || forwardedIps[forwardedIps.length - 1] || forwardedIps[0] || "127.0.0.1";
+  if (!rawCandidate) rawCandidate = FALLBACK_CLIENT_IP;
 
   // Sanitize IP format to prevent header injection in keys
-  const ip = /^[\d.a-fA-F:]+$/.test(rawCandidate) ? rawCandidate : "127.0.0.1";
+  const ip = /^[\d.a-fA-F:]+$/.test(rawCandidate) ? rawCandidate : FALLBACK_CLIENT_IP;
 
   return createHash("sha256").update(`${ip}:${SALT}`).digest("hex").slice(0, 16);
 }

@@ -22,10 +22,14 @@ function postRequest(headers: Record<string, string> = {}): Request {
   });
 }
 
-describe("anonymizeClientIp", () => {
-  it("produces a 16-character SHA-256 hash token from client IP headers", () => {
+describe("anonymizeClientIp (Phase 65 trust policy)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("produces a 16-character SHA-256 hash token from the trusted header", () => {
     const req1 = postRequest({ "x-forwarded-for": "192.168.1.50" });
-    const req2 = postRequest({ "x-real-ip": "10.0.0.1" });
+    const req2 = postRequest({ "x-forwarded-for": "10.0.0.1" });
 
     const token1 = anonymizeClientIp(req1);
     const token2 = anonymizeClientIp(req2);
@@ -34,6 +38,66 @@ describe("anonymizeClientIp", () => {
     expect(token2).toHaveLength(16);
     expect(token1).not.toBe(token2);
     expect(token1).not.toContain("192.168.1.50");
+  });
+
+  it("uses the LAST X-Forwarded-For entry — a proxy-appended real IP beats any client-supplied prefix", () => {
+    const spoofed = postRequest({ "x-forwarded-for": "6.6.6.6, 1.2.3.4" });
+    const honest = postRequest({ "x-forwarded-for": "1.2.3.4" });
+    // Both carry the same proxy-appended tail; the client's prepended decoy
+    // must not change the token.
+    expect(anonymizeClientIp(spoofed)).toBe(anonymizeClientIp(honest));
+    // And a DIFFERENT real tail produces a different token.
+    const other = postRequest({ "x-forwarded-for": "6.6.6.6, 5.6.7.8" });
+    expect(anonymizeClientIp(spoofed)).not.toBe(anonymizeClientIp(other));
+  });
+
+  it("IGNORES client-supplied CF-Connecting-IP / X-Real-IP by default (spoof-resistant)", () => {
+    // Pre-Phase-65 behavior trusted CF-Connecting-IP > X-Real-IP blindly; a
+    // direct-to-app client could rotate these to bypass the IP limiter.
+    const honest = postRequest({ "x-forwarded-for": "1.2.3.4" });
+    const cfSpoof = postRequest({ "x-forwarded-for": "1.2.3.4", "cf-connecting-ip": "9.9.9.1" });
+    const realSpoof = postRequest({ "x-forwarded-for": "1.2.3.4", "x-real-ip": "9.9.9.2" });
+    const bothSpoof = postRequest({
+      "x-forwarded-for": "1.2.3.4",
+      "cf-connecting-ip": "9.9.9.3",
+      "x-real-ip": "9.9.9.4",
+    });
+    const expected = anonymizeClientIp(honest);
+    expect(anonymizeClientIp(cfSpoof)).toBe(expected);
+    expect(anonymizeClientIp(realSpoof)).toBe(expected);
+    expect(anonymizeClientIp(bothSpoof)).toBe(expected);
+  });
+
+  it("honors an explicitly configured trusted-header list (e.g. Cloudflare)", () => {
+    vi.stubEnv("PDFKIT_CLIENT_IP_HEADERS", "cf-connecting-ip,x-forwarded-for");
+    const behindCf = postRequest({ "cf-connecting-ip": "203.0.113.9" });
+    const notBehindCf = postRequest({ "x-forwarded-for": "198.51.100.7" });
+    const tokens = [behindCf, notBehindCf].map((r) => anonymizeClientIp(r));
+    expect(tokens[0]).not.toBe(tokens[1]);
+
+    // With the header list configured, an unlisted header stays ignored.
+    const ignored = postRequest({ "x-real-ip": "203.0.113.9", "cf-connecting-ip": "203.0.113.9" });
+    expect(anonymizeClientIp(ignored)).toBe(tokens[0]);
+  });
+
+  it("'none' mode collapses all clients into one fallback bucket (fail-closed, no proxy)", () => {
+    vi.stubEnv("PDFKIT_CLIENT_IP_HEADERS", "none");
+    const a = postRequest({ "x-forwarded-for": "1.1.1.1" });
+    const b = postRequest({ "x-forwarded-for": "2.2.2.2", "cf-connecting-ip": "3.3.3.3" });
+    expect(anonymizeClientIp(a)).toBe(anonymizeClientIp(b));
+  });
+
+  it("falls back to a single bucket when no trusted header is present", () => {
+    const a = postRequest({});
+    const b = postRequest({});
+    expect(anonymizeClientIp(a)).toBe(anonymizeClientIp(b));
+    expect(anonymizeClientIp(a)).toHaveLength(16);
+  });
+
+  it("rejects malformed header values (injection-shaped) via the IP format check", () => {
+    const hostile = postRequest({ "x-forwarded-for": "pdfkit:ratelimit/x; DROP" });
+    const fallback = postRequest({});
+    expect(anonymizeClientIp(hostile)).toBe(anonymizeClientIp(fallback));
   });
 });
 
