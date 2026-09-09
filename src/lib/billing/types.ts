@@ -8,7 +8,17 @@ export interface BillingConfig {
   razorpayWebhookSecret: string | null;
   razorpayProPlanId: string | null;
   isConfigured: boolean;
+  /** Phase 66: disabled | test | live (live requires PDFKIT_BILLING_ALLOW_LIVE=true). */
+  mode: BillingMode;
 }
+
+/**
+ * Billing operating mode. Derived from the Razorpay key prefix
+ * (rzp_test_… / rzp_live_…); live additionally requires the explicit
+ * PDFKIT_BILLING_ALLOW_LIVE acknowledgment, otherwise the stack runs
+ * disabled. Phase 66 validates disabled and test only.
+ */
+export type BillingMode = "disabled" | "test" | "live";
 
 export interface CheckoutSessionOptions {
   identity: UserIdentity;

@@ -132,6 +132,15 @@ describe("Phase 46C — Razorpay Billing & Subscription Architecture", () => {
         .update(`${paymentId}|${subId}`)
         .digest("hex");
 
+      // Phase 66: checkout stores the created subscription on the account
+      // BEFORE payment; verification binds the payment to that subscription.
+      await repo.upsertUserAccount({
+        userId: mockUserIdentity.userId,
+        email: mockUserIdentity.email,
+        tier: "free",
+        razorpaySubscriptionId: subId,
+      });
+
       const result = await service.verifyPayment({
         identity: mockUserIdentity,
         razorpayPaymentId: paymentId,

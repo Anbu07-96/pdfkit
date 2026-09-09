@@ -35,6 +35,7 @@ export async function getUserIdentity(): Promise<UserIdentity> {
       email?: string | null;
       name?: string | null;
       tier?: string;
+      sessionIssuedAt?: number;
     };
 
     const userId = user.id || user.email || "usr_session";
@@ -44,6 +45,14 @@ export async function getUserIdentity(): Promise<UserIdentity> {
     try {
       const persistedAcc = await getUsageRepository().getUserAccount(userId);
       if (persistedAcc) {
+        // Phase 66: a successful password reset stamps passwordResetAt;
+        // JWT sessions issued BEFORE that instant are treated as signed out
+        // (stateless JWTs cannot be revoked any other way).
+        const resetAtMs = persistedAcc.passwordResetAt?.getTime() ?? 0;
+        const issuedAtMs = (user.sessionIssuedAt ?? 0) * 1000;
+        if (resetAtMs > 0 && issuedAtMs > 0 && issuedAtMs < resetAtMs) {
+          return ANONYMOUS_USER_IDENTITY;
+        }
         tier = (persistedAcc.tier as UserIdentity["tier"]) || tier;
         status = (persistedAcc.status as UserIdentity["status"]) || status;
       }

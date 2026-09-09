@@ -134,6 +134,15 @@ export class InMemoryUsageRepository implements UsageRepository {
     return null;
   }
 
+  async getUserAccountByPasswordResetTokenHash(tokenHash: string): Promise<PersistedUserAccount | null> {
+    for (const account of this.accounts.values()) {
+      if (account.passwordResetTokenHash === tokenHash) {
+        return { ...account };
+      }
+    }
+    return null;
+  }
+
   async getUserAccountByRazorpayCustomerId(customerId: string): Promise<PersistedUserAccount | null> {
     for (const account of this.accounts.values()) {
       if (account.razorpayCustomerId === customerId) {
@@ -168,6 +177,9 @@ export class InMemoryUsageRepository implements UsageRepository {
     razorpaySubscriptionId?: string | null;
     /** scrypt hash — set at registration/Password change; never cleared by metadata syncs (Phase 65). */
     passwordHash?: string | null;
+    passwordResetTokenHash?: string | null;
+    passwordResetExpires?: Date | null;
+    passwordResetAt?: Date | null;
   }): Promise<PersistedUserAccount> {
     const existing = this.accounts.get(account.userId);
     const now = new Date();
@@ -209,6 +221,18 @@ export class InMemoryUsageRepository implements UsageRepository {
         account.razorpaySubscriptionId !== undefined
           ? account.razorpaySubscriptionId
           : existing?.razorpaySubscriptionId || null,
+      passwordResetTokenHash:
+        account.passwordResetTokenHash !== undefined
+          ? account.passwordResetTokenHash
+          : existing?.passwordResetTokenHash ?? null,
+      passwordResetExpires:
+        account.passwordResetExpires !== undefined
+          ? account.passwordResetExpires
+          : existing?.passwordResetExpires ?? null,
+      passwordResetAt:
+        account.passwordResetAt !== undefined
+          ? account.passwordResetAt
+          : existing?.passwordResetAt ?? null,
       createdAt: existing?.createdAt || now,
       updatedAt: now,
     };
@@ -375,6 +399,9 @@ export class PrismaUsageRepository implements UsageRepository {
         billingProvider: acc.billingProvider,
         razorpayCustomerId: acc.razorpayCustomerId,
         razorpaySubscriptionId: acc.razorpaySubscriptionId,
+        passwordResetTokenHash: acc.passwordResetTokenHash,
+        passwordResetExpires: acc.passwordResetExpires,
+        passwordResetAt: acc.passwordResetAt,
         createdAt: acc.createdAt,
         updatedAt: acc.updatedAt,
       };
@@ -428,6 +455,43 @@ export class PrismaUsageRepository implements UsageRepository {
         billingProvider: acc.billingProvider,
         razorpayCustomerId: acc.razorpayCustomerId,
         razorpaySubscriptionId: acc.razorpaySubscriptionId,
+        passwordResetTokenHash: acc.passwordResetTokenHash,
+        passwordResetExpires: acc.passwordResetExpires,
+        passwordResetAt: acc.passwordResetAt,
+        createdAt: acc.createdAt,
+        updatedAt: acc.updatedAt,
+      };
+    } catch (error) {
+      this.handleDbError(error);
+    }
+  }
+
+  async getUserAccountByPasswordResetTokenHash(tokenHash: string): Promise<PersistedUserAccount | null> {
+    try {
+      const acc = await this.prisma.userAccount.findUnique({
+        where: { passwordResetTokenHash: tokenHash },
+      });
+
+      if (!acc) return null;
+
+      return {
+        id: acc.id,
+        userId: acc.userId,
+        email: acc.email,
+        name: acc.name,
+        tier: acc.tier as UserAccountTier,
+        status: acc.status,
+        accountTrustStatus: acc.accountTrustStatus,
+        authProvider: acc.authProvider,
+        emailVerified: acc.emailVerified,
+        verificationToken: acc.verificationToken,
+        verificationExpires: acc.verificationExpires,
+        billingProvider: acc.billingProvider,
+        razorpayCustomerId: acc.razorpayCustomerId,
+        razorpaySubscriptionId: acc.razorpaySubscriptionId,
+        passwordResetTokenHash: acc.passwordResetTokenHash,
+        passwordResetExpires: acc.passwordResetExpires,
+        passwordResetAt: acc.passwordResetAt,
         createdAt: acc.createdAt,
         updatedAt: acc.updatedAt,
       };
@@ -459,6 +523,9 @@ export class PrismaUsageRepository implements UsageRepository {
         billingProvider: acc.billingProvider,
         razorpayCustomerId: acc.razorpayCustomerId,
         razorpaySubscriptionId: acc.razorpaySubscriptionId,
+        passwordResetTokenHash: acc.passwordResetTokenHash,
+        passwordResetExpires: acc.passwordResetExpires,
+        passwordResetAt: acc.passwordResetAt,
         createdAt: acc.createdAt,
         updatedAt: acc.updatedAt,
       };
@@ -490,6 +557,9 @@ export class PrismaUsageRepository implements UsageRepository {
         billingProvider: acc.billingProvider,
         razorpayCustomerId: acc.razorpayCustomerId,
         razorpaySubscriptionId: acc.razorpaySubscriptionId,
+        passwordResetTokenHash: acc.passwordResetTokenHash,
+        passwordResetExpires: acc.passwordResetExpires,
+        passwordResetAt: acc.passwordResetAt,
         createdAt: acc.createdAt,
         updatedAt: acc.updatedAt,
       };
@@ -514,6 +584,9 @@ export class PrismaUsageRepository implements UsageRepository {
     razorpaySubscriptionId?: string | null;
     /** scrypt hash — set at registration/Password change; never cleared by metadata syncs (Phase 65). */
     passwordHash?: string | null;
+    passwordResetTokenHash?: string | null;
+    passwordResetExpires?: Date | null;
+    passwordResetAt?: Date | null;
   }): Promise<PersistedUserAccount> {
     try {
       const acc = await this.prisma.userAccount.upsert({
@@ -533,6 +606,9 @@ export class PrismaUsageRepository implements UsageRepository {
           billingProvider: account.billingProvider ?? "razorpay",
           razorpayCustomerId: account.razorpayCustomerId ?? null,
           razorpaySubscriptionId: account.razorpaySubscriptionId ?? null,
+          passwordResetTokenHash: account.passwordResetTokenHash ?? null,
+          passwordResetExpires: account.passwordResetExpires ?? null,
+          passwordResetAt: account.passwordResetAt ?? null,
         },
         update: {
           ...(account.email !== undefined ? { email: account.email } : {}),
@@ -558,6 +634,15 @@ export class PrismaUsageRepository implements UsageRepository {
             ? { razorpaySubscriptionId: account.razorpaySubscriptionId }
             : {}),
           ...(account.passwordHash !== undefined ? { passwordHash: account.passwordHash } : {}),
+          ...(account.passwordResetTokenHash !== undefined
+            ? { passwordResetTokenHash: account.passwordResetTokenHash }
+            : {}),
+          ...(account.passwordResetExpires !== undefined
+            ? { passwordResetExpires: account.passwordResetExpires }
+            : {}),
+          ...(account.passwordResetAt !== undefined
+            ? { passwordResetAt: account.passwordResetAt }
+            : {}),
         },
       });
 
@@ -576,6 +661,9 @@ export class PrismaUsageRepository implements UsageRepository {
         billingProvider: acc.billingProvider,
         razorpayCustomerId: acc.razorpayCustomerId,
         razorpaySubscriptionId: acc.razorpaySubscriptionId,
+        passwordResetTokenHash: acc.passwordResetTokenHash,
+        passwordResetExpires: acc.passwordResetExpires,
+        passwordResetAt: acc.passwordResetAt,
         createdAt: acc.createdAt,
         updatedAt: acc.updatedAt,
       };
@@ -687,6 +775,7 @@ export function getUsageRepository(): UsageRepository {
       getUserAccount: async () => unconfiguredErr(),
       getUserAccountAuthByEmail: async () => unconfiguredErr(),
       getUserAccountByVerificationToken: async () => unconfiguredErr(),
+      getUserAccountByPasswordResetTokenHash: async () => unconfiguredErr(),
       getUserAccountByRazorpayCustomerId: async () => unconfiguredErr(),
       getUserAccountByRazorpaySubscriptionId: async () => unconfiguredErr(),
       upsertUserAccount: async () => unconfiguredErr(),

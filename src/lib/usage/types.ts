@@ -92,6 +92,11 @@ export interface PersistedUserAccount {
   billingProvider: string | null;
   razorpayCustomerId: string | null;
   razorpaySubscriptionId: string | null;
+  /** SHA-256 hex digest of the active one-time reset token, if any (Phase 66). */
+  passwordResetTokenHash: string | null;
+  passwordResetExpires: Date | null;
+  /** Timestamp of the last successful password reset (session invalidation). */
+  passwordResetAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -133,6 +138,11 @@ export interface UsageRepository {
   getUserAccountAuthByEmail(email: string): Promise<PersistedAccountAuth | null>;
 
   /**
+   * Get account by the SHA-256 hash of a password-reset token (Phase 66).
+   */
+  getUserAccountByPasswordResetTokenHash(tokenHash: string): Promise<PersistedUserAccount | null>;
+
+  /**
    * Get account metadata by Razorpay Customer ID.
    */
   getUserAccountByRazorpayCustomerId(customerId: string): Promise<PersistedUserAccount | null>;
@@ -161,6 +171,11 @@ export interface UsageRepository {
     razorpaySubscriptionId?: string | null;
     /** scrypt hash — set at registration/password change (Phase 65). */
     passwordHash?: string | null;
+    /** One-time password-reset token hash + expiry (Phase 66). */
+    passwordResetTokenHash?: string | null;
+    passwordResetExpires?: Date | null;
+    /** Last successful reset — sessions issued before it are rejected. */
+    passwordResetAt?: Date | null;
   }): Promise<PersistedUserAccount>;
 
   /**

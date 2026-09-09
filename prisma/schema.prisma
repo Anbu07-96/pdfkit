@@ -35,6 +35,14 @@ model UserAccount {
   emailVerified          DateTime?
   verificationToken      String?      @unique
   verificationExpires    DateTime?
+  // Phase 66: password reset — SHA-256 hash of the one-time reset token
+  // (the raw token exists only in the emailed link), its expiry, and the
+  // timestamp of the last successful reset (sessions issued before it are
+  // treated as unauthenticated by getUserIdentity — JWTs are stateless
+  // otherwise and could not be revoked).
+  passwordResetTokenHash String?      @unique
+  passwordResetExpires   DateTime?
+  passwordResetAt        DateTime?
   billingProvider        String?      @default("razorpay")
   razorpayCustomerId     String?      @unique
   razorpaySubscriptionId String?      @unique

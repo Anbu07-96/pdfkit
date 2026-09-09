@@ -62,6 +62,9 @@ export const footerNav: FooterGroup[] = [
     links: [
       { label: "Privacy", href: "/privacy" },
       { label: "Terms", href: "/terms" },
+      { label: "Security", href: "/security" },
+      { label: "Refund Policy", href: "/refund-policy" },
+      { label: "Contact & Support", href: "/contact" },
     ],
   },
 ];

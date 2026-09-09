@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { ContentPage, Prose } from "@/components/layout/content-page";
 import { ButtonLink } from "@/components/ui/button";
-import { Check } from "lucide-react";
+import { Check, Clock } from "lucide-react";
+import { PLANS, ANONYMOUS_LIMITS, formatInr } from "@/lib/billing/plans";
+import { TOOLS } from "@/lib/tools/catalog";
+import { formatBytes } from "@/lib/utils/format";
 
 export const metadata: Metadata = {
   title: "Pricing",
@@ -9,7 +12,17 @@ export const metadata: Metadata = {
     "Simple, transparent pricing for PDFKit. Privacy-first PDF processing with free daily limits and Razorpay Pro upgrades.",
 };
 
+/**
+ * Phase 66 — pricing rendered from the plan catalog (single source of truth).
+ * Only implemented features are advertised; the tool count comes from the
+ * catalog's AVAILABLE status, which a test enforces against the processor
+ * registry. Nothing here may claim priority processing, offline support or
+ * guarantees the product does not actually provide.
+ */
 export default function PricingPage() {
+  const availableTools = TOOLS.filter((t) => t.status === "AVAILABLE").length;
+  const comingSoon = TOOLS.length - availableTools;
+
   return (
     <ContentPage
       title="Simple, Honest Pricing"
@@ -18,144 +31,122 @@ export default function PricingPage() {
       breadcrumbs={[{ label: "Home", href: "/" }, { label: "Pricing" }]}
     >
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 not-prose mb-10">
-        {/* Free Plan */}
-        <div className="rounded-2xl border border-border bg-surface p-6 flex flex-col justify-between shadow-xs">
-          <div>
-            <div className="text-xs font-semibold text-muted uppercase tracking-wider">
-              Free Plan
+        {PLANS.map((plan) => (
+          <div
+            key={plan.id}
+            className={`rounded-2xl border bg-surface p-6 flex flex-col justify-between shadow-xs relative ${
+              plan.id === "pro" ? "border-2 border-brand shadow-md" : "border-border"
+            }`}
+          >
+            {plan.id === "pro" ? (
+              <div className="absolute -top-3 right-6 rounded-full bg-brand px-3 py-0.5 text-[10px] font-bold text-brand-foreground uppercase tracking-wide">
+                Most Popular
+              </div>
+            ) : null}
+            <div>
+              <div
+                className={`text-xs font-semibold uppercase tracking-wider ${
+                  plan.id === "pro" ? "text-brand" : "text-muted"
+                }`}
+              >
+                {plan.name} Plan
+              </div>
+              <div className="mt-3 flex items-baseline gap-1">
+                <span className="text-3xl font-bold text-foreground">
+                  {formatInr(plan.monthlyPriceMinor)}
+                </span>
+                <span className="text-xs text-muted">
+                  / month{plan.id === "pro" ? " (GST may apply)" : ""}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-muted">{plan.tagline}</p>
+
+              <ul className="mt-6 space-y-2.5 text-xs text-foreground">
+                {plan.features.map((feature) => (
+                  <li key={feature.label} className="flex items-start gap-2">
+                    <Check
+                      className={`h-4 w-4 shrink-0 ${plan.id === "pro" ? "text-brand" : "text-success"}`}
+                      aria-hidden="true"
+                    />
+                    <span>{feature.label}</span>
+                  </li>
+                ))}
+                <li className="flex items-start gap-2">
+                  <Check
+                    className={`h-4 w-4 shrink-0 ${plan.id === "pro" ? "text-brand" : "text-success"}`}
+                    aria-hidden="true"
+                  />
+                  <span>{plan.supportLevel}</span>
+                </li>
+              </ul>
             </div>
-            <div className="mt-3 flex items-baseline gap-1">
-              <span className="text-3xl font-bold text-foreground">₹0</span>
-              <span className="text-xs text-muted">/ month</span>
+
+            <div className="mt-8">
+              <ButtonLink
+                href={plan.cta?.href ?? "/account"}
+                variant={plan.id === "pro" ? "primary" : "secondary"}
+                className="w-full"
+              >
+                {plan.cta?.label ?? "Upgrade to Pro"}
+              </ButtonLink>
             </div>
-            <p className="mt-2 text-xs text-muted">
-              Ideal for occasional PDF edits and document tasks. Zero credit card required.
-            </p>
-
-            <ul className="mt-6 space-y-2.5 text-xs text-foreground">
-              <li className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-success shrink-0" />
-                <span>50 processing jobs / day</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-success shrink-0" />
-                <span>250 MB daily volume limit</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-success shrink-0" />
-                <span>Access to 33 online tools</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-success shrink-0" />
-                <span>100% In-memory privacy</span>
-              </li>
-            </ul>
           </div>
-
-          <div className="mt-8">
-            <ButtonLink href="/login" variant="secondary" className="w-full">
-              Get Started Free
-            </ButtonLink>
-          </div>
-        </div>
-
-        {/* Pro Plan */}
-        <div className="rounded-2xl border-2 border-brand bg-surface p-6 flex flex-col justify-between shadow-md relative">
-          <div className="absolute -top-3 right-6 rounded-full bg-brand px-3 py-0.5 text-[10px] font-bold text-brand-foreground uppercase tracking-wide">
-            Most Popular
-          </div>
-          <div>
-            <div className="text-xs font-semibold text-brand uppercase tracking-wider">
-              Pro Plan
-            </div>
-            <div className="mt-3 flex items-baseline gap-1">
-              <span className="text-3xl font-bold text-foreground">₹499</span>
-              <span className="text-xs text-muted">/ month (~$5 USD)</span>
-            </div>
-            <p className="mt-2 text-xs text-muted">
-              For power users and professionals who need high daily document throughput.
-            </p>
-
-            <ul className="mt-6 space-y-2.5 text-xs text-foreground">
-              <li className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-brand shrink-0" />
-                <span className="font-medium">500 processing jobs / day</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-brand shrink-0" />
-                <span className="font-medium">2 GB daily volume limit</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-brand shrink-0" />
-                <span>Priority processing queue</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-brand shrink-0" />
-                <span>UPI, Cards, Netbanking via Razorpay</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-brand shrink-0" />
-                <span>Cancel anytime instantly</span>
-              </li>
-            </ul>
-          </div>
-
-          <div className="mt-8">
-            <ButtonLink href="/account" variant="primary" className="w-full">
-              Upgrade to Pro
-            </ButtonLink>
-          </div>
-        </div>
-
-        {/* Business Plan */}
-        <div className="rounded-2xl border border-border bg-surface p-6 flex flex-col justify-between shadow-xs">
-          <div>
-            <div className="text-xs font-semibold text-muted uppercase tracking-wider">
-              Business Plan
-            </div>
-            <div className="mt-3 flex items-baseline gap-1">
-              <span className="text-3xl font-bold text-foreground">₹2,499</span>
-              <span className="text-xs text-muted">/ month</span>
-            </div>
-            <p className="mt-2 text-xs text-muted">
-              Dedicated volume for teams, organizations, and high-frequency workloads.
-            </p>
-
-            <ul className="mt-6 space-y-2.5 text-xs text-foreground">
-              <li className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-success shrink-0" />
-                <span>5,000 processing jobs / day</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-success shrink-0" />
-                <span>20 GB daily volume limit</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-success shrink-0" />
-                <span>Dedicated account support</span>
-              </li>
-            </ul>
-          </div>
-
-          <div className="mt-8">
-            <ButtonLink href="/help" variant="secondary" className="w-full">
-              Contact Sales
-            </ButtonLink>
-          </div>
-        </div>
+        ))}
       </div>
 
       <Prose>
-        <h2>Payment & Billing Guarantees</h2>
+        <h2>What every plan includes</h2>
         <ul>
           <li>
-            <strong>Primary Payment Gateway:</strong> Razorpay (supporting UPI, Google Pay, PhonePe, Paytm, Indian Credit/Debit Cards, Netbanking, and International Cards).
+            <strong>All {availableTools} available tools</strong> — every plan
+            (including anonymous visitors) can use every tool that exists
+            today, within daily quotas.
           </li>
           <li>
-            <strong>100% In-Memory Privacy:</strong> Your documents are processed in Node.js server RAM for the duration of the job and never stored on disk or shared with AI providers.
+            <strong>Anonymous use needs no account</strong> —{" "}
+            {ANONYMOUS_LIMITS.dailyJobLimit} jobs/day,{" "}
+            {formatBytes(ANONYMOUS_LIMITS.dailyByteLimit, 0)} daily volume,
+            {ANONYMOUS_LIMITS.bulkFilesPerBatch} files per bulk batch.
           </li>
           <li>
-            <strong>No Surprise Charges:</strong> Subscriptions renew monthly through Razorpay and can be cancelled at any time from your Account dashboard.
+            <strong>Bulk processing</strong> — all seven bulk tools work on
+            every plan; higher plans raise the per-batch file and volume
+            ceilings (see your plan above).
+          </li>
+          <li>
+            <strong>Privacy-first processing</strong> — documents are processed
+            in server memory for the duration of the job and never stored or
+            shared with third parties. See the{" "}
+            <a href="/privacy">privacy page</a> for exactly what is and is not
+            collected.
+          </li>
+          <li>
+            <strong>{comingSoon} more tools are listed as coming soon</strong>{" "}
+            <Clock className="inline size-3.5" aria-hidden="true" /> — they are
+            marked on their pages and are not sold as part of any plan.
+          </li>
+        </ul>
+
+        <h2>Payment &amp; billing</h2>
+        <ul>
+          <li>
+            <strong>Payments via Razorpay</strong> — UPI, Google Pay, PhonePe,
+            Paytm, Indian credit/debit cards, netbanking and international
+            cards. Pro is a monthly subscription ({formatInr(49900)}).
+          </li>
+          <li>
+            <strong>Cancel anytime</strong> — from your{" "}
+            <a href="/account">account page</a>. Cancellation takes effect at
+            the end of the period you have already paid for; no further
+            charges are made.
+          </li>
+          <li>
+            <strong>Business plans</strong> are arranged individually —{" "}
+            <a href="/contact">contact us</a> with your volume requirements.
+          </li>
+          <li>
+            Refunds are handled case by case under the{" "}
+            <a href="/refund-policy">refund policy</a>.
           </li>
         </ul>
       </Prose>

@@ -1,6 +1,6 @@
-# Release-Candidate Checklist — Phase 65
+# Release-Candidate Checklist — Phase 66 refresh
 
-**Branch:** `arena/01a081d8-pdfkit` · **Date:** 2026-09-09 · **Companion evidence:** [`staging-validation-results.md`](./staging-validation-results.md)
+**Branch:** `arena/01a081d8-pdfkit` · **Date:** 2026-09-09 · **Companion evidence:** [`staging-validation-results.md`](./staging-validation-results.md) · GO/NO-GO matrix: [`production-launch-blockers.md`](./production-launch-blockers.md)
 
 Status legend: **PASS** (verified by actual staging execution unless noted) · **FAIL** · **BLOCKED** (external dependency) · **N/A** (not applicable by scope decision)
 
@@ -135,7 +135,26 @@ Status legend: **PASS** (verified by actual staging execution unless noted) · *
 | K2 | Live billing | N/A | Deliberately disabled — dedicated later phase; fail-safe verified |
 | K3 | Limits unchanged | PASS | No tier/limit modifications |
 | K4 | OAuth | **BLOCKED** | Requires real credentials before public launch |
-| K5 | CI on GitHub | **BLOCKED** | Manual workflow push required (permissions) |
+| K5 | CI on GitHub | **BLOCKED** | Manual workflow push required (permissions); patch re-verified current in Phase 66 |
 | K6 | Production (edge TLS, real CDN, secrets mgmt) | **REQUIRES PRODUCTION VALIDATION** | Local staging validates app behavior only |
 
-**Overall: release-candidate quality for the application itself. Remaining blockers are operational (OAuth credentials, CI workflow push), not code.**
+## L. Phase 66 additions (commercial readiness)
+
+| # | Item | Status | Note |
+| --- | --- | --- | --- |
+| L1 | Plan catalog single source of truth | PASS | `src/lib/billing/plans.ts`; quotas derived from enforced config; drift-tested |
+| L2 | Pricing page truthful (no unimplemented features) | PASS | Rendered from catalog; "priority queue"/"dedicated support" claims removed; tool count derived from AVAILABLE status |
+| L3 | Billing modes disabled/test/live with live guard | PASS | Live requires live keys AND `PDFKIT_BILLING_ALLOW_LIVE=true` (fail-closed); automated-tested |
+| L4 | Payment verification bound to account's subscription | PASS | Cross-account signature replay rejected (automated-tested) |
+| L5 | Webhook cancel semantics (paid period honored) | PASS | cancelled-with-time-remaining keeps Pro; completed/halted downgrade; automated-tested |
+| L6 | Self-service cancellation | PASS | `/api/billing/cancel` (Razorpay cycle-end); route + service tested |
+| L7 | Password reset (hashed tokens, expiry, one-time, rate-limited, enumeration-safe) | PASS | API + browser E2E; pre-reset sessions invalidated |
+| L8 | Transactional email transport + fail-closed | PASS | nodemailer SMTP; production without SMTP fails clearly; never logs tokens/PII |
+| L9 | Legal/trust pages (privacy/terms/security/contact/refund) | PASS | Truthful content; owner placeholders marked inline |
+| L10 | Production env validator | PASS | `npm run validate:production` — names only, never values |
+| L11 | Ops docs (secrets, backup/recovery, runbook, launch metrics) | PASS | Four documents added under docs/ |
+| L12 | Test-mode billing E2E vs Razorpay | **BLOCKED** | No test credentials in environment — see payment-provider-strategy.md |
+| L13 | OAuth (Google/Microsoft) real flows | **BLOCKED** | Requires owner credentials + final domain |
+| L14 | PDF/bulk limits unchanged | PASS | No quota/limit/bulk changes in Phase 66 (verified against config) |
+
+**Overall: application code remains release-candidate quality. Remaining blockers are operational (owner actions in [`production-launch-blockers.md`](./production-launch-blockers.md)), not code.**

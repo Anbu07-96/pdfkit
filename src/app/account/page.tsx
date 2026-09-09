@@ -2,10 +2,14 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getUserIdentity } from "@/lib/auth/session";
 import { getUsageService } from "@/lib/usage/service";
+import { getUsageRepository } from "@/lib/usage/repository";
+import { getPlan, formatInr, ANONYMOUS_LIMITS } from "@/lib/billing/plans";
+import { getBillingModeLabel } from "@/lib/billing/config";
 import { formatBytes } from "@/lib/utils/format";
 import { Badge } from "@/components/ui/badge";
 import { ContentPage, Prose } from "@/components/layout/content-page";
 import { UpgradeButton } from "@/components/billing/upgrade-button";
+import { CancelSubscriptionButton } from "@/components/billing/cancel-subscription-button";
 
 export const metadata: Metadata = {
   title: "Account",
@@ -21,6 +25,16 @@ export default async function AccountPage() {
 
   const usageService = getUsageService();
   const usage = await usageService.getUserSummary(identity);
+
+  // Account row for verification state and subscription presence (Phase 66).
+  const account = await getUsageRepository()
+    .getUserAccount(identity.userId)
+    .catch(() => null);
+  const plan = getPlan(identity.tier);
+  const proPlan = getPlan("pro");
+  const verified = account?.accountTrustStatus === "verified";
+  const hasRazorpaySubscription = Boolean(account?.razorpaySubscriptionId);
+  const billingMode = getBillingModeLabel();
 
   return (
     <ContentPage
@@ -38,18 +52,11 @@ export default async function AccountPage() {
               <p className="text-xs text-muted mt-0.5">{identity.email}</p>
             </div>
             <Badge tone="neutral">
-              {identity.tier.toUpperCase()} PLAN
+              {(plan?.name ?? identity.tier).toUpperCase()} PLAN
             </Badge>
           </div>
 
           <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 text-sm">
-            <div>
-              <dt className="text-xs font-medium text-subtle">User ID</dt>
-              <dd className="mt-1 font-mono text-xs text-foreground break-all">
-                {identity.userId}
-              </dd>
-            </div>
-
             <div>
               <dt className="text-xs font-medium text-subtle">Account Status</dt>
               <dd className="mt-1 text-xs font-medium text-success capitalize">
@@ -58,9 +65,22 @@ export default async function AccountPage() {
             </div>
 
             <div>
-              <dt className="text-xs font-medium text-subtle">Plan Tier</dt>
-              <dd className="mt-1 text-xs text-foreground capitalize">
-                {identity.tier} Plan
+              <dt className="text-xs font-medium text-subtle">Email Verification</dt>
+              <dd className="mt-1 text-xs font-medium">
+                {verified ? (
+                  <span className="text-success">Verified</span>
+                ) : (
+                  <span className="text-muted">
+                    Unverified — check your inbox for the verification link
+                  </span>
+                )}
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-xs font-medium text-subtle">Plan</dt>
+              <dd className="mt-1 text-xs text-foreground">
+                {plan ? `${plan.name} — ${formatInr(plan.monthlyPriceMinor)} / month` : "Free"}
               </dd>
             </div>
 
@@ -72,7 +92,35 @@ export default async function AccountPage() {
             </div>
           </dl>
 
-          <UpgradeButton currentTier={identity.tier} />
+          <UpgradeButton
+            currentTier={identity.tier}
+            priceLabel={proPlan ? `${formatInr(proPlan.monthlyPriceMinor)} / month` : undefined}
+            planBlurb={
+              proPlan
+                ? `Upgrade with Razorpay for ${proPlan.dailyJobLimit.toLocaleString("en-IN")} jobs/day and ${formatBytes(proPlan.dailyByteLimit, 0)} daily volume. Anonymous and Free access remain available.`
+                : undefined
+            }
+          />
+
+          {identity.tier === "pro" && hasRazorpaySubscription ? (
+            <div className="rounded-xl border border-border bg-surface-hover/30 p-4 space-y-2">
+              <div className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                Subscription
+              </div>
+              <p className="text-xs text-muted">
+                Active subscription billed monthly through Razorpay. Cancelling
+                takes effect at the end of the period you have already paid
+                for — your Pro quotas continue until then.
+              </p>
+              {billingMode === "test" ? (
+                <p className="text-xs text-muted">
+                  This deployment runs Razorpay in <strong>test mode</strong> —
+                  no real charges are made.
+                </p>
+              ) : null}
+              <CancelSubscriptionButton />
+            </div>
+          ) : null}
 
           <div className="pt-4 border-t border-border">
             <h3 className="text-sm font-semibold text-foreground mb-3">
@@ -101,7 +149,9 @@ export default async function AccountPage() {
             </div>
 
             <p className="mt-4 text-xs text-muted">
-              PDFKit keeps all 29 online tools fully accessible to anonymous visitors and free account holders within daily quotas.
+              Anonymous visitors get {ANONYMOUS_LIMITS.dailyJobLimit} jobs/day
+              ({formatBytes(ANONYMOUS_LIMITS.dailyByteLimit, 0)}). Every plan
+              includes all available tools within its daily quotas.
             </p>
           </div>
         </div>

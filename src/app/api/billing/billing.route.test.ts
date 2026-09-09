@@ -107,6 +107,15 @@ describe("Phase 46C — Razorpay Billing API Routes", () => {
         tier: "free",
       });
 
+      // Phase 66: the account must hold the checkout-created subscription id
+      // before verification (payment is bound to the account's subscription).
+      await repo.upsertUserAccount({
+        userId: "usr_route_test",
+        email: "route@example.com",
+        tier: "free",
+        razorpaySubscriptionId: "sub_route_123",
+      });
+
       const secret = "rzp_test_secret";
       const paymentId = "pay_route_123";
       const subId = "sub_route_123";

@@ -19,7 +19,8 @@
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "db:migrate": "prisma migrate deploy",
-    "smoke:staging": "node scripts/staging-smoke.mjs"
+    "smoke:staging": "node scripts/staging-smoke.mjs",
+    "validate:production": "node scripts/validate-production.mjs"
   },
   "dependencies": {
     "@hyzyla/pdfium": "^2.1.13",
@@ -38,6 +39,7 @@
     "lucide-react": "^1.33.0",
     "next": "16.3.1",
     "next-auth": "^4.24.15",
+    "nodemailer": "^7.0.13",
     "pdf-lib": "^1.17.1",
     "pg": "^8.23.0",
     "prisma": "^6.16.2",
@@ -55,6 +57,7 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.5",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.15.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",

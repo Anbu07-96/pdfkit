@@ -3,6 +3,7 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { getBillingConfig } from "@/lib/billing/config";
 import { getRazorpayClient } from "@/lib/billing/razorpay";
+import { PLANS } from "@/lib/billing/plans";
 import type {
   CheckoutSessionOptions,
   CheckoutSessionResult,
@@ -13,6 +14,7 @@ import type {
 import { ProcessingError } from "@/lib/processing/errors";
 import { getUsageRepository } from "@/lib/usage/repository";
 import type { UsageRepository } from "@/lib/usage/types";
+import type { UserAccountTier } from "@/lib/auth/types";
 
 /**
  * Server-only Razorpay Billing Service for PDFKit.
@@ -56,6 +58,9 @@ export class BillingService {
         "Razorpay billing is not configured on this deployment.",
       );
     }
+    // NOTE: live mode is only reachable with live keys AND the explicit
+    // PDFKIT_BILLING_ALLOW_LIVE=true acknowledgment (see config.ts) — a
+    // deliberate two-key decision. Phase 66 runs disabled/test only.
 
     const razorpay = getRazorpayClient();
 
@@ -91,7 +96,9 @@ export class BillingService {
     return {
       subscriptionId: subscription.id,
       keyId: config.razorpayKeyId,
-      amount: 49900, // ₹499/month in paise
+      // Single source of truth (Phase 66): the amount shown to Razorpay
+      // checkout comes from the plan catalog, never a second hardcode.
+      amount: PLANS.find((p) => p.id === "pro")!.monthlyPriceMinor,
       currency: "INR",
       planName: "PDFKit Pro Plan",
     };
@@ -146,6 +153,24 @@ export class BillingService {
       );
     }
 
+    // Phase 66 hardening: the verified payment must belong to THIS account.
+    // createCheckoutSession persists the subscription ID it created on the
+    // account row, so a signature for a different subscription (however it
+    // was obtained) must never upgrade this user. The signature alone proves
+    // Razorpay signed the pair — not that the pair belongs to this account.
+    const account = await this.repo.getUserAccount(identity.userId);
+    if (
+      !account ||
+      !account.razorpaySubscriptionId ||
+      account.razorpaySubscriptionId !== razorpaySubscriptionId
+    ) {
+      console.error("[billing] Payment verification subscription/account mismatch");
+      throw new ProcessingError(
+        "VALIDATION_ERROR",
+        "This payment could not be matched to your account. Please contact support.",
+      );
+    }
+
     // Upgrade user account to PRO
     await this.repo.upsertUserAccount({
       userId: identity.userId,
@@ -159,6 +184,50 @@ export class BillingService {
       verified: true,
       tier: "pro",
     };
+  }
+
+  /**
+   * Cancel the signed-in user's active Razorpay subscription at the end of the
+   * current paid period (Phase 66: makes "cancel anytime" truthful).
+   *
+   * Semantics: Razorpay keeps the subscription active until the period the
+   * user already paid for ends, then fires `subscription.completed` — the
+   * webhook handler downgrades the account to Free. The account therefore
+   * keeps Pro access for the paid period; no proration, no refunds (documented
+   * on /refund-policy). The stored subscription record is kept for audit and
+   * webhook correlation.
+   */
+  async cancelSubscriptionAtPeriodEnd(
+    identity: VerifyPaymentOptions["identity"],
+  ): Promise<{ cancelled: boolean; tier: UserAccountTier }> {
+    if (!identity.isAuthenticated || identity.userId === "anon") {
+      throw new ProcessingError(
+        "VALIDATION_ERROR",
+        "You must be signed in to manage your subscription.",
+      );
+    }
+
+    const config = getBillingConfig();
+    if (!config.isConfigured) {
+      throw new ProcessingError(
+        "VALIDATION_ERROR",
+        "Razorpay billing is not configured on this deployment.",
+      );
+    }
+
+    const account = await this.repo.getUserAccount(identity.userId);
+    if (!account || !account.razorpaySubscriptionId) {
+      throw new ProcessingError(
+        "VALIDATION_ERROR",
+        "No active subscription found on your account.",
+      );
+    }
+
+    const razorpay = getRazorpayClient();
+    // cancelAtCycleEnd = true → access continues to the end of the paid period.
+    await razorpay.subscriptions.cancel(account.razorpaySubscriptionId, true);
+
+    return { cancelled: true, tier: account.tier as UserAccountTier };
   }
 
   /**
@@ -279,12 +348,31 @@ export class BillingService {
             : null);
 
         if (account) {
-          await this.repo.upsertUserAccount({
-            userId: account.userId,
-            tier: "free",
-            status: "active",
-            billingProvider: "razorpay",
-          });
+          // Phase 66: a cycle-end cancellation (subscriptions.cancel(id, true))
+          // keeps the paid period running — the user stays Pro until the
+          // period actually ends, at which point Razorpay fires
+          // subscription.completed. Downgrading early would take away access
+          // the user already paid for, so only downgrade when the entity has
+          // no remaining paid time (current_end in the past or absent) or the
+          // subscription halted (charges failing). Err towards the user when
+          // the payload is ambiguous.
+          const currentEnd = Number(subEntity?.current_end ?? 0);
+          const paidTimeRemaining =
+            Number.isFinite(currentEnd) && currentEnd * 1000 > Date.now();
+          // Halted (charges failing) or completed (all cycles done): downgrade.
+          // Cancelled: downgrade only when no paid time remains — a cycle-end
+          // cancellation keeps Pro until the period actually completes.
+          const shouldDowngrade =
+            eventType !== "subscription.cancelled" || !paidTimeRemaining;
+
+          if (shouldDowngrade) {
+            await this.repo.upsertUserAccount({
+              userId: account.userId,
+              tier: "free",
+              status: "active",
+              billingProvider: "razorpay",
+            });
+          }
         }
         break;
       }

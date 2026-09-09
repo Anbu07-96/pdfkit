@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 
 interface UpgradeButtonProps {
   currentTier: string;
+  /** Display label from the plan catalog (server-side source of truth). */
+  priceLabel?: string;
+  planBlurb?: string;
 }
 
 declare global {
@@ -16,7 +19,11 @@ declare global {
   }
 }
 
-export function UpgradeButton({ currentTier }: UpgradeButtonProps) {
+export function UpgradeButton({
+  currentTier,
+  priceLabel = "₹499 / month",
+  planBlurb = "Upgrade with Razorpay for 500 jobs/day and 2 GB daily volume. Anonymous and Free access remain available.",
+}: UpgradeButtonProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -138,11 +145,9 @@ export function UpgradeButton({ currentTier }: UpgradeButtonProps) {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-brand/20 bg-brand-subtle/20 p-4">
         <div>
           <div className="text-sm font-semibold text-foreground">
-            PDFKit Pro Plan (₹499 / $5 mo)
+            PDFKit Pro Plan ({priceLabel})
           </div>
-          <p className="text-xs text-muted mt-0.5">
-            Upgrade with Razorpay for 500 jobs/day and 2 GB daily volume. Anonymous and Free access remain available.
-          </p>
+          <p className="text-xs text-muted mt-0.5">{planBlurb}</p>
         </div>
 
         <Button

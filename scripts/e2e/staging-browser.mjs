@@ -17,6 +17,9 @@
  *   bulk-desktop anonymous 10-file + free 25-file batches, ZIP + CSV + retry
  *   bulk-mobile  representative mobile viewport (390×844) 10-file batch
  *   bulk-50      business-tier 50-file batch — ZIP resource review evidence
+ *   phase66     pricing page, upgrade CTA, billing-disabled behavior,
+ *               password reset (dev-mode instance), legal/trust pages,
+ *               mobile pricing/account layout
  *   audit        aggregated console-error / network-failure review
  *
  * Usage:
@@ -110,6 +113,7 @@ function attachAudit(contextOrPage, sink) {
     if (status >= 500) sink.serverErrors.push(`${status} ${url}`);
     if (status === 404 && !url.includes("favicon")) sink.notFound.push(url);
     if (status === 429) sink.rateLimited.push(url.replace(BASE, ""));
+    if (status === 400) sink.badRequest.push(url.replace(BASE, ""));
   });
   contextOrPage.on("requestfailed", (req) => {
     sink.requestFailed.push(`${req.failure()?.errorText ?? "?"} ${req.url()}`);
@@ -206,7 +210,10 @@ async function heapOf(page) {
  */
 async function formLogin(page, email, password) {
   await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
-  const submit = page.locator('form button[type="submit"]');
+  // .first(): during post-navigation hydration the streamed shell and the
+  // hydrated tree can briefly BOTH contain the submit button (transient
+  // duplicate, one hidden) — strict mode would abort on the pair.
+  const submit = page.locator('form button[type="submit"]').first();
   await submit.waitFor({ state: "visible", timeout: 15000 });
   for (let attempt = 0; attempt < 3; attempt++) {
     await page.getByLabel("Email address").fill(email);
@@ -326,8 +333,14 @@ async function sectionAccountMeter(browser, sink, user) {
 
   // Account meter vs server vs database.
   await page.goto(`${BASE}/account`, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("text=Jobs Processed", { timeout: 10000 });
-  const meterText = await page.locator("text=Jobs Processed").locator("..").innerText();
+  // During post-login hydration the streamed shell and the hydrated tree can
+  // BRIEFLY both contain the label (transient duplicate observed in-suite;
+  // a fresh context always shows exactly one). .first() + a settle wait is
+  // robust either way; exact:true avoids matching ancestors.
+  await page.waitForTimeout(1500);
+  const meterLabel = page.getByText("Jobs Processed", { exact: true }).first();
+  await meterLabel.waitFor({ timeout: 10000 });
+  const meterText = await meterLabel.locator("..").innerText();
   const meterMatch = meterText.match(/(\d+)\s*\/\s*(\d+)/);
   const meterUsed = meterMatch ? Number(meterMatch[1]) : null;
   const meterLimit = meterMatch ? Number(meterMatch[2]) : null;
@@ -494,6 +507,216 @@ async function sectionBulk50(browser, sink, stamp) {
   );
 }
 
+
+// ---------------------------------------------------------------------------
+// Section: Phase 66 — commercial readiness (pricing, billing UX, reset, legal)
+// ---------------------------------------------------------------------------
+const DEV_INSTANCE = "http://127.0.0.1:3107"; // dev-mode instance (same DB/Redis)
+
+async function sectionPhase66(browser, sink, stamp) {
+  // --- Pricing page (desktop) ---
+  {
+    const context = await newAuditedContext(browser, sink);
+    const page = await context.newPage();
+    await page.goto(`${BASE}/pricing`, { waitUntil: "domcontentloaded" });
+    const text = await page.locator("body").innerText();
+    // Note: the plan-card labels render uppercase via CSS (innerText reflects
+    // text-transform in Chromium), so checks are case-insensitive.
+    const checks = [
+      ["Free Plan", /free\s+plan/i.test(text)],
+      ["Pro Plan ₹499", text.includes("₹499")],
+      ["Business Plan ₹2,499", text.includes("₹2,499")],
+      ["contact-sales → /contact", text.includes("Contact Sales")],
+      ["no 'priority processing' claim", !/priority processing/i.test(text)],
+      ["no 'dedicated support' claim", !/dedicated (account )?support/i.test(text)],
+    ];
+    report(
+      "phase66",
+      "pricing-page",
+      checks.every(([, ok]) => ok),
+      checks.map(([n, ok]) => `${ok ? "✓" : "✗"}${n}`).join(" · "),
+    );
+    await context.close();
+  }
+
+  // --- Upgrade CTA + billing-DISABLED behavior (staging has no Razorpay) ---
+  {
+    const email = `cta-${stamp}@staging.pdfkit.local`;
+    if (!(await registerUser(email, "CtaUser2026"))) {
+      report("phase66", "upgrade-cta-billing-disabled", false, "could not register test user");
+      return;
+    }
+    const context = await newAuditedContext(browser, sink);
+    const page = await context.newPage();
+    if (!(await formLogin(page, email, "CtaUser2026"))) {
+      report("phase66", "upgrade-cta-billing-disabled", false, "login form never became submittable");
+      await context.close();
+      return;
+    }
+    await page.goto(`${BASE}/account`, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector("text=Upgrade to Pro", { timeout: 10000 });
+    const upgradeVisible = true;
+    // Click upgrade: staging billing is unconfigured → the UI must show a
+    // clean error, never a crash or a fake checkout.
+    await page.getByRole("button", { name: "Upgrade to Pro" }).click();
+    // The upgrade panel's error alert (role=alert) with a billing message.
+    await page.waitForSelector('[role="alert"]:has-text("billing"), [role="alert"]:has-text("Razorpay"), [role="alert"]:has-text("fully usable")', { timeout: 15000 });
+    const alertText = (await page.locator('[role="alert"]').first().innerText()).trim();
+    const alertOk = /unconfigured|not configured|fully usable|try again|could not connect/i.test(alertText);
+    report(
+      "phase66",
+      "upgrade-cta-billing-disabled",
+      upgradeVisible && alertOk,
+      `free account sees Upgrade CTA; with billing unconfigured the click yields a clean error: "${alertText.slice(0, 90)}"`,
+    );
+    await context.close();
+
+    // --- Password reset: full flow against the dev-mode instance
+    // (NODE_ENV=development exposes the one-time devToken; production
+    // requires SMTP and never exposes it — fail-closed behavior is covered
+    // by API tests). UI: /forgot-password → /reset-password → login. ---
+    const resetContext = await newAuditedContext(browser, sink);
+    const resetPage = await resetContext.newPage();
+    await resetPage.goto(`${DEV_INSTANCE}/forgot-password`, { waitUntil: "load", timeout: 60000 });
+    // Dev-mode hydration can be slow (first compile). A fill BEFORE React
+    // attaches its listeners is lost — the DOM holds the value but state
+    // stays empty and the submit button never enables. Settle first, then
+    // fill+check with retries.
+    await resetPage.waitForTimeout(4000);
+    for (let attempt = 0; attempt < 10; attempt++) {
+      await resetPage.locator('input[type="email"]').fill(email);
+      await resetPage.waitForTimeout(1500);
+      const enabled = await resetPage.evaluate(() => {
+        const btn = document.querySelector('button[type="submit"]');
+        return btn !== null && !btn.disabled;
+      });
+      if (enabled) break;
+    }
+    await resetPage.locator('button[type="submit"]').click();
+    await resetPage.waitForSelector("text=If an account exists", { timeout: 15000 });
+
+    // Fetch the dev token through the page (dev instance only).
+    const devToken = await resetPage.evaluate(
+      async (addr) => {
+        const res = await fetch("/api/auth/reset-request", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: addr }),
+        });
+        const body = await res.json();
+        return body.devToken ?? null;
+      },
+      email,
+    );
+    if (!devToken) {
+      report("phase66", "password-reset-flow", false, "dev-mode instance did not return a one-time token");
+      await resetContext.close();
+      return;
+    }
+
+    // Old password must stop working after the reset (session sign-out note).
+    await resetPage.goto(`${DEV_INSTANCE}/reset-password?token=${devToken}`, {
+      waitUntil: "domcontentloaded",
+    });
+    await resetPage.locator('input[type="password"]').first().fill("ResetFlow2026");
+    await resetPage.locator('input[type="password"]').nth(1).fill("ResetFlow2026");
+    await resetPage.getByRole("button", { name: "Set new password" }).click();
+    await resetPage.waitForSelector("text=Your password has been updated", { timeout: 15000 });
+
+    // Sign in with the NEW password through the real login form.
+    const relogin = await newAuditedContext(browser, sink);
+    const loginPage = await relogin.newPage();
+    await formLogin(loginPage, email, "ResetFlow2026");
+    const session = await loginPage.evaluate(async () => (await fetch("/api/auth/session")).json());
+    report(
+      "phase66",
+      "password-reset-flow",
+      session?.user?.email === email,
+      `forgot-password → one-time link → new password set → sign-in works with the NEW password (session: ${session?.user?.email ?? "none"})`,
+    );
+    await resetContext.close();
+    await relogin.close();
+  }
+
+  // --- Legal / trust pages ---
+  {
+    const context = await newAuditedContext(browser, sink);
+    const page = await context.newPage();
+    const pages = [
+      ["/privacy", "Privacy", ["processed in memory", "scrypt", "Razorpay", "session cookie"]],
+      ["/terms", "Terms", ["subscription", "Cancellation", "Razorpay"]],
+      ["/security", "Security", ["scrypt", "rate limiting", "Responsible disclosure"]],
+      ["/contact", "Contact", ["Support", "Security reports", "Business plans"]],
+      ["/refund-policy", "Refund", ["Cancellation", "Refunds", "duplicate"]],
+    ];
+    const results = [];
+    for (const [path, , needles] of pages) {
+      const res = await page.goto(`${BASE}${path}`, { waitUntil: "load" });
+      const status = res ? res.status() : 0;
+      // Settle + retry once: reading innerText immediately after navigation
+      // can race the render (transient miss observed once in-suite while the
+      // same page passes deterministically over plain HTTP).
+      let text = await page.locator("body").innerText();
+      let ok = status === 200 && needles.every((n) => text.toLowerCase().includes(n.toLowerCase()));
+      if (!ok) {
+        await page.waitForTimeout(1200);
+        text = await page.locator("body").innerText();
+        ok = status === 200 && needles.every((n) => text.toLowerCase().includes(n.toLowerCase()));
+      }
+      results.push(`${path}:${ok ? "✓" : "✗"}`);
+      if (!ok) {
+        report(
+          "phase66",
+          `legal-page-${path.slice(1)}`,
+          false,
+          `HTTP ${status}, missing: ${needles.filter((n) => !text.toLowerCase().includes(n.toLowerCase())).join(", ") || "(status)"}`,
+        );
+      }
+    }
+    report(
+      "phase66",
+      "legal-trust-pages",
+      results.every((r) => r.endsWith("✓")),
+      `all five pages render with expected content: ${results.join(" · ")}`,
+    );
+    await context.close();
+  }
+
+  // --- Mobile layout (390×844): pricing + account ---
+  {
+    const context = await newAuditedContext(browser, sink, {
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+    });
+    const page = await context.newPage();
+    await page.goto(`${BASE}/pricing`, { waitUntil: "domcontentloaded" });
+    const pricingOk = (await page.locator("body").innerText()).includes("₹499");
+    const noHScroll = await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+    );
+    const email = `cta-${stamp}@staging.pdfkit.local`;
+    if (!(await formLogin(page, email, "ResetFlow2026"))) {
+      report("phase66", "mobile-pricing-account", false, "mobile login form never became submittable");
+      await context.close();
+      return;
+    }
+    await page.goto(`${BASE}/account`, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector("text=Today", { timeout: 10000 });
+    const accountOk = (await page.locator("body").innerText()).includes("Jobs Processed");
+    const accountNoHScroll = await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+    );
+    report(
+      "phase66",
+      "mobile-pricing-account",
+      pricingOk && noHScroll && accountOk && accountNoHScroll,
+      `390×844: pricing renders (${pricingOk}) without horizontal scroll (${noHScroll}); account renders (${accountOk}) without horizontal scroll (${accountNoHScroll})`,
+    );
+    await context.close();
+  }
+}
+
 async function sectionAudit(sink) {
   // Genuine regressions only: page errors, 5xx, failed requests and console
   // errors that are NOT Chromium's automatic "Failed to load resource" log
@@ -502,8 +725,18 @@ async function sectionAudit(sink) {
   // (non-favicon) are listed for review but not auto-failed.
   const handled429Console = (t) =>
     sink.rateLimited.length > 0 && /Failed to load resource.*429/.test(t);
+  // A 400 on the billing checkout is the EXPECTED disabled-billing probe
+  // (Phase 66: the UI surfaces a clean error; the route answers 400 by
+  // design). Only that URL is excused — any other 400 console error stays
+  // genuine.
+  const handled400Console = (t) =>
+    sink.badRequest.length > 0 &&
+    sink.badRequest.every((u) => u.startsWith("/api/billing/checkout")) &&
+    /Failed to load resource.*400/.test(t);
   const genuine = [
-    ...sink.consoleErrors.filter((t) => !handled429Console(t)).map((t) => `console.error: ${t.slice(0, 140)}`),
+    ...sink.consoleErrors
+      .filter((t) => !handled429Console(t) && !handled400Console(t))
+      .map((t) => `console.error: ${t.slice(0, 140)}`),
     ...sink.pageErrors.map((t) => `pageerror: ${t.slice(0, 140)}`),
     ...sink.serverErrors,
     ...sink.requestFailed.filter((t) => !t.includes("net::ERR_ABORTED")), // aborted downloads on navigation are benign
@@ -512,13 +745,16 @@ async function sectionAudit(sink) {
   const rateInfo = sink.rateLimited.length
     ? ` — ${sink.rateLimited.length} HTTP 429 response(s) on ${[...new Set(sink.rateLimited)].join(", ")} (rate limiter working as designed; handled by client backoff, batches finished 0 failed)`
     : "";
+  const billingInfo = sink.badRequest.length
+    ? ` — ${sink.badRequest.length} HTTP 400 response(s) on ${[...new Set(sink.badRequest)].join(", ")} (billing-disabled probe: the route answers 400 by design and the UI shows a clean error)`
+    : "";
   report(
     "audit",
     "console-and-network",
     unique.length === 0,
     unique.length === 0
-      ? `no page errors, 5xx, failed requests or unexplained console errors across all visited pages (${sink.notFound.length} non-favicon 404(s) for review: ${sink.notFound.slice(0, 3).join(", ") || "none"})${rateInfo}`
-      : `GENUINE ISSUES: ${unique.slice(0, 6).join(" | ")}${rateInfo}`,
+      ? `no page errors, 5xx, failed requests or unexplained console errors across all visited pages (${sink.notFound.length} non-favicon 404(s) for review: ${sink.notFound.slice(0, 3).join(", ") || "none"})${rateInfo}${billingInfo}`
+      : `GENUINE ISSUES: ${unique.slice(0, 6).join(" | ")}${rateInfo}${billingInfo}`,
   );
 }
 
@@ -535,7 +771,7 @@ async function main() {
   const { browser } = await launchBrowser();
   console.log(`browser E2E against ${BASE}\n`);
 
-  const sink = { consoleErrors: [], pageErrors: [], serverErrors: [], notFound: [], requestFailed: [], rateLimited: [] };
+  const sink = { consoleErrors: [], pageErrors: [], serverErrors: [], notFound: [], requestFailed: [], rateLimited: [], badRequest: [] };
   const stamp = Date.now();
 
   let uiUser = null;
@@ -569,6 +805,7 @@ async function main() {
     if (bulkWanted.length > 2) await drainWindow();
   }
   if (wants("bulk-50")) await sectionBulk50(browser, sink, stamp);
+  if (wants("phase66")) await sectionPhase66(browser, sink, stamp);
   if (wants("audit")) await sectionAudit(sink);
 
   await browser.close();

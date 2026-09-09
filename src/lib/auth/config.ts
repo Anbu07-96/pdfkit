@@ -139,9 +139,18 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
-        const u = session.user as { id?: string; tier?: string; email?: string | null; name?: string | null };
+        const u = session.user as {
+          id?: string;
+          tier?: string;
+          email?: string | null;
+          name?: string | null;
+          sessionIssuedAt?: number;
+        };
         u.id = token.id as string;
         u.tier = (token.tier as string) ?? "free";
+        // JWT issued-at (unix seconds) — getUserIdentity compares it with
+        // account.passwordResetAt to reject pre-reset sessions (Phase 66).
+        u.sessionIssuedAt = typeof token.iat === "number" ? token.iat : undefined;
       }
       return session;
     },

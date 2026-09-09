@@ -109,6 +109,9 @@ async function main() {
       "verificationToken",
       "verificationExpires", // Phase 64 migration
       "passwordHash", // Phase 65 migration
+      "passwordResetTokenHash", // Phase 66 migration
+      "passwordResetExpires", // Phase 66 migration
+      "passwordResetAt", // Phase 66 migration
     ];
     for (const col of required) {
       if (!colNames.includes(col)) throw new Error(`staging schema missing column UserAccount.${col}`);
