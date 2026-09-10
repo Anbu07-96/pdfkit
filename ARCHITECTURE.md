@@ -149,7 +149,7 @@ src/
    │  ├─ client.ts            Browser-side API client (the only fetch)
    │  ├─ validation/          PDF signature and limit checks
    │  └─ processors/          merge-pdf.ts
-   ├─ engines/                Conversion engine abstraction (Phases 67-68)
+   ├─ engines/                Conversion engine abstraction (Phases 67-69)
    │  ├─ types.ts             ConversionType, EngineDescriptor, EngineResult…
    │  ├─ errors.ts            EngineRoutingError (internal invariant only)
    │  ├─ registry.ts          One engine per conversion type, deterministic
@@ -157,6 +157,7 @@ src/
    │  ├─ processor.ts         Engine-backed ToolProcessor factory
    │  ├─ profile.ts           DocumentProfile (signature/full tiers, lazy)
    │  ├─ validation.ts        Structural OutputValidator (diagnostic only)
+   │  ├─ quality.ts           QualityGate v1 (diagnostic-only verdicts)
    │  └─ adapters/current.ts  Thin adapters over the existing processors
    ├─ hardening/
    │  ├─ config.ts            Timeout/concurrency config (env, documented defaults)
@@ -1184,7 +1185,7 @@ PostgreSQL/Redis architecture real, testable and fail-closed:
 
 ---
 
-## 5z. Conversion engine abstraction (Phases 67-68)
+## 5z. Conversion engine abstraction (Phases 67-69)
 
 An **additive abstraction layer** between the processing registry and the
 conversion implementations PDFKit already ships. It introduces **no second
@@ -1288,6 +1289,56 @@ re-open verification, password-protect's encryption verification) remain
 the authoritative, behavior-defining checks and were not weakened or
 moved.
 
+### Stage 3 (Phase 69): QualityGate v1
+
+A conservative, conversion-aware, **diagnostic-only** quality assessment
+(`src/lib/engines/quality.ts`) that runs after the OutputValidator on every
+successful engine execution and records its verdict on
+`EngineResult.quality`.
+
+```text
+Engine → OutputValidator (structural) → QualityGate (quality) → verdict
+```
+
+- **States**: `healthy` (available signals consistent with a good
+  conversion) · `suspicious` (technically valid, but a measurable signal
+  indicates quality may be poor or incomplete — NOT a failure) ·
+  `insufficient` (too little evidence for a meaningful determination — also
+  NOT a failure) · `not-evaluated` (no policy for the type).
+- **Score**: 0–100 weighted index (share of evaluated weight that passed).
+  It is a heuristic index, NOT a fidelity percentage, and scores from
+  different `qualityVersion`s are not comparable. `qualityVersion: 1`.
+- **Checks**: structured `{ id, state, weight, reason }` entries — ids like
+  `output-structurally-valid`, `source-text-availability`,
+  `output-content-volume`, `output-page-coverage`, `image-content-volume`,
+  `table-content-volume`; reasons are short and contain counts only.
+- **Conversion-specific policies**: text conversions judge source/output
+  text signals (a scanned source yields an honest `suspicious`, never a
+  failure — no OCR exists); raster conversions judge structure and page
+  coverage only (text-free sources are never penalized); extract-images
+  treats zero images as a low-weight diagnostic and accepts zero when the
+  source provably has no image objects; excel/tables are deliberately
+  conservative (sparse and image-only documents are legitimate);
+  compress-pdf judges structure only (size change is NOT a quality signal);
+  compare-documents invents no semantic score (its fidelity check is
+  immaterial, weight 0).
+- **Signals are free**: the gate consumes only what the request already
+  produced — the signature-tier profile, the Stage 2 validation verdict,
+  the processor's own meta (character/row/image/page counts), artifact
+  facts and one derived boolean (marker-only text output, computed where
+  the content already lives, never retained). No re-parsing, no
+  decompression, no rendering; a full `DocumentProfile` is used only when a
+  caller genuinely has one. Unavailable signals are recorded as
+  `not-evaluated` — unknown beats false precision.
+- **Privacy**: assessments contain a typed state, a numeric score, check
+  ids, non-sensitive reasons and a version — never document content, names
+  or metadata values (enforced by test).
+
+**Stage 3 does not select another engine. Stage 3 does not reject
+successful output. Stage 3 does not retry conversion. Stage 3 does not
+implement fallback.** The verdict is recorded for the future retry/fallback
+stage to consume explicitly.
+
 ### Behavioural guarantees
 
 Enforced by `src/lib/engines/equivalence.test.ts` and friends:
@@ -1308,9 +1359,10 @@ Enforced by `src/lib/engines/equivalence.test.ts` and friends:
 
 - A second engine for any conversion type, selected by benchmarks run
   before any replacement decision.
-- Retry and fallback (`EngineFailure` classification, engine chains).
-- QualityGate (Stage 3): quality thresholds consuming
-  `EngineResult.validation` plus `DocumentProfile` text-yield signals.
+- Retry and fallback (`EngineFailure` classification, engine chains),
+  consuming QualityGate verdicts and engine health explicitly.
+- Enforcing quality thresholds (QualityGate v1 is diagnostic-only; any
+  rejection/switching semantics are a separate, approved decision).
 - Document profiling in the request path and richer, typed routing
   inputs.
 - Per-tool engine configuration (`PDFKIT_ENGINE_<CONVERSION>=a,b,c`) with

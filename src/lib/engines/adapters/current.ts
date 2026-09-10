@@ -6,8 +6,9 @@ import type {
   EngineResult,
 } from "@/lib/engines/types";
 import { describeInputFile } from "@/lib/engines/profile";
+import { assessConversionQuality } from "@/lib/engines/quality";
 import { validateEngineResult } from "@/lib/engines/validation";
-import type { ToolProcessor } from "@/lib/processing/contract";
+import type { ProcessingArtifact, ToolProcessor } from "@/lib/processing/contract";
 import { compareDocumentsProcessor } from "@/lib/processing/processors/compare-documents";
 import { compressPdfProcessor } from "@/lib/processing/processors/compress-pdf";
 import { extractImagesProcessor } from "@/lib/processing/processors/extract-images";
@@ -50,6 +51,40 @@ interface CurrentEngineSpec<TOptions = Record<string, unknown>> {
   processor: ToolProcessor<TOptions>;
 }
 
+/**
+ * Upper bound for the marker-only scan: text artifacts above this size are
+ * certainly not marker-only (a 50-page marker-only output is a few KiB).
+ */
+const MARKER_SCAN_MAX_BYTES = 1024 * 1024;
+
+const PAGE_MARKER_PATTERNS = [
+  /--- Page \d+ ---/g,
+  /\[Page \d+ contains no extractable text\]/g,
+];
+
+/**
+ * Derive (without retaining anything) whether every text artifact consists
+ * entirely of the current processors' page markers — the honest signal that
+ * a PDF → text conversion extracted no source text. Boolean only: no
+ * content leaves this function.
+ */
+function textArtifactsMarkerOnly(artifacts: readonly ProcessingArtifact[]): boolean | undefined {
+  let sawTextArtifact = false;
+  for (const artifact of artifacts) {
+    if (!artifact.mimeType.toLowerCase().startsWith("text/")) continue;
+    sawTextArtifact = true;
+    if (artifact.bytes.length === 0 || artifact.bytes.length > MARKER_SCAN_MAX_BYTES) {
+      return false;
+    }
+    let text = new TextDecoder().decode(artifact.bytes);
+    for (const pattern of PAGE_MARKER_PATTERNS) {
+      text = text.replace(pattern, "");
+    }
+    if (text.trim().length > 0) return false;
+  }
+  return sawTextArtifact ? true : undefined;
+}
+
 /** Wrap an existing processor as a conversion engine. */
 export function currentEngineAdapter<TOptions>(
   spec: CurrentEngineSpec<TOptions>,
@@ -77,7 +112,29 @@ export function currentEngineAdapter<TOptions>(
       };
       // Structural validation (Phase 68) — records the verdict on the
       // result and returns it unchanged either way. Diagnostic only.
-      return validateEngineResult(result);
+      const validated = validateEngineResult(result);
+
+      // QualityGate v1 (Phase 69, Stage 3) — a conservative, diagnostic-only
+      // quality verdict from signals the request already produced (profile
+      // tier, validation verdict, processor meta, artifact facts). It adds
+      // no parsing and never changes the outcome; Stage 4 (PLANNED) will
+      // decide what to do with it.
+      const outputBytes = validated.artifacts.reduce(
+        (total, artifact) => total + artifact.size,
+        0,
+      );
+      return {
+        ...validated,
+        quality: assessConversionQuality(descriptor.conversionType, {
+          profile: validated.profile,
+          validation: validated.validation,
+          meta: validated.meta,
+          artifactCount: validated.artifacts.length,
+          outputBytes,
+          inputFileCount: request.files.length,
+          outputTextMarkerOnly: textArtifactsMarkerOnly(validated.artifacts),
+        }),
+      };
     },
   };
 }

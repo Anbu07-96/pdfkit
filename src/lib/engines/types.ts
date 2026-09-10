@@ -7,6 +7,7 @@ import type {
   ProcessorInputRules,
 } from "@/lib/processing/contract";
 import type { DocumentProfile } from "@/lib/engines/profile";
+import type { QualityAssessment } from "@/lib/engines/quality";
 
 /**
  * Conversion engine abstraction — public types (Phase 67, Stage 1).
@@ -137,6 +138,12 @@ export type {
   ProfileAnalysisState,
   ProfiledDocumentKind,
 } from "@/lib/engines/profile";
+export type {
+  QualityAssessment,
+  QualityCheck,
+  QualityCheckState,
+  QualityState,
+} from "@/lib/engines/quality";
 
 /** A non-fatal note about a produced output. Always empty in Stage 1. */
 export interface EngineWarning {
@@ -191,6 +198,14 @@ export interface EngineResult {
    * Present whenever the request carried at least one file.
    */
   readonly profile?: DocumentProfile;
+  /**
+   * QualityGate v1 verdict (Phase 69, Stage 3): a conservative,
+   * conversion-aware, **diagnostic-only** assessment computed after
+   * validation from signals the request already produced. It never affects
+   * the result, never reaches the user, and is not yet consumed by any
+   * routing/retry decision (Stage 4 — PLANNED).
+   */
+  readonly quality?: QualityAssessment;
 }
 
 /**
