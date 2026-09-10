@@ -13,7 +13,8 @@ import "server-only";
  *   codebase are validated (DATABASE_URL, PDFKIT_REDIS_URL/REDIS_URL,
  *   PDFKIT_REDIS_REQUIRED, PDFKIT_ADMIN_METRICS_TOKEN, PDFKIT_ENVIRONMENT,
  *   NODE_ENV, PDFKIT_USE_IN_MEMORY_USAGE_REPO,
- *   PDFKIT_PDF_TO_TEXT_ENGINE (Phase 73 manual engine gating)).
+ *   PDFKIT_PDF_TO_TEXT_ENGINE (Phase 73 manual engine gating),
+ *   PDFKIT_PDF_TEXT_DIAGNOSTICS (Phase 74 engine diagnostics)).
  *
  * Consumers: scripts/validate-environment.mjs (staging pre-deploy check),
  * unit tests, and docs/staging-deployment.md. The app itself stays
@@ -167,6 +168,27 @@ export function validateEnvironment(): EnvironmentValidationResult {
       severity: "warning",
       message:
         "PDFKIT_PDF_TO_TEXT_ENGINE is set but is not one of the approved values (current, pdfjs); engine selection fails closed to the default pdfium engine. Check the spelling.",
+    });
+  }
+
+  // --- PDFKIT_PDF_TEXT_DIAGNOSTICS (Phase 74 engine diagnostics) ---------
+  // Operator visibility only (a warning, never an error): the engine
+  // diagnostics are behavior-neutral and privacy-safe, so an unrecognized
+  // value keeps them ENABLED (fail-open — a typo must not silently destroy
+  // the evidence record; the engine-selection gate fails CLOSED by design).
+  // Names the VARIABLE only, never the value.
+  const pdfTextDiagnostics = process.env.PDFKIT_PDF_TEXT_DIAGNOSTICS;
+  if (
+    pdfTextDiagnostics !== undefined &&
+    !["on", "off", "1", "0", "true", "false", "disabled"].includes(
+      pdfTextDiagnostics.trim().toLowerCase(),
+    )
+  ) {
+    warnings.push({
+      variable: "PDFKIT_PDF_TEXT_DIAGNOSTICS",
+      severity: "warning",
+      message:
+        "PDFKIT_PDF_TEXT_DIAGNOSTICS is set but is not one of the approved values (on, off); engine diagnostics stay enabled. Check the spelling.",
     });
   }
 

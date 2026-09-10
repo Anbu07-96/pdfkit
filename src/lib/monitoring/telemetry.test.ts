@@ -107,6 +107,27 @@ describe("recordTelemetryEvent", () => {
     expect(snapshot.statuses.ok2xx).toBe(1);
   });
 
+  it("keeps pdf_text_engine_run metrics-only (Phase 74: no per-run log lines)", () => {
+    setMetricsProviderForTests(new InMemoryMetricsProvider());
+    const infoLog = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    recordTelemetryEvent({
+      type: "pdf_text_engine_run",
+      engineId: "current-pdfium-text",
+      outcome: "success",
+      qualityState: "healthy",
+      validationStatus: "passed",
+      durationBucket: "lt-100ms",
+      inputSizeBucket: "0-100kb",
+      pageCountBucket: "1",
+    });
+
+    expect(infoLog).not.toHaveBeenCalled();
+    const pdfText = getTelemetrySnapshot({}).pdfText;
+    expect(pdfText.byEngine["current-pdfium-text"].success).toBe(1);
+    expect(pdfText.qualityStates).toEqual({ healthy: 1 });
+  });
+
   it("preserves the exact Phase 62 event names for guard events", () => {
     setMetricsProviderForTests(new InMemoryMetricsProvider());
     const eventLog = vi.spyOn(console, "info").mockImplementation(() => {});

@@ -142,6 +142,11 @@ function emitLogLine(event: TelemetryEvent): void {
         source: "client",
       });
       return;
+    case "pdf_text_engine_run":
+      // Metrics-only: one line per pdf-to-text engine run would double the
+      // per-request log volume; the aggregates (and the Phase 74 evidence
+      // workflow in docs/pdf-text-evidence.md) never need the log pipeline.
+      return;
     case "batch_cancelled":
     case "batch_budget_stopped":
     case "batch_quota_stopped":

@@ -1212,6 +1212,18 @@ fallback, no retry, no QualityGate routing; attempt stays 1. Known accepted
 divergences: µ→μ (Rule A) and off-page clipping (Rule B, pdfium is the
 baseline). Full contract: `docs/pdfjs-text-engine.md`.
 
+**Phase 74 (evidence, not routing):** both pdf-to-text engines emit one
+`pdf_text_engine_run` telemetry event per run through the Phase 63
+telemetry facade — closed-vocabulary outcome/failure-code labels and
+duration/size/page buckets only, no document data, no log lines,
+kill-switchable (`PDFKIT_PDF_TEXT_DIAGNOSTICS`), and provably
+behavior-neutral (identical results with diagnostics on, off, or throwing).
+The aggregates (including the §9 technical-failure rate with its explicit
+denominator) appear in the existing token-gated admin metrics snapshot.
+No fallback, retry or quality-triggered switching exists. Evidence
+contract and the DRAFT (not active) future fallback policy:
+`docs/pdf-text-evidence.md`.
+
 ### Stage 1 (Phase 67): the abstraction skeleton
 
 - `src/lib/engines/types.ts` — `ConversionType` (the eleven conversion

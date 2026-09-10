@@ -95,9 +95,12 @@ fixture, and the µ→μ divergence appears **only** on the symbol fixture.
 
 ## 4. DRAFT (NOT ACTIVE): technical-failure fallback policy (§41/§42)
 
-Phase 73 implements **no automatic fallback of any kind**. The following is
-the draft policy for a possible Phase 74, written down now so the design
-constraints are on record. **Nothing in this section is implemented.**
+Phase 73 implements **no automatic fallback of any kind**. Phase 74 (see
+`docs/pdf-text-evidence.md`) added the measurement system — privacy-safe,
+behavior-neutral engine diagnostics — that a future decision requires, and
+**still no fallback exists**. The following is the draft policy for a
+possible later phase, written down so the design constraints are on
+record. **Nothing in this section is implemented.**
 
 - **Trigger class: technical failure only.** Candidate triggers are typed
   processor errors from the *technical* taxonomy (e.g. `PROCESSING_ERROR`,
@@ -115,9 +118,13 @@ constraints are on record. **Nothing in this section is implemented.**
 - **Observability:** the result must record which engine produced the output
   (`engineId`) and that a fallback occurred — without exposing engine
   selection to the client as a control surface.
-- **Exit criteria for Phase 74:** enough real-world evidence that technical
-  failures of the current engine are (a) rare and (b) recoverable by pdfjs on
-  the *same bytes*; otherwise the integration stays experimental.
+- **Exit criteria (Phase 74 instrumentation, `docs/pdf-text-evidence.md`
+  §10):** enough real-world evidence that technical failures of the current
+  engine are (a) measurable and (b) recoverable by pdfjs on the *same
+  bytes* (manual operator replay, §8 there); otherwise the integration
+  stays experimental. The evidence requirements are enumerated as ten
+  conditions in the evidence document; all ten must hold before any
+  fallback phase.
 
 ## 5. Character coverage, fonts, and honest boundaries
 
@@ -173,7 +180,18 @@ constraints are on record. **Nothing in this section is implemented.**
   isolation tests). Any appearance of pdfjs code in the **client** bundle is
   a STOP condition; the Phase 73 bundle audit re-verified this.
 
-## 7. Test coverage summary
+## 7. Phase 74: production evidence instrumentation
+
+`docs/pdf-text-evidence.md` is the Phase 74 contract: a
+`pdf_text_engine_run` telemetry event (closed-vocabulary labels and buckets
+only) recorded once per engine run through the Phase 63 telemetry facade,
+aggregated into the bounded `pdfText` snapshot section, kill-switchable via
+`PDFKIT_PDF_TEXT_DIAGNOSTICS`, provably behavior-neutral and
+privacy-safe. It measures the current engine's real technical-failure rate
+post-launch — the evidence a future fallback decision requires. It does
+not select, switch, retry or rank anything.
+
+## 8. Test coverage summary
 
 - `src/lib/engines/pdfjs-text.engine.test.ts` — the §44 battery: parity on
   standard/multi-page/unicode/dense inputs, typed error equality, page-limit

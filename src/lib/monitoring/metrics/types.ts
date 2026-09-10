@@ -104,6 +104,32 @@ export interface TelemetrySnapshot {
     rejectionsByTier: Record<string, number>;
     rejectionsTotal: number;
   };
+  /**
+   * PDF → text engine diagnostics (Phase 74). Bounded aggregates over the
+   * `pdf_text_engine_run` event: fixed-vocabulary labels only, no document
+   * data. `technicalFailureRate` uses the Phase 74 §9 denominator —
+   * eligible runs = successes + technical failures (validation failures and
+   * pre-engine rejections are excluded).
+   */
+  pdfText: {
+    byEngine: Record<
+      string,
+      {
+        runs: number;
+        success: number;
+        technicalFailures: number;
+        validationFailures: number;
+      }
+    >;
+    failureCodes: Record<string, number>;
+    qualityStates: Record<string, number>;
+    validationStatuses: Record<string, number>;
+    durationBuckets: Record<string, number>;
+    inputSizeBuckets: Record<string, number>;
+    pageCountBuckets: Record<string, number>;
+    eligibleRuns: number;
+    technicalFailureRate: number | null;
+  };
   system: {
     activeJobs: number;
     rssBytes: number | null;

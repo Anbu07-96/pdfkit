@@ -6,6 +6,10 @@ import type {
   EngineResult,
 } from "@/lib/engines/types";
 import { describeInputFile } from "@/lib/engines/profile";
+import {
+  recordPdfTextEngineFailure,
+  recordPdfTextEngineSuccess,
+} from "@/lib/engines/pdf-text-diagnostics";
 import { assessConversionQuality } from "@/lib/engines/quality";
 import { validateEngineResult } from "@/lib/engines/validation";
 import type { ProcessingArtifact, ToolProcessor } from "@/lib/processing/contract";
@@ -30,8 +34,13 @@ import type { ProcessingArtifact, ToolProcessor } from "@/lib/processing/contrac
  *   (Phase 68) — diagnostic only, never a failure path;
  * - attaches the QualityGate v1 verdict (Phase 69) — observe and record
  *   only, never a routing or retry input;
- * - lets the original `ProcessingError` propagate on failure: no catching,
- *   no wrapping, no classification, NO fallback to another engine.
+ * - lets the original `ProcessingError` propagate on failure: no wrapping,
+ *   no classification, NO fallback to another engine. The single exception
+ *   to "no catching" is the Phase 74 engine diagnostic recording for
+ *   `pdf-to-text`: the failure path records one privacy-safe, bounded
+ *   telemetry event (swallowed on every error path of its own) and then
+ *   rethrows the ORIGINAL error unchanged — behavior-identical whether the
+ *   diagnostics are enabled, disabled, or broken.
  */
 
 export interface ProcessorEngineSpec<TOptions = Record<string, unknown>> {
@@ -85,7 +94,26 @@ export function processorEngineAdapter<TOptions>(
     input: processor.input,
     async run(request, context) {
       const startedAt = Date.now();
-      const success = await processor.process(request, context);
+      // Phase 74: engine-level diagnostics, pdf-to-text only. Recorded on
+      // the success AND failure path, swallowed on both — never a routing,
+      // retry or fallback input (test-enforced).
+      const diagnostics = descriptor.conversionType === "pdf-to-text";
+      let success: Awaited<ReturnType<typeof processor.process>>;
+      try {
+        success = await processor.process(request, context);
+      } catch (error) {
+        if (diagnostics) {
+          recordPdfTextEngineFailure({
+            engineId: descriptor.id,
+            request,
+            error,
+            durationMs: Date.now() - startedAt,
+          });
+        }
+        // The ORIGINAL error, unchanged: no wrapping, no fallback, no
+        // second engine attempt (Phase 73 §12, Phase 74 §10).
+        throw error;
+      }
       const result: EngineResult = {
         ...success,
         engineId: descriptor.id,
@@ -114,7 +142,7 @@ export function processorEngineAdapter<TOptions>(
         (total, artifact) => total + artifact.size,
         0,
       );
-      return {
+      const final: EngineResult = {
         ...validated,
         quality: assessConversionQuality(descriptor.conversionType, {
           profile: validated.profile,
@@ -126,6 +154,15 @@ export function processorEngineAdapter<TOptions>(
           outputTextMarkerOnly: textArtifactsMarkerOnly(validated.artifacts),
         }),
       };
+      if (diagnostics) {
+        recordPdfTextEngineSuccess({
+          engineId: descriptor.id,
+          request,
+          result: final,
+          durationMs: final.durationMs,
+        });
+      }
+      return final;
     },
   };
 }

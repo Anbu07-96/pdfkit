@@ -119,6 +119,37 @@ export type TelemetryEvent =
       operation: string;
       settledFiles: number;
       totalFiles: number;
+    }
+  /**
+   * Engine-level PDF → text diagnostic (Phase 74).
+   *
+   * Emitted once per ENGINE RUN (not per job) by the shared processor→engine
+   * adapter, for `pdf-to-text` only — the evidence source for the
+   * post-launch technical-failure-rate measurement that a future fallback
+   * decision requires. PRIVACY: every field is a fixed-vocabulary label or
+   * bucket chosen by trusted server code — never document content, never
+   * raw numbers, never error messages, never identifiers. Raw durations,
+   * byte counts and page counts are pre-bucketed by
+   * `src/lib/engines/pdf-text-diagnostics.ts` before this event exists.
+   */
+  | {
+      type: "pdf_text_engine_run";
+      /** Engine descriptor id (closed set: current-pdfium-text | pdfjs-text). */
+      engineId: string;
+      /** success | technical_failure | validation_failure (§3 classification). */
+      outcome: "success" | "technical_failure" | "validation_failure";
+      /** Typed ProcessingError code on failures (closed vocabulary). */
+      failureCode?: string;
+      /** QualityGate verdict on success (diagnostic only, closed vocabulary). */
+      qualityState?: string;
+      /** OutputValidator verdict on success (closed vocabulary). */
+      validationStatus?: string;
+      /** Pre-bucketed engine run duration. */
+      durationBucket: string;
+      /** Pre-bucketed total input bytes. */
+      inputSizeBucket: string;
+      /** Pre-bucketed source page count ("unknown" on failure). */
+      pageCountBucket: string;
     };
 
 /** All event type discriminants, for validation of client beacons. */

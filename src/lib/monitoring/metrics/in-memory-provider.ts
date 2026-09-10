@@ -145,6 +145,58 @@ class CappedToolStats {
   }
 }
 
+interface PdfTextEngineStats {
+  runs: number;
+  success: number;
+  technicalFailures: number;
+  validationFailures: number;
+}
+
+/**
+ * Per-engine pdf-to-text diagnostic counters (Phase 74). The engine set is
+ * closed (2 engines), but the same capped-fold-into-"other" discipline as
+ * tool stats applies so a hostile label can never grow the map.
+ */
+class CappedPdfTextEngineStats {
+  private readonly stats = new Map<string, PdfTextEngineStats>();
+
+  constructor(private readonly cap: number = 8) {}
+
+  record(
+    engineId: string,
+    outcome: "success" | "technical_failure" | "validation_failure",
+  ): void {
+    const safe = sanitizeMetricsKey(engineId);
+    let entry = this.stats.get(safe);
+    if (!entry) {
+      if (this.stats.size >= this.cap) {
+        entry = this.stats.get("other") ?? {
+          runs: 0,
+          success: 0,
+          technicalFailures: 0,
+          validationFailures: 0,
+        };
+        this.stats.set("other", entry);
+      } else {
+        entry = { runs: 0, success: 0, technicalFailures: 0, validationFailures: 0 };
+        this.stats.set(safe, entry);
+      }
+    }
+    entry.runs += 1;
+    if (outcome === "success") entry.success += 1;
+    else if (outcome === "technical_failure") entry.technicalFailures += 1;
+    else entry.validationFailures += 1;
+  }
+
+  entries(): Record<string, PdfTextEngineStats> {
+    return Object.fromEntries(this.stats);
+  }
+
+  reset(): void {
+    this.stats.clear();
+  }
+}
+
 export class InMemoryMetricsProvider implements MetricsProvider {
   readonly name = "in-memory";
 
@@ -195,6 +247,17 @@ export class InMemoryMetricsProvider implements MetricsProvider {
 
   // Quota
   private rejectionsByTier = new CappedCounters();
+
+  // PDF → text engine diagnostics (Phase 74)
+  private pdfTextByEngine = new CappedPdfTextEngineStats();
+  private pdfTextFailureCodes = new CappedCounters();
+  private pdfTextQualityStates = new CappedCounters();
+  private pdfTextValidationStatuses = new CappedCounters();
+  private pdfTextDurationBuckets = new CappedCounters();
+  private pdfTextInputSizeBuckets = new CappedCounters();
+  private pdfTextPageCountBuckets = new CappedCounters();
+  private pdfTextEligibleRuns = 0;
+  private pdfTextTechnicalFailures = 0;
 
   record(event: TelemetryEvent, timestamp: Date): void {
     try {
@@ -282,6 +345,33 @@ export class InMemoryMetricsProvider implements MetricsProvider {
       }
       case "batch_quota_stopped": {
         this.batchesQuotaStopped += 1;
+        break;
+      }
+      case "pdf_text_engine_run": {
+        // Phase 74: bounded aggregates over closed-vocabulary labels.
+        // Raw values were already bucketed before the event existed.
+        this.pdfTextByEngine.record(event.engineId, event.outcome);
+        this.pdfTextDurationBuckets.bump(event.durationBucket);
+        this.pdfTextInputSizeBuckets.bump(event.inputSizeBucket);
+        this.pdfTextPageCountBuckets.bump(event.pageCountBucket);
+        if (event.outcome !== "success") {
+          this.pdfTextFailureCodes.bump(event.failureCode ?? "unknown");
+          if (event.outcome === "technical_failure") {
+            this.pdfTextTechnicalFailures += 1;
+          }
+        } else {
+          if (event.qualityState !== undefined) {
+            this.pdfTextQualityStates.bump(event.qualityState);
+          }
+          if (event.validationStatus !== undefined) {
+            this.pdfTextValidationStatuses.bump(event.validationStatus);
+          }
+        }
+        // §9 denominator: eligible = reached the engine stage = success +
+        // technical failures. Validation failures are excluded.
+        if (event.outcome !== "validation_failure") {
+          this.pdfTextEligibleRuns += 1;
+        }
         break;
       }
     }
@@ -407,6 +497,20 @@ export class InMemoryMetricsProvider implements MetricsProvider {
         heapUsedBytes: context.heapUsedBytes ?? null,
         nodeVersion: process.version,
       },
+      pdfText: {
+        byEngine: this.pdfTextByEngine.entries(),
+        failureCodes: this.pdfTextFailureCodes.entries(),
+        qualityStates: this.pdfTextQualityStates.entries(),
+        validationStatuses: this.pdfTextValidationStatuses.entries(),
+        durationBuckets: this.pdfTextDurationBuckets.entries(),
+        inputSizeBuckets: this.pdfTextInputSizeBuckets.entries(),
+        pageCountBuckets: this.pdfTextPageCountBuckets.entries(),
+        eligibleRuns: this.pdfTextEligibleRuns,
+        technicalFailureRate:
+          this.pdfTextEligibleRuns === 0
+            ? null
+            : this.pdfTextTechnicalFailures / this.pdfTextEligibleRuns,
+      },
     };
   }
 
@@ -442,6 +546,15 @@ export class InMemoryMetricsProvider implements MetricsProvider {
     this.inputTotal = 0;
     this.outputTotal = 0;
     this.rejectionsByTier.reset();
+    this.pdfTextByEngine.reset();
+    this.pdfTextFailureCodes.reset();
+    this.pdfTextQualityStates.reset();
+    this.pdfTextValidationStatuses.reset();
+    this.pdfTextDurationBuckets.reset();
+    this.pdfTextInputSizeBuckets.reset();
+    this.pdfTextPageCountBuckets.reset();
+    this.pdfTextEligibleRuns = 0;
+    this.pdfTextTechnicalFailures = 0;
   }
 }
 

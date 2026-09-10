@@ -139,6 +139,32 @@ describe("validateEnvironment", () => {
     expect(result.warnings.some((w) => w.variable === "PDFKIT_USE_IN_MEMORY_USAGE_REPO")).toBe(true);
   });
 
+  it("warns on unrecognized PDFKIT_PDF_TEXT_DIAGNOSTICS values, accepts approved ones", () => {
+    const restore = withEnv({
+      NODE_ENV: "development",
+      PDFKIT_PDF_TEXT_DIAGNOSTICS: "typo-value",
+    });
+    const warned = validateEnvironment();
+    restore();
+    expect(warned.ok).toBe(true); // a warning, never an error
+    expect(
+      warned.warnings.some((w) => w.variable === "PDFKIT_PDF_TEXT_DIAGNOSTICS"),
+    ).toBe(true);
+
+    for (const value of ["on", "off", "1", "0", "true", "false", "disabled", " ON "]) {
+      const restoreApproved = withEnv({
+        NODE_ENV: "development",
+        PDFKIT_PDF_TEXT_DIAGNOSTICS: value,
+      });
+      const result = validateEnvironment();
+      restoreApproved();
+      expect(
+        result.warnings.some((w) => w.variable === "PDFKIT_PDF_TEXT_DIAGNOSTICS"),
+        `value "${value}" should be recognized`,
+      ).toBe(false);
+    }
+  });
+
   it("requires NEXTAUTH_SECRET in production", () => {
     const restore = withEnv({
       NODE_ENV: "production",

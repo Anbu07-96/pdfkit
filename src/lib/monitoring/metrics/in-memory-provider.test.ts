@@ -359,6 +359,98 @@ describe("InMemoryMetricsProvider", () => {
     expect(afterReset.errors.byTool).toEqual({});
   });
 
+  it("aggregates pdf-to-text engine diagnostics with the Phase 74 denominator", () => {
+    const provider = new InMemoryMetricsProvider();
+    const now = new Date();
+    const run = (
+      over: Partial<Extract<TelemetryEvent, { type: "pdf_text_engine_run" }>>,
+    ): TelemetryEvent => ({
+      type: "pdf_text_engine_run",
+      engineId: "current-pdfium-text",
+      outcome: "success",
+      durationBucket: "lt-100ms",
+      inputSizeBucket: "0-100kb",
+      pageCountBucket: "1",
+      ...over,
+    });
+
+    provider.record(run({}), now); // pdfium success
+    provider.record(
+      run({
+        engineId: "pdfjs-text",
+        outcome: "success",
+        qualityState: "healthy",
+        validationStatus: "passed",
+        pageCountBucket: "6-20",
+      }),
+      now,
+    );
+    provider.record(
+      run({
+        outcome: "technical_failure",
+        failureCode: "INVALID_PDF",
+        pageCountBucket: "unknown",
+        durationBucket: "100-500ms",
+      }),
+      now,
+    );
+    provider.record(
+      run({ outcome: "validation_failure", failureCode: "VALIDATION_ERROR" }),
+      now,
+    );
+
+    const pdfText = provider.snapshot({}).pdfText;
+    expect(pdfText.byEngine["current-pdfium-text"]).toEqual({
+      runs: 3,
+      success: 1,
+      technicalFailures: 1,
+      validationFailures: 1,
+    });
+    expect(pdfText.byEngine["pdfjs-text"]).toEqual({
+      runs: 1,
+      success: 1,
+      technicalFailures: 0,
+      validationFailures: 0,
+    });
+    // §9 denominator: eligible = success + technical failures = 3 here.
+    expect(pdfText.eligibleRuns).toBe(3);
+    expect(pdfText.technicalFailureRate).toBeCloseTo(1 / 3, 10);
+    expect(pdfText.failureCodes).toEqual({ invalid_pdf: 1, validation_error: 1 });
+    expect(pdfText.qualityStates).toEqual({ healthy: 1 });
+    expect(pdfText.validationStatuses).toEqual({ passed: 1 });
+    expect(pdfText.durationBuckets).toEqual({ "lt-100ms": 3, "100-500ms": 1 });
+    expect(pdfText.pageCountBuckets).toEqual({ "1": 2, "6-20": 1, unknown: 1 });
+
+    provider.reset();
+    expect(provider.snapshot({}).pdfText.byEngine).toEqual({});
+    expect(provider.snapshot({}).pdfText.technicalFailureRate).toBe(null);
+  });
+
+  it("bounds pdf-to-text engine diagnostics: hostile labels fold, maps cap", () => {
+    const provider = new InMemoryMetricsProvider();
+    const now = new Date();
+    const hostile = (engineId: string): TelemetryEvent => ({
+      type: "pdf_text_engine_run",
+      engineId,
+      outcome: "success",
+      durationBucket: "INJECTION \n attempt",
+      inputSizeBucket: "0-100kb",
+      pageCountBucket: "1",
+    });
+
+    // More distinct engine labels than the cap: excess folds into "other".
+    for (let index = 0; index < 12; index += 1) {
+      provider.record(hostile(`engine-${index}`), now);
+    }
+    const pdfText = provider.snapshot({}).pdfText;
+    expect(Object.keys(pdfText.byEngine).length).toBeLessThanOrEqual(9); // 8 + "other"
+    // Hostile bucket labels never appear as-is.
+    const json = JSON.stringify(pdfText);
+    expect(json).not.toContain("INJECTION");
+    expect(json).not.toContain("\\n");
+    expect(() => provider.record(hostile("x".repeat(10_000)), now)).not.toThrow();
+  });
+
   it("reports a sanitized environment identifier", () => {
     const provider = new InMemoryMetricsProvider();
     const original = process.env.PDFKIT_ENVIRONMENT;
