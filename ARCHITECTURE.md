@@ -1360,7 +1360,11 @@ Enforced by `src/lib/engines/equivalence.test.ts` and friends:
 - A second engine for any conversion type, selected by benchmarks run
   before any replacement decision. The factual readiness matrix and the
   benchmark design that must precede any engine selection:
-  `docs/stage4-readiness.md` (Phase 70 audit artifact).
+  `docs/stage4-readiness.md` (Phase 70 audit artifact); the Phase 71
+  candidate audit, licensing gates and benchmark foundation:
+  `docs/engine-candidates.md` + `docs/benchmark-plan.md`
+  (`src/lib/benchmarks/` — benchmark-only, isolated from production by
+  test).
 - Retry and fallback (`EngineFailure` classification, engine chains),
   consuming QualityGate verdicts and engine health explicitly.
 - Enforcing quality thresholds (QualityGate v1 is diagnostic-only; any

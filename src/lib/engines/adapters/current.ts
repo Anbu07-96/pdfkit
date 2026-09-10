@@ -69,7 +69,7 @@ const PAGE_MARKER_PATTERNS = [
  * a PDF → text conversion extracted no source text. Boolean only: no
  * content leaves this function.
  */
-function textArtifactsMarkerOnly(artifacts: readonly ProcessingArtifact[]): boolean | undefined {
+export function textArtifactsMarkerOnly(artifacts: readonly ProcessingArtifact[]): boolean | undefined {
   let sawTextArtifact = false;
   for (const artifact of artifacts) {
     if (!artifact.mimeType.toLowerCase().startsWith("text/")) continue;
