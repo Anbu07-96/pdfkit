@@ -1358,7 +1358,9 @@ Enforced by `src/lib/engines/equivalence.test.ts` and friends:
 ### PLANNED (documented only — not implemented, not activated)
 
 - A second engine for any conversion type, selected by benchmarks run
-  before any replacement decision.
+  before any replacement decision. The factual readiness matrix and the
+  benchmark design that must precede any engine selection:
+  `docs/stage4-readiness.md` (Phase 70 audit artifact).
 - Retry and fallback (`EngineFailure` classification, engine chains),
   consuming QualityGate verdicts and engine health explicitly.
 - Enforcing quality thresholds (QualityGate v1 is diagnostic-only; any

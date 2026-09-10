@@ -55,7 +55,8 @@ interface CurrentEngineSpec<TOptions = Record<string, unknown>> {
  * Upper bound for the marker-only scan: text artifacts above this size are
  * certainly not marker-only (a 50-page marker-only output is a few KiB).
  */
-const MARKER_SCAN_MAX_BYTES = 1024 * 1024;
+/** Exported for boundary tests (Phase 70); the value is policy, not secret. */
+export const MARKER_SCAN_MAX_BYTES = 1024 * 1024;
 
 const PAGE_MARKER_PATTERNS = [
   /--- Page \d+ ---/g,
