@@ -1364,7 +1364,11 @@ Enforced by `src/lib/engines/equivalence.test.ts` and friends:
   candidate audit, licensing gates and benchmark foundation:
   `docs/engine-candidates.md` + `docs/benchmark-plan.md`
   (`src/lib/benchmarks/` — benchmark-only, isolated from production by
-  test).
+  test); the Phase 72 controlled execution evidence and per-conversion
+  CONDITIONAL GO / NO-GO / NOT APPLICABLE decisions:
+  `docs/benchmark-results-phase72.md` (+ machine-readable
+  `docs/benchmark-results-phase72.json`). Phase 72 did NOT implement any
+  second engine — Stage 4 approval is still required.
 - Retry and fallback (`EngineFailure` classification, engine chains),
   consuming QualityGate verdicts and engine health explicitly.
 - Enforcing quality thresholds (QualityGate v1 is diagnostic-only; any

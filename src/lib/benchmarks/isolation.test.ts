@@ -7,7 +7,8 @@ import { selectEngine } from "@/lib/engines/router";
 import { getProcessor } from "@/lib/processing/registry";
 
 /**
- * Phase 71 production-isolation proofs (Phase 71 §16).
+ * Phase 71 production-isolation proofs (Phase 71 §16), extended for
+ * Phase 72 (§23–§24).
  *
  * The candidate engine and the benchmark harness must be unreachable from
  * production. These tests enforce it statically and behaviorally.
@@ -137,5 +138,75 @@ describe("production isolation (Phase 71 §16)", () => {
     const pkg = JSON.parse(readFileSync("package.json", "utf8"));
     expect(pkg.dependencies["pdfjs-dist"]).toBeUndefined();
     expect(pkg.devDependencies["pdfjs-dist"]).toBeDefined();
+  });
+});
+
+describe("production isolation (Phase 72 §23–§24)", () => {
+  it("no source file imports the optional native canvas (rendering stays un-benchmarked and un-shipped)", () => {
+    // The repository DISCUSSES @napi-rs/canvas in comments (the pdfium
+    // rationale in thumbnails/renderer.ts) — what is forbidden is an IMPORT.
+    const offenders = collectFiles("src")
+      .filter((file) => !file.includes(join("src", "lib", "benchmarks")))
+      .filter((file) => {
+        const source = readFileSync(file, "utf8");
+        return (
+          /from\s+["']@napi-rs\/canvas["']/.test(source) ||
+          /require\(\s*["']@napi-rs\/canvas["']\s*\)/.test(source) ||
+          /import\(\s*["']@napi-rs\/canvas["']\s*\)/.test(source)
+        );
+      });
+    expect(offenders).toEqual([]);
+  });
+
+  it("benchmark code never imports the router, the registry or processing routes", () => {
+    // Isolation TESTS import the router to assert its behavior — only the
+    // harness itself (non-test files) is forbidden from importing it.
+    const benchmarkFiles = collectFiles(join("src", "lib", "benchmarks")).filter(
+      (file) => !file.endsWith(".test.ts"),
+    );
+    expect(benchmarkFiles.length).toBeGreaterThan(5);
+    const offenders = benchmarkFiles.filter((file) => {
+      const source = readFileSync(file, "utf8");
+      return (
+        source.includes("@/lib/engines/router") ||
+        source.includes("@/lib/engines/registry") ||
+        source.includes("@/lib/processing/registry") ||
+        source.includes("@/lib/processing/http")
+      );
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it("the candidate table-signal engine is benchmark-only and absent from the live registry", () => {
+    const registry = getDefaultEngineRegistry();
+    expect(registry.byId("candidate-pdfjs-table-signal")).toBeUndefined();
+    expect(registry.byId("candidate-pdfjs-text")).toBeUndefined();
+    expect(registry.list()).toHaveLength(11);
+  });
+
+  it("pdfjs-dist stays a devDependency and the native canvas stays an optional transitive only", () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+    expect(pkg.dependencies["pdfjs-dist"]).toBeUndefined();
+    expect(pkg.dependencies["@napi-rs/canvas"]).toBeUndefined();
+    expect(pkg.devDependencies["pdfjs-dist"]).toBeDefined();
+    expect(pkg.devDependencies["@napi-rs/canvas"]).toBeUndefined();
+    const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+    const canvasEntry = lock.packages["node_modules/@napi-rs/canvas"];
+    expect(canvasEntry?.optional).toBe(true);
+    expect(canvasEntry?.dev).toBe(true);
+  });
+
+  it("benchmark fixtures and results never persist to the repository working tree", () => {
+    // The evidence artifact is committed deliberately as documentation; the
+    // HARNESS itself writes only to the system temp directory. This test
+    // keeps benchmark code from growing filesystem side effects inside the
+    // repository: no benchmark module may import a repo-relative writer.
+    const offenders = collectFiles(join("src", "lib", "benchmarks"))
+      .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
+      .filter((file) => {
+        const source = readFileSync(file, "utf8");
+        return /writeFile|appendFile|mkdirSync\(|rmSync\(/.test(source);
+      });
+    expect(offenders).toEqual([]);
   });
 });

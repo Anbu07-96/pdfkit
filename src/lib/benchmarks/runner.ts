@@ -4,7 +4,8 @@ import { assessConversionQuality } from "@/lib/engines/quality";
 import { textArtifactsMarkerOnly } from "@/lib/engines/adapters/current";
 import { validateEngineResult } from "@/lib/engines/validation";
 import type { EngineResult } from "@/lib/engines/types";
-import { computeMetrics, errorCategory } from "@/lib/benchmarks/metrics";
+import { computeMetrics, errorCategory, benchmarkFailureCategory } from "@/lib/benchmarks/metrics";
+import { assertFixtureBytesWithinBounds, BenchmarkBoundsError } from "@/lib/benchmarks/bounds";
 import {
   BENCHMARK_VERSION,
   type BenchmarkEngine,
@@ -35,6 +36,8 @@ export async function runBenchmark(
   let result: BenchmarkRunResult;
   try {
     const bytes = await fixture.build();
+    // Resource safety (§14): every executed fixture stays inside the bounds.
+    assertFixtureBytesWithinBounds(fixture, bytes);
     const run = await engine.run({ name: `${fixture.id}.pdf`, bytes });
 
     // Uniform structural validation + quality assessment: the exact
@@ -96,6 +99,9 @@ export async function runBenchmark(
       },
     };
   } catch (error) {
+    // Bounds violations are harness errors, not engine failures: they must
+    // be loud, never recorded as an engine's failed run.
+    if (error instanceof BenchmarkBoundsError) throw error;
     result = {
       benchmarkVersion: BENCHMARK_VERSION,
       fixtureVersion: fixture.version,
@@ -109,6 +115,7 @@ export async function runBenchmark(
         "output.count": 0,
         "output.bytes": 0,
         "failure.errorCategory": errorCategory(error),
+        "failure.benchmarkCategory": benchmarkFailureCategory(errorCategory(error)),
         "performance.wallClockMs": options.wallClockMs ?? Date.now() - startedAt,
       },
       error: { category: errorCategory(error) },

@@ -1,26 +1,38 @@
 # Benchmark Plan — Conversion Intelligence Engine
 
-**Phase 71 deliverable. This is the plan and harness for the Stage 4
-benchmark campaign. No production thresholds are final; every proposed
-threshold below is DRAFT. No engine has been selected.**
+**Phase 71 deliverable — EXECUTED in Phase 72. This is the plan and
+harness for the Stage 4 benchmark campaign. No production thresholds are
+final; every proposed threshold below is DRAFT. No engine has been
+selected.**
 
 Companion documents: `docs/engine-candidates.md` (Phase 71 candidate audit,
 licensing, decision), `docs/stage4-readiness.md` (Phase 70 readiness
-matrix).
+matrix), and **`docs/benchmark-results-phase72.md`** (Phase 72 controlled
+execution: full-corpus evidence, per-conversion GO/NO-GO decisions, and the
+machine-readable artifact `docs/benchmark-results-phase72.json`).
 
 ## 1. Architecture (implemented in Phase 71)
 
 ```text
 src/lib/benchmarks/
-├─ types.ts                    BenchmarkEngine / BenchmarkFixture / BenchmarkRunResult
-├─ fixtures.ts                 Synthetic corpus (8 fixtures, in-memory, repo-owned)
+├─ types.ts                    BenchmarkEngine / BenchmarkFixture / BenchmarkRunResult (+ Phase 72 series/report types)
+├─ applicability.ts            Phase 72 applicability matrix (data; tested)
+├─ fixtures.ts                 Synthetic corpus (39 fixtures v2, in-memory, repo-owned, ground truth)
 ├─ metrics.ts                  Metric computation, OBJECTIVE/HEURISTIC labeled
+├─ bounds.ts                   Phase 72 resource bounds (bytes/pages/iterations/budget)
 ├─ runner.ts                   runBenchmark(engine, fixture) → machine-readable result
+├─ perf.ts                     Phase 72 series: warm-up, repeated runs, timing aggregation
+├─ report.ts                   Phase 72 evidence report builder (privacy-enforced)
 ├─ engines/
 │  ├─ current-adapter.ts       Wraps the CURRENT production engine adapters (no router)
-│  └─ pdfjs-candidate.ts       BENCHMARK-ONLY candidate (pdfjs-dist devDependency)
-├─ benchmarks.test.ts          Harness tests (deterministic, offline)
-└─ isolation.test.ts           Production-isolation proofs
+│  ├─ pdfjs-candidate.ts       BENCHMARK-ONLY candidate (pdfjs-dist devDependency)
+│  └─ pdfjs-table-signal.ts    BENCHMARK-ONLY component engine (positional table signal)
+├─ benchmarks.test.ts          Harness + corpus ground-truth + metric tests
+├─ applicability.test.ts       Applicability matrix tests
+├─ perf.test.ts                Timing math + series behavior tests
+├─ candidate.test.ts           Candidate cleanup + offline (no-network) proofs
+├─ report.test.ts              Evidence report structure/privacy/serialization tests
+└─ isolation.test.ts           Production-isolation proofs (Phase 71 + Phase 72)
 ```
 
 Properties, enforced by tests:
@@ -50,7 +62,13 @@ Executing the harness: `npx vitest run src/lib/benchmarks`.
 All fixtures are **synthetic, generated in memory by repository-owned
 builders** (pdf-lib emission). No downloads, no copyrighted documents, no
 customer documents, no personal data. Provenance is stated per fixture in
-`fixtures.ts`; corpus version = `FIXTURE_VERSION` (1).
+`fixtures.ts`; corpus version = `FIXTURE_VERSION` (**2** after the Phase 72
+expansion: 39 fixtures across text, layout, pages, images, tables and edge
+categories, each with machine-readable provenance and explicit ground
+truth — see `docs/benchmark-results-phase72.md` §2 for the summary and the
+known corpus limitations, e.g. no Tamil / no encrypted fixtures). The
+original Phase 71 eight-fixture foundation is preserved unchanged in shape
+(F-01…F-08).
 
 | ID | Category | Purpose | Expected |
 | --- | --- | --- | --- |

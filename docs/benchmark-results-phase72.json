@@ -1,0 +1,3966 @@
+{
+  "benchmarkVersion": 2,
+  "fixtureVersion": 2,
+  "generatedAt": "2026-09-10T22:12:02.697Z",
+  "runtime": {
+    "node": "v22.22.3",
+    "platform": "linux",
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz"
+  },
+  "seriesConfig": {
+    "warmupRuns": 1,
+    "minMeasuredRuns": 5,
+    "maxMeasuredRuns": 10,
+    "fastExtensionThresholdMs": 50,
+    "maxCaseWallClockMs": 30000
+  },
+  "applicability": [
+    {
+      "conversion": "pdf-to-word",
+      "currentEngine": "current-pdfium-docx",
+      "status": "PARTIAL",
+      "scope": "component",
+      "reason": "PDF.js can replace the shared pdfium text-extraction component (extractPdfPageTexts) that feeds the docx assembly, but provides no DOCX assembly itself. Component evidence only; assembly stage unmeasured."
+    },
+    {
+      "conversion": "pdf-to-excel",
+      "currentEngine": "current-pdfium-exceljs",
+      "status": "PARTIAL",
+      "scope": "component",
+      "reason": "PDF.js can replace the shared pdfium text-extraction component, but provides neither table detection nor XLSX assembly. Component evidence only; assembly stage unmeasured."
+    },
+    {
+      "conversion": "pdf-to-text",
+      "currentEngine": "current-pdfium-text",
+      "status": "YES",
+      "scope": "direct",
+      "reason": "Both engines parse a PDF and emit a text artifact — the same processing role, directly comparable end to end."
+    },
+    {
+      "conversion": "pdf-to-jpg",
+      "currentEngine": "current-pdfium-jpeg",
+      "status": "NO",
+      "scope": "not-comparable",
+      "reason": "Raster rendering via PDF.js requires @napi-rs/canvas, a platform-specific native binary (pdfjs-dist optionalDependency). Native binaries violate the repository's production constraint, and the repository already rejected this path for rendering (src/lib/thumbnails/renderer.ts rationale). No production-viable comparison exists."
+    },
+    {
+      "conversion": "pdf-to-png",
+      "currentEngine": "current-pdfium-png",
+      "status": "NO",
+      "scope": "not-comparable",
+      "reason": "Same rendering constraint as pdf-to-jpg: PDF.js raster output needs the optional native @napi-rs/canvas backend, which the production stack forbids."
+    },
+    {
+      "conversion": "extract-tables",
+      "currentEngine": "current-pdfium-tables",
+      "status": "PARTIAL",
+      "scope": "component",
+      "reason": "PDF.js provides positioned text (x/y per item) that table reconstruction could consume, but implements no table reconstruction itself. Benchmarked at component level (positional signal quality), NOT as a complete extract-tables alternative."
+    },
+    {
+      "conversion": "compare-documents",
+      "currentEngine": "current-pdfium-compare",
+      "status": "PARTIAL",
+      "scope": "component",
+      "reason": "PDF.js can feed text/positions to a comparator, but the comparison logic itself is repository code the candidate does not provide. Only the shared text component is benchmarked; comparison behavior is unmeasured."
+    },
+    {
+      "conversion": "extract-images",
+      "currentEngine": "current-pdf-lib-extract-images",
+      "status": "NO",
+      "scope": "not-comparable",
+      "reason": "PDF.js has no stable public API for extracting embedded image XObjects (only operator-list internals); the current engine reads image objects directly via pdf-lib. Not benchmarked."
+    },
+    {
+      "conversion": "images-to-pdf",
+      "currentEngine": "current-pdf-lib-images",
+      "status": "NO",
+      "scope": "not-comparable",
+      "reason": "PDF.js is a PDF reader; it cannot author PDFs. The conversion's entire role (image → PDF assembly) is outside the candidate."
+    },
+    {
+      "conversion": "png-to-pdf",
+      "currentEngine": "current-pdf-lib-png",
+      "status": "NO",
+      "scope": "not-comparable",
+      "reason": "PDF authoring again: a reader cannot wrap PNGs into a PDF document."
+    },
+    {
+      "conversion": "compress-pdf",
+      "currentEngine": "current-pdf-lib-compress",
+      "status": "NO",
+      "scope": "not-comparable",
+      "reason": "PDF.js parses but does not optimize or rewrite PDF files. The backup candidate for this space is qpdf (Apache-2.0), out of Phase 72 scope."
+    }
+  ],
+  "cases": [
+    {
+      "fixtureId": "F-01-text-single",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-01-text-single",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 35,
+            "text.characterCount": 35,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 1.9,
+            "minMs": 1,
+            "maxMs": 7,
+            "stdDevMs": 1.8529256146249726,
+            "p95Ms": 7
+          },
+          "heapDeltaBytesMedian": 35632,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-01-text-single",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 35,
+            "text.characterCount": 35,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 3,
+            "meanMs": 3.6,
+            "minMs": 3,
+            "maxMs": 6,
+            "stdDevMs": 1.07496769977314,
+            "p95Ms": 6
+          },
+          "heapDeltaBytesMedian": 444628,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-02-text-multi",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-02-text-multi",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 163,
+            "text.characterCount": 163,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 1.1,
+            "minMs": 1,
+            "maxMs": 2,
+            "stdDevMs": 0.31622776601683794,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 43844,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-02-text-multi",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 163,
+            "text.characterCount": 163,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 6,
+            "meanMs": 6.5,
+            "minMs": 5,
+            "maxMs": 9,
+            "stdDevMs": 1.2692955176439846,
+            "p95Ms": 9
+          },
+          "heapDeltaBytesMedian": 1029268,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-03-table-aligned",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-03-table-aligned",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 185,
+            "text.characterCount": 185,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.8,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.42163702135578396,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 42352,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-03-table-aligned",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 182,
+            "text.characterCount": 182,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 3.2,
+            "minMs": 2,
+            "maxMs": 11,
+            "stdDevMs": 2.7808871486152276,
+            "p95Ms": 11
+          },
+          "heapDeltaBytesMedian": 555164,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-04-multicolumn",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-04-multicolumn",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 183,
+            "text.characterCount": 183,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 0.4444444444444444,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "text.columnOrderPreserved": 0
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.9,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.31622776601683794,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 36624,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-04-multicolumn",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 174,
+            "text.characterCount": 174,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "text.columnOrderPreserved": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 2,
+            "minMs": 2,
+            "maxMs": 2,
+            "stdDevMs": 0,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 512204,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-05-mixed-text-image",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-05-mixed-text-image",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 88,
+            "text.characterCount": 88,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "text.blankPageCorrectness": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.9,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.31622776601683794,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 30352,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-05-mixed-text-image",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 51,
+            "text.characterCount": 51,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "text.blankPageCorrectness": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 6.4,
+            "minMs": 2,
+            "maxMs": 35,
+            "stdDevMs": 10.426462061078587,
+            "p95Ms": 35
+          },
+          "heapDeltaBytesMedian": 435160,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-06-scanned",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-06-scanned",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 106,
+            "text.characterCount": 106,
+            "text.pageCoverage": 1,
+            "text.blankPageCorrectness": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "suspicious",
+            "score": 71,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 1,
+            "minMs": 1,
+            "maxMs": 1,
+            "stdDevMs": 0,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 27992,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-06-scanned",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 32,
+            "text.characterCount": 32,
+            "text.pageCoverage": 1,
+            "text.blankPageCorrectness": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "suspicious",
+            "score": 71,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 2.9,
+            "minMs": 2,
+            "maxMs": 7,
+            "stdDevMs": 1.7288403306519917,
+            "p95Ms": 7
+          },
+          "heapDeltaBytesMedian": 357380,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-07-large",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-07-large",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 1030,
+            "text.characterCount": 1030,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 2.4,
+            "minMs": 2,
+            "maxMs": 3,
+            "stdDevMs": 0.5163977794943223,
+            "p95Ms": 3
+          },
+          "heapDeltaBytesMedian": 155436,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-07-large",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 1030,
+            "text.characterCount": 1030,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 25,
+            "meanMs": 25.6,
+            "minMs": 21,
+            "maxMs": 32,
+            "stdDevMs": 3.373096170846271,
+            "p95Ms": 32
+          },
+          "heapDeltaBytesMedian": 4244236,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-08-malformed",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-08-malformed",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": false,
+          "metrics": {
+            "output.exists": false,
+            "output.count": 0,
+            "output.bytes": 0,
+            "failure.errorCategory": "INVALID_PDF",
+            "failure.benchmarkCategory": "malformed-input"
+          },
+          "metricsStable": true,
+          "error": {
+            "category": "INVALID_PDF"
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 0,
+            "meanMs": 0,
+            "minMs": 0,
+            "maxMs": 0,
+            "stdDevMs": 0,
+            "p95Ms": 0
+          },
+          "heapDeltaBytesMedian": 0,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-08-malformed",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": false,
+          "metrics": {
+            "output.exists": false,
+            "output.count": 0,
+            "output.bytes": 0,
+            "failure.errorCategory": "InvalidPDFException",
+            "failure.benchmarkCategory": "malformed-input"
+          },
+          "metricsStable": true,
+          "error": {
+            "category": "InvalidPDFException"
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 0,
+            "meanMs": 0.3,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.4830458915396479,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 0,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-09-text-short-paragraph",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-09-text-short-paragraph",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 125,
+            "text.characterCount": 125,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 1.1,
+            "minMs": 0,
+            "maxMs": 4,
+            "stdDevMs": 1.1005049346146119,
+            "p95Ms": 4
+          },
+          "heapDeltaBytesMedian": 41000,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-09-text-short-paragraph",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 123,
+            "text.characterCount": 123,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 2,
+            "minMs": 1,
+            "maxMs": 4,
+            "stdDevMs": 0.816496580927726,
+            "p95Ms": 4
+          },
+          "heapDeltaBytesMedian": 417540,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-10-text-long-paragraph",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-10-text-long-paragraph",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 2104,
+            "text.characterCount": 2104,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 2.2,
+            "minMs": 2,
+            "maxMs": 3,
+            "stdDevMs": 0.42163702135578385,
+            "p95Ms": 3
+          },
+          "heapDeltaBytesMedian": 201568,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-10-text-long-paragraph",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 2075,
+            "text.characterCount": 2075,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 4.5,
+            "meanMs": 4.8,
+            "minMs": 3,
+            "maxMs": 9,
+            "stdDevMs": 1.6193277068654823,
+            "p95Ms": 9
+          },
+          "heapDeltaBytesMedian": 2294968,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-11-text-multiple-fonts",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-11-text-multiple-fonts",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 84,
+            "text.characterCount": 84,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1.5,
+            "meanMs": 1.5,
+            "minMs": 1,
+            "maxMs": 2,
+            "stdDevMs": 0.5270462766947299,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 32168,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-11-text-multiple-fonts",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 82,
+            "text.characterCount": 82,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 2,
+            "minMs": 2,
+            "maxMs": 2,
+            "stdDevMs": 0,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 449492,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-12-text-font-sizes",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-12-text-font-sizes",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 111,
+            "text.characterCount": 111,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.9,
+            "minMs": 0,
+            "maxMs": 2,
+            "stdDevMs": 0.5676462121975466,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 33496,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-12-text-font-sizes",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 107,
+            "text.characterCount": 107,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 1.9,
+            "minMs": 1,
+            "maxMs": 4,
+            "stdDevMs": 0.875595035770913,
+            "p95Ms": 4
+          },
+          "heapDeltaBytesMedian": 421936,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-13-text-bold-italic",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-13-text-bold-italic",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 89,
+            "text.characterCount": 89,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1.5,
+            "meanMs": 1.5,
+            "minMs": 1,
+            "maxMs": 2,
+            "stdDevMs": 0.5270462766947299,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 30120,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-13-text-bold-italic",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 87,
+            "text.characterCount": 87,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 2.1,
+            "minMs": 2,
+            "maxMs": 3,
+            "stdDevMs": 0.31622776601683794,
+            "p95Ms": 3
+          },
+          "heapDeltaBytesMedian": 453736,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-14-text-unicode",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-14-text-unicode",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 152,
+            "text.characterCount": 142,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.unicodePreservation": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 1.2,
+            "minMs": 0,
+            "maxMs": 4,
+            "stdDevMs": 1.0327955589886444,
+            "p95Ms": 4
+          },
+          "heapDeltaBytesMedian": 39700,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-14-text-unicode",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 148,
+            "text.characterCount": 138,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.unicodePreservation": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 1.8,
+            "minMs": 1,
+            "maxMs": 3,
+            "stdDevMs": 0.6324555320336759,
+            "p95Ms": 3
+          },
+          "heapDeltaBytesMedian": 429112,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-15-text-symbols",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-15-text-symbols",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 70,
+            "text.characterCount": 59,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.unicodePreservation": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.8,
+            "minMs": 0,
+            "maxMs": 2,
+            "stdDevMs": 0.6324555320336759,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 30600,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-15-text-symbols",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 70,
+            "text.characterCount": 59,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 1,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 0,
+            "text.unicodePreservation": 0.9,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1.5,
+            "meanMs": 1.5,
+            "minMs": 1,
+            "maxMs": 2,
+            "stdDevMs": 0.5270462766947299,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 320792,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-16-text-numbers",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-16-text-numbers",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 60,
+            "text.characterCount": 60,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.8,
+            "minMs": 0,
+            "maxMs": 2,
+            "stdDevMs": 0.6324555320336759,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 31592,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-16-text-numbers",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 60,
+            "text.characterCount": 60,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1.5,
+            "meanMs": 1.6,
+            "minMs": 1,
+            "maxMs": 3,
+            "stdDevMs": 0.6992058987801011,
+            "p95Ms": 3
+          },
+          "heapDeltaBytesMedian": 322888,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-17-text-punctuation",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-17-text-punctuation",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 138,
+            "text.characterCount": 136,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 1.3,
+            "minMs": 0,
+            "maxMs": 5,
+            "stdDevMs": 1.3374935098492586,
+            "p95Ms": 5
+          },
+          "heapDeltaBytesMedian": 38304,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-17-text-punctuation",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 136,
+            "text.characterCount": 134,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 1.7,
+            "minMs": 1,
+            "maxMs": 2,
+            "stdDevMs": 0.48304589153964794,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 409188,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-18-text-whitespace",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-18-text-whitespace",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 71,
+            "text.characterCount": 71,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.8,
+            "minMs": 0,
+            "maxMs": 2,
+            "stdDevMs": 0.6324555320336759,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 31368,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-18-text-whitespace",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 69,
+            "text.characterCount": 69,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 1.8,
+            "minMs": 1,
+            "maxMs": 4,
+            "stdDevMs": 0.9189365834726815,
+            "p95Ms": 4
+          },
+          "heapDeltaBytesMedian": 355388,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-19-layout-three-column",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-19-layout-three-column",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 193,
+            "text.characterCount": 193,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 0.2727272727272727,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "text.columnOrderPreserved": 0
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.9,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.31622776601683794,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 37304,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-19-layout-three-column",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 182,
+            "text.characterCount": 182,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "text.columnOrderPreserved": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 1.9,
+            "minMs": 1,
+            "maxMs": 3,
+            "stdDevMs": 0.5676462121975469,
+            "p95Ms": 3
+          },
+          "heapDeltaBytesMedian": 513180,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-20-layout-header-footer",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-20-layout-header-footer",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 220,
+            "text.characterCount": 220,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 1.1,
+            "minMs": 1,
+            "maxMs": 2,
+            "stdDevMs": 0.31622776601683794,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 41304,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-20-layout-header-footer",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 211,
+            "text.characterCount": 211,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 3,
+            "meanMs": 3.3,
+            "minMs": 3,
+            "maxMs": 5,
+            "stdDevMs": 0.6749485577105528,
+            "p95Ms": 5
+          },
+          "heapDeltaBytesMedian": 728104,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-21-layout-mixed-order",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-21-layout-mixed-order",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 78,
+            "text.characterCount": 78,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 0.25,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.7,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.48304589153964794,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 28096,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-21-layout-mixed-order",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 74,
+            "text.characterCount": 74,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1.5,
+            "meanMs": 1.5,
+            "minMs": 1,
+            "maxMs": 2,
+            "stdDevMs": 0.5270462766947299,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 358716,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-22-layout-positioned-labels",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-22-layout-positioned-labels",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 96,
+            "text.characterCount": 96,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 0,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.8,
+            "minMs": 0,
+            "maxMs": 2,
+            "stdDevMs": 0.6324555320336759,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 30160,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-22-layout-positioned-labels",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 93,
+            "text.characterCount": 93,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.tokenRecall": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 1.7,
+            "minMs": 1,
+            "maxMs": 3,
+            "stdDevMs": 0.6749485577105528,
+            "p95Ms": 3
+          },
+          "heapDeltaBytesMedian": 382284,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-23-layout-overlapping",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-23-layout-overlapping",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 46,
+            "text.characterCount": 46,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.6,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.5163977794943223,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 25680,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-23-layout-overlapping",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 46,
+            "text.characterCount": 46,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 1.4,
+            "minMs": 1,
+            "maxMs": 2,
+            "stdDevMs": 0.5163977794943223,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 314340,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-24-layout-rotated",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-24-layout-rotated",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 60,
+            "text.characterCount": 60,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.6,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.5163977794943223,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 26504,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-24-layout-rotated",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 58,
+            "text.characterCount": 58,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 1.6,
+            "minMs": 1,
+            "maxMs": 2,
+            "stdDevMs": 0.5163977794943223,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 338748,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-25-layout-landscape",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-25-layout-landscape",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 141,
+            "text.characterCount": 141,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 0.42857142857142855,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "text.columnOrderPreserved": 0
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.7,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.48304589153964794,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 32360,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-25-layout-landscape",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 134,
+            "text.characterCount": 134,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "text.columnOrderPreserved": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 2,
+            "minMs": 1,
+            "maxMs": 4,
+            "stdDevMs": 0.816496580927726,
+            "p95Ms": 4
+          },
+          "heapDeltaBytesMedian": 449212,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-26-layout-unusual-dimensions",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-26-layout-unusual-dimensions",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 64,
+            "text.characterCount": 64,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.7,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.48304589153964794,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 27784,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-26-layout-unusual-dimensions",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 64,
+            "text.characterCount": 64,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 2,
+            "minMs": 2,
+            "maxMs": 2,
+            "stdDevMs": 0,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 421616,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-27-pages-two",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-27-pages-two",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 54,
+            "text.characterCount": 54,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.6,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.5163977794943223,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 28872,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-27-pages-two",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 54,
+            "text.characterCount": 54,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 2.2,
+            "minMs": 2,
+            "maxMs": 4,
+            "stdDevMs": 0.6324555320336759,
+            "p95Ms": 4
+          },
+          "heapDeltaBytesMedian": 412196,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-28-pages-ten",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-28-pages-ten",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 290,
+            "text.characterCount": 290,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 1.1,
+            "minMs": 1,
+            "maxMs": 2,
+            "stdDevMs": 0.31622776601683794,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 55996,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-28-pages-ten",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 290,
+            "text.characterCount": 290,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.characterRatio": 1,
+            "text.whitespaceNormalizedExactness": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 7.5,
+            "meanMs": 8.6,
+            "minMs": 6,
+            "maxMs": 14,
+            "stdDevMs": 2.716206504995115,
+            "p95Ms": 14
+          },
+          "heapDeltaBytesMedian": 1423480,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-29-pages-stress",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-29-pages-stress",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 1730,
+            "text.characterCount": 1730,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 4,
+            "meanMs": 3.7,
+            "minMs": 3,
+            "maxMs": 5,
+            "stdDevMs": 0.6749485577105528,
+            "p95Ms": 5
+          },
+          "heapDeltaBytesMedian": 176700,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-29-pages-stress",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 1730,
+            "text.characterCount": 1730,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 30.5,
+            "meanMs": 31.4,
+            "minMs": 29,
+            "maxMs": 36,
+            "stdDevMs": 2.4585451886114362,
+            "p95Ms": 36
+          },
+          "heapDeltaBytesMedian": 577904,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-30-images-multiple",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-30-images-multiple",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 85,
+            "text.characterCount": 85,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "text.blankPageCorrectness": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.6,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.5163977794943223,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 28392,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-30-images-multiple",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 48,
+            "text.characterCount": 48,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "text.blankPageCorrectness": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 4.5,
+            "minMs": 1,
+            "maxMs": 28,
+            "stdDevMs": 8.263036837493694,
+            "p95Ms": 28
+          },
+          "heapDeltaBytesMedian": 414896,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-31-table-multi-row",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-31-table-multi-row",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 476,
+            "text.characterCount": 476,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 1,
+            "minMs": 1,
+            "maxMs": 1,
+            "stdDevMs": 0,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 71168,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-31-table-multi-row",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 467,
+            "text.characterCount": 467,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 2.3,
+            "minMs": 2,
+            "maxMs": 4,
+            "stdDevMs": 0.6749485577105528,
+            "p95Ms": 4
+          },
+          "heapDeltaBytesMedian": 882336,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-32-table-multi-col",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-32-table-multi-col",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 377,
+            "text.characterCount": 377,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 1,
+            "minMs": 1,
+            "maxMs": 1,
+            "stdDevMs": 0,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 60648,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-32-table-multi-col",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 374,
+            "text.characterCount": 374,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 1.9,
+            "minMs": 1,
+            "maxMs": 2,
+            "stdDevMs": 0.31622776601683794,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 720028,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-33-table-split-pages",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-33-table-split-pages",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 589,
+            "text.characterCount": 589,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 1.1,
+            "minMs": 1,
+            "maxMs": 2,
+            "stdDevMs": 0.31622776601683794,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 85856,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-33-table-split-pages",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 579,
+            "text.characterCount": 579,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 3,
+            "meanMs": 3,
+            "minMs": 3,
+            "maxMs": 3,
+            "stdDevMs": 0,
+            "p95Ms": 3
+          },
+          "heapDeltaBytesMedian": 1101612,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-39-edge-offpage-text",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-39-edge-offpage-text",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 82,
+            "text.characterCount": 82,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.6,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.5163977794943223,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 27064,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-39-edge-offpage-text",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 74,
+            "text.characterCount": 74,
+            "text.anchorPreservation": 0.75,
+            "text.anchorPrecision": 0.75,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 1,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 1.4,
+            "minMs": 1,
+            "maxMs": 2,
+            "stdDevMs": 0.5163977794943223,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 351928,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-38-table-positioned-cells",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-38-table-positioned-cells",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 289,
+            "text.characterCount": 289,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.9,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.31622776601683794,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 53688,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-38-table-positioned-cells",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 284,
+            "text.characterCount": 284,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 2,
+            "minMs": 2,
+            "maxMs": 2,
+            "stdDevMs": 0,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 688080,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-34-edge-blank-pdf",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-34-edge-blank-pdf",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 52,
+            "text.characterCount": 52,
+            "text.pageCoverage": 1,
+            "text.blankPageCorrectness": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "suspicious",
+            "score": 71,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 0,
+            "meanMs": 0.1,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.31622776601683794,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 23896,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-34-edge-blank-pdf",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 15,
+            "text.characterCount": 15,
+            "text.pageCoverage": 1,
+            "text.blankPageCorrectness": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "suspicious",
+            "score": 71,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.7,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.48304589153964794,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 173644,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-35-edge-blank-among-text",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-35-edge-blank-among-text",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 112,
+            "text.characterCount": 112,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "text.blankPageCorrectness": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.6,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.5163977794943223,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 31744,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-35-edge-blank-among-text",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 75,
+            "text.characterCount": 75,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "text.blankPageCorrectness": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 2.3,
+            "minMs": 2,
+            "maxMs": 4,
+            "stdDevMs": 0.6749485577105528,
+            "p95Ms": 4
+          },
+          "heapDeltaBytesMedian": 461368,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-36-edge-truncated",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-36-edge-truncated",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": false,
+          "metrics": {
+            "output.exists": false,
+            "output.count": 0,
+            "output.bytes": 0,
+            "failure.errorCategory": "INVALID_PDF",
+            "failure.benchmarkCategory": "malformed-input"
+          },
+          "metricsStable": true,
+          "error": {
+            "category": "INVALID_PDF"
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 0,
+            "meanMs": 0,
+            "minMs": 0,
+            "maxMs": 0,
+            "stdDevMs": 0,
+            "p95Ms": 0
+          },
+          "heapDeltaBytesMedian": 0,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-36-edge-truncated",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": false,
+          "metrics": {
+            "output.exists": false,
+            "output.count": 0,
+            "output.bytes": 0,
+            "failure.errorCategory": "InvalidPDFException",
+            "failure.benchmarkCategory": "malformed-input"
+          },
+          "metricsStable": true,
+          "error": {
+            "category": "InvalidPDFException"
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.6,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.5163977794943223,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 0,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-37-edge-high-object-count",
+      "conversion": "pdf-to-text",
+      "scope": "direct",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-37-edge-high-object-count",
+          "engineId": "current-pdfium-text",
+          "engineVersion": "1.0.0",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 5925,
+            "text.characterCount": 5925,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 6,
+            "meanMs": 6.4,
+            "minMs": 5,
+            "maxMs": 8,
+            "stdDevMs": 0.8432740427115677,
+            "p95Ms": 8
+          },
+          "heapDeltaBytesMedian": 471128,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-37-edge-high-object-count",
+          "engineId": "candidate-pdfjs-text",
+          "engineVersion": "0.2.0 (pdfjs-dist 6.3.289)",
+          "conversion": "pdf-to-text",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 5906,
+            "text.characterCount": 5906,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 13.5,
+            "meanMs": 14.3,
+            "minMs": 12,
+            "maxMs": 21,
+            "stdDevMs": 2.6687491868330793,
+            "p95Ms": 21
+          },
+          "heapDeltaBytesMedian": 945064,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-03-table-aligned",
+      "conversion": "extract-tables",
+      "scope": "component",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-03-table-aligned",
+          "engineId": "current-pdfium-tables",
+          "engineVersion": "1.0.0",
+          "conversion": "extract-tables",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 191,
+            "text.characterCount": 191,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "table.cellTokenRecall": 1,
+            "table.rowCountRatio": 1,
+            "table.rowGroupingAccuracy": 0,
+            "table.rowsExtracted": 4
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.8,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.42163702135578396,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 52512,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-03-table-aligned",
+          "engineId": "candidate-pdfjs-table-signal",
+          "engineVersion": "0.1.0 (pdfjs-dist positioned items)",
+          "conversion": "extract-tables",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 206,
+            "text.characterCount": 206,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "table.cellTokenRecall": 1,
+            "table.rowCountRatio": 1,
+            "table.rowGroupingAccuracy": 1,
+            "table.rowsExtracted": 4
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 2.7,
+            "minMs": 1,
+            "maxMs": 9,
+            "stdDevMs": 2.496664441476534,
+            "p95Ms": 9
+          },
+          "heapDeltaBytesMedian": 502680,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-31-table-multi-row",
+      "conversion": "extract-tables",
+      "scope": "component",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-31-table-multi-row",
+          "engineId": "current-pdfium-tables",
+          "engineVersion": "1.0.0",
+          "conversion": "extract-tables",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 488,
+            "text.characterCount": 488,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "table.cellTokenRecall": 1,
+            "table.rowCountRatio": 1,
+            "table.rowGroupingAccuracy": 0,
+            "table.rowsExtracted": 10
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 1.1,
+            "minMs": 1,
+            "maxMs": 2,
+            "stdDevMs": 0.31622776601683794,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 98640,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-31-table-multi-row",
+          "engineId": "candidate-pdfjs-table-signal",
+          "engineVersion": "0.1.0 (pdfjs-dist positioned items)",
+          "conversion": "extract-tables",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 527,
+            "text.characterCount": 527,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "table.cellTokenRecall": 1,
+            "table.rowCountRatio": 1,
+            "table.rowGroupingAccuracy": 1,
+            "table.rowsExtracted": 10
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 2.3,
+            "minMs": 2,
+            "maxMs": 3,
+            "stdDevMs": 0.48304589153964794,
+            "p95Ms": 3
+          },
+          "heapDeltaBytesMedian": 894236,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-32-table-multi-col",
+      "conversion": "extract-tables",
+      "scope": "component",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-32-table-multi-col",
+          "engineId": "current-pdfium-tables",
+          "engineVersion": "1.0.0",
+          "conversion": "extract-tables",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 383,
+            "text.characterCount": 383,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "table.cellTokenRecall": 1,
+            "table.rowCountRatio": 1,
+            "table.rowGroupingAccuracy": 0,
+            "table.rowsExtracted": 4
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.8,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.42163702135578396,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 74024,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-32-table-multi-col",
+          "engineId": "candidate-pdfjs-table-signal",
+          "engineVersion": "0.1.0 (pdfjs-dist positioned items)",
+          "conversion": "extract-tables",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 422,
+            "text.characterCount": 422,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "table.cellTokenRecall": 1,
+            "table.rowCountRatio": 1,
+            "table.rowGroupingAccuracy": 1,
+            "table.rowsExtracted": 4
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 1.9,
+            "minMs": 1,
+            "maxMs": 2,
+            "stdDevMs": 0.31622776601683794,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 727144,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-33-table-split-pages",
+      "conversion": "extract-tables",
+      "scope": "component",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-33-table-split-pages",
+          "engineId": "current-pdfium-tables",
+          "engineVersion": "1.0.0",
+          "conversion": "extract-tables",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 604,
+            "text.characterCount": 604,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "table.cellTokenRecall": 1,
+            "table.rowCountRatio": 1,
+            "table.rowGroupingAccuracy": 0,
+            "table.rowsExtracted": 12
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 1.2,
+            "minMs": 1,
+            "maxMs": 2,
+            "stdDevMs": 0.42163702135578396,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 118820,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-33-table-split-pages",
+          "engineId": "candidate-pdfjs-table-signal",
+          "engineVersion": "0.1.0 (pdfjs-dist positioned items)",
+          "conversion": "extract-tables",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 650,
+            "text.characterCount": 650,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "table.cellTokenRecall": 1,
+            "table.rowCountRatio": 1,
+            "table.rowGroupingAccuracy": 1,
+            "table.rowsExtracted": 12
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 3,
+            "meanMs": 2.8,
+            "minMs": 2,
+            "maxMs": 3,
+            "stdDevMs": 0.4216370213557839,
+            "p95Ms": 3
+          },
+          "heapDeltaBytesMedian": 1110444,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "fixtureId": "F-38-table-positioned-cells",
+      "conversion": "extract-tables",
+      "scope": "component",
+      "runs": [
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-38-table-positioned-cells",
+          "engineId": "current-pdfium-tables",
+          "engineVersion": "1.0.0",
+          "conversion": "extract-tables",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 297,
+            "text.characterCount": 297,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "table.cellTokenRecall": 1,
+            "table.rowCountRatio": 1,
+            "table.rowGroupingAccuracy": 0,
+            "table.rowsExtracted": 6
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 1,
+            "meanMs": 0.9,
+            "minMs": 0,
+            "maxMs": 1,
+            "stdDevMs": 0.31622776601683794,
+            "p95Ms": 1
+          },
+          "heapDeltaBytesMedian": 70888,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        },
+        {
+          "benchmarkVersion": 2,
+          "fixtureVersion": 2,
+          "fixtureId": "F-38-table-positioned-cells",
+          "engineId": "candidate-pdfjs-table-signal",
+          "engineVersion": "0.1.0 (pdfjs-dist positioned items)",
+          "conversion": "extract-tables",
+          "success": true,
+          "metrics": {
+            "output.exists": true,
+            "output.count": 1,
+            "output.bytes": 320,
+            "text.characterCount": 320,
+            "text.anchorPreservation": 1,
+            "text.anchorPrecision": 1,
+            "text.readingOrderAccuracy": 1,
+            "text.unexpectedTokenCount": 0,
+            "text.pageCoverage": 1,
+            "table.cellTokenRecall": 1,
+            "table.rowCountRatio": 1,
+            "table.rowGroupingAccuracy": 1,
+            "table.rowsExtracted": 6
+          },
+          "metricsStable": true,
+          "quality": {
+            "state": "healthy",
+            "score": 100,
+            "checks": 4
+          },
+          "timing": {
+            "samples": 10,
+            "medianMs": 2,
+            "meanMs": 2,
+            "minMs": 2,
+            "maxMs": 2,
+            "stdDevMs": 0,
+            "p95Ms": 2
+          },
+          "heapDeltaBytesMedian": 700244,
+          "warmupRuns": 1,
+          "measuredRuns": 10,
+          "truncated": false
+        }
+      ]
+    }
+  ],
+  "qualityCorrelation": [
+    {
+      "engineId": "candidate-pdfjs-table-signal",
+      "state": "healthy",
+      "runs": 5,
+      "meanAnchorPreservation": 1
+    },
+    {
+      "engineId": "candidate-pdfjs-text",
+      "state": "healthy",
+      "runs": 35,
+      "meanAnchorPreservation": 0.9928571428571429,
+      "meanTokenRecall": 1
+    },
+    {
+      "engineId": "candidate-pdfjs-text",
+      "state": "suspicious",
+      "runs": 2
+    },
+    {
+      "engineId": "current-pdfium-tables",
+      "state": "healthy",
+      "runs": 5,
+      "meanAnchorPreservation": 1
+    },
+    {
+      "engineId": "current-pdfium-text",
+      "state": "healthy",
+      "runs": 35,
+      "meanAnchorPreservation": 1,
+      "meanTokenRecall": 1
+    },
+    {
+      "engineId": "current-pdfium-text",
+      "state": "suspicious",
+      "runs": 2
+    }
+  ],
+  "notes": [
+    "Rendering conversions (pdf-to-jpg, pdf-to-png) were not benchmarked: candidate applicability is NO — raster output requires the optional native @napi-rs/canvas dependency, which the production no-native-binaries constraint excludes.",
+    "extract-tables evidence is COMPONENT-LEVEL: the candidate provides positioned text, not table reconstruction; no full extract-tables equivalence is claimed.",
+    "pdf-to-word, pdf-to-excel and compare-documents share the same pdfium text component as pdf-to-text, so the pdf-to-text cases are their component evidence; their assembly stages are unmeasured.",
+    "Timing values are wall-clock measurements from the recorded runs: reproducible in method, not identical in value.",
+    "All fixtures are synthetic repository-owned documents; results contain no document content.",
+    "This artifact records evidence only — it encodes no decision, ranking or production threshold."
+  ]
+}
