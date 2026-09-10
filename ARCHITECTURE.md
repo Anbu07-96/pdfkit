@@ -149,6 +149,13 @@ src/
    │  ├─ client.ts            Browser-side API client (the only fetch)
    │  ├─ validation/          PDF signature and limit checks
    │  └─ processors/          merge-pdf.ts
+   ├─ engines/                Conversion engine abstraction (Phase 67, Stage 1)
+   │  ├─ types.ts             ConversionType, EngineDescriptor, EngineResult…
+   │  ├─ errors.ts            EngineRoutingError (internal invariant only)
+   │  ├─ registry.ts          One engine per conversion type, deterministic
+   │  ├─ router.ts            selectEngine(type) — always the current engine
+   │  ├─ processor.ts         Engine-backed ToolProcessor factory
+   │  └─ adapters/current.ts  Thin adapters over the existing processors
    ├─ hardening/
    │  ├─ config.ts            Timeout/concurrency config (env, documented defaults)
    │  ├─ guards.ts            Numeric Content-Length gate + job slot counter
@@ -1270,6 +1277,57 @@ Every uploaded file is treated as untrusted input:
 - **Safe file names.** Output names come from one shared sanitiser
   (`file-names.ts`), and ZIP entry names are additionally stripped of
   directories, traversal (`../`), drive letters and control characters, then
+  de-duplicated.
+- **No empty documents.** Delete PDF Pages refuses to produce a zero-page PDF;
+  the check runs before any page is copied.
+- **Rotation is validated server-side.** Angles and page numbers are re-checked
+  against the real document before anything is written, and an invalid request
+  produces no output document at all.
+- **Rasterisation is bounded.** Page count, render width and per-image bytes are
+  all capped, with hard ceilings above the configurable values; a 4× aspect
+  ratio cap bounds the bitmap for unusual page shapes. Rendering happens in
+  memory only — no temporary files, so there is no cleanup path to get wrong and
+  nothing under `public/`.
+- **Safe errors.** Clients receive a code and a short message; stack traces,
+  library internals and causes never leave the server.
+- **Privacy-safe logging.** Counts, byte totals, durations and error codes only.
+- **Response hardening.** `no-store`, `nosniff` and a sanitised
+  `Content-Disposition` file name (control characters and quotes stripped, so
+  the header cannot be split).
+- **Secrets.** None exist; `.env*` is git-ignored apart from `.env.example`, and
+  future credentials must stay server-side (no `NEXT_PUBLIC_` prefix).
+
+This is a foundation, not a hardened production deployment: there is no rate
+limiting, no authentication, no virus scanning and no per-IP quota yet.
+
+---
+
+## 10. Testing strategy
+
+- **Pure logic** (`src/lib`) is unit tested directly: catalog integrity, search
+  behaviour, file validation, formatting.
+- **Components** are tested through the DOM with Testing Library, using roles
+  and accessible names, covering navigation, theme switching, search, tool cards
+  and every meaningful upload state.
+- **Server tests** run in the Node environment and exercise the real processors
+  with real PDFs built by pdf-lib, plus the route handlers through their exported
+  `POST`/`GET` functions. Split PDF tests build documents whose page widths encode
+  the page number, so page identity and ordering can be asserted after copying.
+- **ZIP responses are opened in tests**, every PDF inside is parsed, and its page
+  count and page identity are checked — an HTTP 200 is never treated as proof.
+- **Page identity, not just page counts.** Fixtures encode the page number in
+  the page width, so tests prove that page 3 really is page 3 after extracting,
+  deleting, splitting or reordering. A document with the right number of wrong
+  pages fails.
+- **Thumbnail identity by pixels.** A fixture gives every page a distinct solid
+  colour; thumbnail tests decode the returned PNG and check the centre pixel, so
+  "three images were returned" can never pass for "the right three pages".
+- **Honesty guard:** a test fails if a tool is marked available without a
+  registered processor, or a processor exists without an available catalog entry
+  — the rule is enforced, not just documented.
+- `next/link` and `next/navigation` are mocked in `vitest.setup.ts` so component
+  tests run without the Next.js runtime.
+tories, traversal (`../`), drive letters and control characters, then
   de-duplicated.
 - **No empty documents.** Delete PDF Pages refuses to produce a zero-page PDF;
   the check runs before any page is copied.
