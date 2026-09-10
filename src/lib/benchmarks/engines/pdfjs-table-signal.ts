@@ -2,10 +2,10 @@ import "server-only";
 
 import type { BenchmarkEngine } from "@/lib/benchmarks/types";
 import {
-  parsePdfTextPages,
+  loadPositionedTextPages,
   type PdfjsDocumentLoader,
   type PositionedTextItem,
-} from "@/lib/benchmarks/engines/pdfjs-candidate";
+} from "@/lib/processing/pdfjs/positioned-text";
 
 /**
  * BENCHMARK-ONLY component engine (Phase 72): PDF.js positioned text as a
@@ -88,10 +88,10 @@ export function createPdfjsTableSignalCandidate(
 ): BenchmarkEngine {
   return {
     id: "candidate-pdfjs-table-signal",
-    version: "0.1.0 (pdfjs-dist positioned items)",
+    version: "0.2.0 (production pdfjs positioned-item core)",
     conversion: "extract-tables",
     async run(file) {
-      const { numPages, pages } = await parsePdfTextPages(
+      const { numPages, pages } = await loadPositionedTextPages(
         file.bytes,
         options.loadDocument ? { loadDocument: options.loadDocument } : {},
       );

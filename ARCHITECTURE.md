@@ -1201,6 +1201,17 @@ API route → hardening → runProcessingJob
         → the existing processor implementation (unchanged)
 ```
 
+**Phase 73 (Stage 4, gated):** for pdf-to-text only, the registry also holds
+one declared **alternative** engine — `pdfjs-text` (pdfjs-dist 6.3.289,
+Apache-2.0, server-side, in-process). It is NOT a default: `byConversion()`
+returns only defaults, `selectEngine()` is unchanged for all callers, and the
+single opt-in call site (`src/lib/engines/processor.ts`) consults the
+fail-closed `PDFKIT_PDF_TO_TEXT_ENGINE` variable — unset or any unrecognized
+value keeps `current-pdfium-text` (bit-for-bit Phase 72 behavior). No
+fallback, no retry, no QualityGate routing; attempt stays 1. Known accepted
+divergences: µ→μ (Rule A) and off-page clipping (Rule B, pdfium is the
+baseline). Full contract: `docs/pdfjs-text-engine.md`.
+
 ### Stage 1 (Phase 67): the abstraction skeleton
 
 - `src/lib/engines/types.ts` — `ConversionType` (the eleven conversion

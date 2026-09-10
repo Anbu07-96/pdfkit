@@ -148,3 +148,36 @@ the large fixture; no heap growth trend across the corpus.
   activation.
 - No benchmark results persisted outside test runs (results are test
   artifacts by design).
+
+## 7. Phase 73: second-engine integration for pdf-to-text (implemented)
+
+Phase 73 implemented the first Stage 4 slice for exactly one conversion:
+**pdf-to-text**, behind manual server-side gating (default OFF).
+
+- **Benchmark/production parity (§23):** the Phase 72 benchmark candidate
+  now wraps the production `pdfjs-text` engine, so benchmark evidence and
+  production behavior share one core. `pdfjs-engine-parity.test.ts` proves
+  it differentially: identical page content, fixture by fixture, plus
+  identical typed failures.
+- **Regression corpus (§24):** both engines run across the full Phase 72
+  fixture corpus in tests. Anchor preservation must be 1.0 everywhere
+  except the documented divergences: Rule A (µ→μ, symbol fixture only) and
+  Rule B (off-page clipping, F-39 only). Phase 72 results in
+  `docs/benchmark-results-phase72.md` / `.json` remain an immutable
+  historical record — Phase 73 differences are documented in
+  `docs/pdfjs-text-engine.md`, never retroactively rewritten.
+- **Registry model (§47):** the registry now holds 11 defaults plus
+  `pdfjs-text` as the single declared **alternative** (pdf-to-text only).
+  `byConversion()` still returns only defaults; `selectEngine()` unchanged;
+  alternatives never become defaults and never influence routing for other
+  conversions (all invariant-tested). Gating is one env variable,
+  fail-closed, kill switch scoped to pdf-to-text — see
+  `docs/pdfjs-text-engine.md` §2.
+- **Stage 4 status (§48):** what is implemented = second engine for
+  pdf-to-text, behind explicit operator gating, with compatibility rules
+  A/B accepted and tested. What is NOT implemented: automatic fallback or
+  retry of any kind, QualityGate-triggered switching (§13 observe-and-record
+  only), ranking or content/performance-based routing, second engines for
+  any other conversion, OCR, and any client-facing engine selection. The
+  §41/§42 technical-failure fallback policy exists in DRAFT form only
+  (`docs/pdfjs-text-engine.md` §4) and is not wired to anything.

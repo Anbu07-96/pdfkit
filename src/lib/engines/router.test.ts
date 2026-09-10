@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { EngineRoutingError } from "@/lib/engines/errors";
 import { getDefaultEngineRegistry } from "@/lib/engines/registry";
 import { selectEngine } from "@/lib/engines/router";
@@ -88,5 +88,70 @@ describe("conversion router (Stage 1)", () => {
         `${id} should be a registered conversion type`,
       ).toBe(true);
     }
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Phase 73 — default purity + explicit alternative selection            */
+/* ------------------------------------------------------------------ */
+
+describe("conversion router (Phase 73 manual gating)", () => {
+  const VARIABLE = "PDFKIT_PDF_TO_TEXT_ENGINE";
+
+  afterEach(() => {
+    delete process.env[VARIABLE];
+  });
+
+  it("the default-signature call NEVER consults the configuration", () => {
+    process.env[VARIABLE] = "pdfjs";
+    try {
+      for (const type of CONVERSION_TYPES) {
+        // Pure default routing, even with the alternative enabled.
+        expect(selectEngine(type).descriptor.id, type).toBe(EXPECTED_ENGINE[type]);
+      }
+    } finally {
+      delete process.env[VARIABLE];
+    }
+  });
+
+  it("honors the approved configuration ONLY for pdf-to-text", () => {
+    process.env[VARIABLE] = "pdfjs";
+    try {
+      expect(selectEngine("pdf-to-text", { honorConfiguredAlternative: true }).descriptor.id).toBe(
+        "pdfjs-text",
+      );
+      // Every other conversion: identity-equivalent routing with the flag.
+      for (const type of CONVERSION_TYPES) {
+        if (type === "pdf-to-text") continue;
+        expect(
+          selectEngine(type, { honorConfiguredAlternative: true }).descriptor.id,
+          type,
+        ).toBe(EXPECTED_ENGINE[type]);
+      }
+    } finally {
+      delete process.env[VARIABLE];
+    }
+  });
+
+  it("fails closed to the default engine for every non-approved configuration value", () => {
+    for (const value of ["", "current", "off", "false", "bogus", "pdfjs-text", "qpdf"]) {
+      process.env[VARIABLE] = value;
+      expect(
+        selectEngine("pdf-to-text", { honorConfiguredAlternative: true }).descriptor.id,
+        `value ${JSON.stringify(value)}`,
+      ).toBe("current-pdfium-text");
+    }
+    delete process.env[VARIABLE];
+    expect(
+      selectEngine("pdf-to-text", { honorConfiguredAlternative: true }).descriptor.id,
+    ).toBe("current-pdfium-text");
+  });
+
+  it("alternative selection is deterministic and returns the same instance", () => {
+    process.env[VARIABLE] = "pdfjs";
+    const first = selectEngine("pdf-to-text", { honorConfiguredAlternative: true });
+    const second = selectEngine("pdf-to-text", { honorConfiguredAlternative: true });
+    expect(first).toBe(second);
+    expect(first.descriptor.id).toBe("pdfjs-text");
   });
 });

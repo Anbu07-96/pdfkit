@@ -44,12 +44,23 @@ export function createEngineProcessor<TOptions = Record<string, unknown>>(
 
     async process(request, context) {
       // Route per request — the router stays in the live path for every
-      // call, which is what later stages build on. The registry hands out
-      // engines typed with the default options record; this processor serves
-      // the very tool the underlying engine implementation was built for and
-      // forwards the request untouched, so narrowing to `TOptions` is sound
-      // and purely compile-time.
-      const engine = selectEngine(conversionType) as ConversionEngine<TOptions>;
+      // call, which is what later stages build on. Phase 73: the processor
+      // is the single production call site that honors the server-side
+      // engine configuration (manual gating for the pdf-to-text
+      // alternative); with the configuration unset or off — the default —
+      // this selects exactly the same default engine as before. The
+      // registry hands out engines typed with the default options record;
+      // this processor serves the very tool the underlying engine
+      // implementation was built for and forwards the request untouched, so
+      // narrowing to `TOptions` is sound and purely compile-time.
+      //
+      // There is deliberately NO fallback here: if the selected engine
+      // (default or alternative) fails, the error propagates to the
+      // existing processing-error model. Engine selection and retry
+      // attempts are different concepts (attempt stays 1).
+      const engine = selectEngine(conversionType, {
+        honorConfiguredAlternative: true,
+      }) as ConversionEngine<TOptions>;
       const result = await engine.run(request, context);
 
       return {

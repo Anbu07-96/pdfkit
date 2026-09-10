@@ -8,10 +8,14 @@ import { getProcessor } from "@/lib/processing/registry";
 
 /**
  * Phase 71 production-isolation proofs (Phase 71 §16), extended for
- * Phase 72 (§23–§24).
+ * Phase 72 (§23–§24) and Phase 73.
  *
- * The candidate engine and the benchmark harness must be unreachable from
- * production. These tests enforce it statically and behaviorally.
+ * Phase 73 legitimately ships a production pdfjs engine: pdfjs-dist is a
+ * real dependency now, imported by exactly ONE designated production
+ * module. Everything else the earlier phases guaranteed still holds: the
+ * benchmark harness stays unreachable from production, the native canvas
+ * stays unimported, defaults stay defaults, and benchmark candidates stay
+ * out of the registry.
  */
 
 /** Recursively collect source files under a directory. */
@@ -47,13 +51,16 @@ const PRODUCTION_ROOTS = [
   "src/components",
 ];
 
-describe("production isolation (Phase 71 §16)", () => {
+describe("production isolation (Phase 71 §16, Phase 73 revision)", () => {
   it("no production module imports the benchmark harness", () => {
     const offenders: string[] = [];
     for (const root of PRODUCTION_ROOTS) {
       for (const file of collectFiles(root)) {
         const source = readFileSync(file, "utf8");
-        if (source.includes("@/lib/benchmarks") || source.includes("pdfjs-dist")) {
+        // Test files colocated with production code are not production
+        // modules; engine tests may import test-only benchmark utilities.
+        if (file.endsWith(".test.ts")) continue;
+        if (source.includes("@/lib/benchmarks")) {
           offenders.push(file);
         }
       }
@@ -61,10 +68,37 @@ describe("production isolation (Phase 71 §16)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("the live registry contains exactly the 11 current engines — no candidate", () => {
+  it("pdfjs-dist is imported by exactly ONE designated production module (the shared core)", () => {
+    // Phase 73: the production pdfjs engine legitimately depends on
+    // pdfjs-dist — but only through the single shared core module, so the
+    // dependency surface stays auditable. Comments may mention pdfjs-dist;
+    // imports are what is constrained.
+    const allowlist = new Set([
+      join("src", "lib", "processing", "pdfjs", "positioned-text.ts"),
+    ]);
+    const importPattern =
+      /(?:from\s+|require\(\s*|import\(\s*)["']pdfjs-dist(?:\/[^"']*)?["']/;
+    const offenders: string[] = [];
+    for (const root of PRODUCTION_ROOTS) {
+      for (const file of collectFiles(root)) {
+        if (allowlist.has(file)) continue;
+        const source = readFileSync(file, "utf8");
+        if (importPattern.test(source)) offenders.push(file);
+      }
+    }
+    expect(offenders).toEqual([]);
+    // And the allowlisted module exists (the allowlist must not rot).
+    expect(allowlist.size).toBe(1);
+    for (const file of allowlist) {
+      expect(() => readFileSync(file, "utf8")).not.toThrow();
+    }
+  });
+
+  it("the live registry holds the 11 current defaults plus exactly one declared alternative", () => {
     const registry = getDefaultEngineRegistry();
     const ids = registry.list().map((engine) => engine.descriptor.id).sort();
     expect(ids).toEqual([
+      // 11 defaults (unchanged):
       "current-pdf-lib-compress",
       "current-pdf-lib-extract-images",
       "current-pdf-lib-images",
@@ -76,10 +110,26 @@ describe("production isolation (Phase 71 §16)", () => {
       "current-pdfium-png",
       "current-pdfium-tables",
       "current-pdfium-text",
+      // 1 alternative (Phase 73), declared for pdf-to-text only:
+      "pdfjs-text",
     ]);
-    expect(registry.list()).toHaveLength(11);
-    // The candidate is nowhere near the registry.
+    expect(registry.list()).toHaveLength(12);
+    // Benchmark candidates are still nowhere near the registry.
     expect(registry.byId("candidate-pdfjs-text")).toBeUndefined();
+    expect(registry.byId("candidate-pdfjs-table-signal")).toBeUndefined();
+    // The alternative is registered as an ALTERNATIVE, not a default:
+    expect(registry.alternativesFor("pdf-to-text").map((e) => e.descriptor.id)).toEqual([
+      "pdfjs-text",
+    ]);
+    expect(
+      registry.byConversion("pdf-to-text").map((e) => e.descriptor.id),
+    ).toEqual(["current-pdfium-text"]);
+    // Every other conversion has NO alternative.
+    for (const engine of registry.list()) {
+      if (engine.descriptor.conversionType !== "pdf-to-text") {
+        expect(registry.alternativesFor(engine.descriptor.conversionType)).toEqual([]);
+      }
+    }
   });
 
   it("the router resolves every conversion to its current engine only", () => {
@@ -96,12 +146,25 @@ describe("production isolation (Phase 71 §16)", () => {
       "pdf-to-word": "current-pdfium-docx",
       "png-to-pdf": "current-pdf-lib-png",
     };
-    for (const [conversion, engineId] of Object.entries(expected)) {
-      expect(selectEngine(conversion as never).descriptor.id).toBe(engineId);
+    // Environment hygiene: even with the alternative ENABLED in the
+    // environment, the default-signature call must return the defaults.
+    const previous = process.env.PDFKIT_PDF_TO_TEXT_ENGINE;
+    process.env.PDFKIT_PDF_TO_TEXT_ENGINE = "pdfjs";
+    try {
+      for (const [conversion, engineId] of Object.entries(expected)) {
+        expect(selectEngine(conversion as never).descriptor.id).toBe(engineId);
+      }
+    } finally {
+      if (previous === undefined) delete process.env.PDFKIT_PDF_TO_TEXT_ENGINE;
+      else process.env.PDFKIT_PDF_TO_TEXT_ENGINE = previous;
     }
   });
 
   it("the processing registry still serves engine-backed processors with current engine ids", async () => {
+    // Feature-disabled baseline (Phase 73 §33): with the alternative not
+    // enabled, the live path must behave exactly as in Phase 72.
+    const previous = process.env.PDFKIT_PDF_TO_TEXT_ENGINE;
+    delete process.env.PDFKIT_PDF_TO_TEXT_ENGINE;
     const processor = getProcessor<Record<string, unknown>>("pdf-to-text");
     expect(processor.toolId).toBe("pdf-to-text");
     // The meta contract is unchanged from Phase 67-70: processor meta plus
@@ -132,12 +195,18 @@ describe("production isolation (Phase 71 §16)", () => {
       expect(result.meta?.engineId).toBe("current-pdfium-text");
       expect(result.meta?.attempt).toBe(1);
     }
+    if (previous !== undefined) process.env.PDFKIT_PDF_TO_TEXT_ENGINE = previous;
   });
 
-  it("pdfjs-dist is a devDependency only — never a production dependency", () => {
+  it("pdfjs-dist is an audited production dependency (Phase 73 promotion); the native canvas is not", () => {
+    // Phase 73 §31: the alternative engine is production-capable, so its
+    // dependency is correctly classified in `dependencies` (Apache-2.0,
+    // zero transitive dependencies, audited — see docs/pdfjs-text-engine.md).
     const pkg = JSON.parse(readFileSync("package.json", "utf8"));
-    expect(pkg.dependencies["pdfjs-dist"]).toBeUndefined();
-    expect(pkg.devDependencies["pdfjs-dist"]).toBeDefined();
+    expect(pkg.dependencies["pdfjs-dist"]).toBeDefined();
+    expect(pkg.devDependencies["pdfjs-dist"]).toBeUndefined();
+    // The optional native canvas must NEVER be a direct dependency.
+    expect(pkg.dependencies["@napi-rs/canvas"]).toBeUndefined();
   });
 });
 
@@ -181,19 +250,17 @@ describe("production isolation (Phase 72 §23–§24)", () => {
     const registry = getDefaultEngineRegistry();
     expect(registry.byId("candidate-pdfjs-table-signal")).toBeUndefined();
     expect(registry.byId("candidate-pdfjs-text")).toBeUndefined();
-    expect(registry.list()).toHaveLength(11);
+    // 11 defaults + the 1 declared alternative (checked in detail above).
+    expect(registry.list()).toHaveLength(12);
   });
 
-  it("pdfjs-dist stays a devDependency and the native canvas stays an optional transitive only", () => {
+  it("the native canvas stays an optional transitive of pdfjs-dist only — never a direct dependency", () => {
     const pkg = JSON.parse(readFileSync("package.json", "utf8"));
-    expect(pkg.dependencies["pdfjs-dist"]).toBeUndefined();
     expect(pkg.dependencies["@napi-rs/canvas"]).toBeUndefined();
-    expect(pkg.devDependencies["pdfjs-dist"]).toBeDefined();
     expect(pkg.devDependencies["@napi-rs/canvas"]).toBeUndefined();
     const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
     const canvasEntry = lock.packages["node_modules/@napi-rs/canvas"];
     expect(canvasEntry?.optional).toBe(true);
-    expect(canvasEntry?.dev).toBe(true);
   });
 
   it("benchmark fixtures and results never persist to the repository working tree", () => {
@@ -206,6 +273,35 @@ describe("production isolation (Phase 72 §23–§24)", () => {
       .filter((file) => {
         const source = readFileSync(file, "utf8");
         return /writeFile|appendFile|mkdirSync\(|rmSync\(/.test(source);
+      });
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe("production isolation (Phase 73 §32, §46)", () => {
+  it("client/UI code never imports the engine layer or pdfjs", () => {
+    const offenders = [...collectFiles("src/app"), ...collectFiles("src/components")]
+      .filter((file) => {
+        const source = readFileSync(file, "utf8");
+        return (
+          /from\s+["']@\/lib\/engines\//.test(source) ||
+          /from\s+["']pdfjs-dist/.test(source) ||
+          /import\(\s*["']pdfjs-dist/.test(source) ||
+          /require\(\s*["']pdfjs-dist/.test(source)
+        );
+      });
+    expect(offenders).toEqual([]);
+  });
+
+  it("production engine code contains no benchmark fixture ids or anchor tokens (no benchmark gaming)", () => {
+    // §46: the production algorithm must be general — no fixture ids
+    // (F-01…), no synthetic anchor tokens (PDFKIT-*) may appear in any
+    // non-test engine/processing source file.
+    const offenders = [...collectFiles("src/lib/engines"), ...collectFiles("src/lib/processing")]
+      .filter((file) => !file.endsWith(".test.ts"))
+      .filter((file) => {
+        const source = readFileSync(file, "utf8");
+        return /PDFKIT-[A-Za-z0-9-]+/.test(source) || /\bF-\d{2}\b/.test(source);
       });
     expect(offenders).toEqual([]);
   });

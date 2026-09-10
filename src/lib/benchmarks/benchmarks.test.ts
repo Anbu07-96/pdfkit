@@ -167,7 +167,8 @@ describe("benchmark runner — PDF.js candidate (benchmark-only)", () => {
 
       if (fixtureId === "F-08-malformed") {
         expect(result.success).toBe(false);
-        expect(typeof result.metrics["failure.errorCategory"]).toBe("string");
+        // Phase 73: typed ProcessingError codes from the shared production core.
+        expect(result.metrics["failure.errorCategory"]).toBe("INVALID_PDF");
       } else {
         expect(result.success).toBe(true);
         expect(result.metrics["output.count"]).toBe(1);
@@ -457,7 +458,10 @@ describe("Phase 72 failure classification (benchmark taxonomy only)", () => {
   it("records the benchmark category alongside the typed code on failure", async () => {
     const result = await runBenchmark(candidate, getFixture("F-36-edge-truncated"));
     expect(result.success).toBe(false);
-    expect(result.metrics["failure.errorCategory"]).toBe("InvalidPDFException");
+    // Phase 73: the candidate now shares the production core, so its
+    // failures are typed ProcessingErrors — the same code the current
+    // engine reports (improved parity; Phase 72 saw raw pdfjs names).
+    expect(result.metrics["failure.errorCategory"]).toBe("INVALID_PDF");
     expect(result.metrics["failure.benchmarkCategory"]).toBe("malformed-input");
     const currentResult = await runBenchmark(currentText, getFixture("F-36-edge-truncated"));
     expect(currentResult.success).toBe(false);

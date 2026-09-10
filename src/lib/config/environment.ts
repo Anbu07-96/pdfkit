@@ -12,7 +12,8 @@ import "server-only";
  * - No invented configuration: only variables that already exist in the
  *   codebase are validated (DATABASE_URL, PDFKIT_REDIS_URL/REDIS_URL,
  *   PDFKIT_REDIS_REQUIRED, PDFKIT_ADMIN_METRICS_TOKEN, PDFKIT_ENVIRONMENT,
- *   NODE_ENV, PDFKIT_USE_IN_MEMORY_USAGE_REPO).
+ *   NODE_ENV, PDFKIT_USE_IN_MEMORY_USAGE_REPO,
+ *   PDFKIT_PDF_TO_TEXT_ENGINE (Phase 73 manual engine gating)).
  *
  * Consumers: scripts/validate-environment.mjs (staging pre-deploy check),
  * unit tests, and docs/staging-deployment.md. The app itself stays
@@ -148,6 +149,24 @@ export function validateEnvironment(): EnvironmentValidationResult {
       severity: "warning",
       message:
         "PDFKIT_ENVIRONMENT contains characters outside [a-zA-Z0-9._-] (max 32 chars); the sanitized environment report will show \"unknown\" instead.",
+    });
+  }
+
+  // --- Phase 73 manual engine gating ---------------------------------------
+  // Fail-closed at the point of use: an unrecognized value selects the
+  // default engine. This check is operator visibility only (a warning, not
+  // an error — an experimental flag typo must not block a deploy), and it
+  // names the VARIABLE only, never the value.
+  const pdfToTextEngine = process.env.PDFKIT_PDF_TO_TEXT_ENGINE;
+  if (
+    pdfToTextEngine !== undefined &&
+    !["current", "pdfjs"].includes(pdfToTextEngine.trim().toLowerCase())
+  ) {
+    warnings.push({
+      variable: "PDFKIT_PDF_TO_TEXT_ENGINE",
+      severity: "warning",
+      message:
+        "PDFKIT_PDF_TO_TEXT_ENGINE is set but is not one of the approved values (current, pdfjs); engine selection fails closed to the default pdfium engine. Check the spelling.",
     });
   }
 

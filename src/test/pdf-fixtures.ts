@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 /** Test fixtures that build genuinely valid PDFs with pdf-lib. */
@@ -456,4 +458,117 @@ export function makeControlCharPdf(): Uint8Array {
     at += chunk.length;
   }
   return bytes;
+}
+
+/**
+ * A PDF using a genuine Type0 / Identity-H CID font (Phase 73 §25):
+ * the descendant CIDFontType2 embeds a REAL TrueType program as FontFile2
+ * (the repository's own Geist UI font, SIL OFL — repo-owned resource), and
+ * the font carries a bfchar ToUnicode CMap. This is the shape modern
+ * producers emit for non-WinAnsi text; extraction goes through ToUnicode.
+ *
+ * Glyph IDs intentionally address arbitrary glyphs (the GID→glyph mapping
+ * is not meaningful) — TEXT EXTRACTION correctness is the fixture's
+ * purpose, and extraction maps via ToUnicode, not glyph identity.
+ */
+export function makeCidFontPdf(text = "PDFKIT-CID-ANCHOR"): Uint8Array {
+  // The geist package's `exports` field blocks subpath resolution, so read
+  // the repository's own UI font (SIL OFL) relative to the test cwd.
+  const ttf = readFileSync(
+    join(
+      process.cwd(),
+      "node_modules",
+      "geist",
+      "dist",
+      "fonts",
+      "geist-sans",
+      "Geist-Regular.ttf",
+    ),
+  );
+
+  const gidChars = text.split("");
+  const bfchars = gidChars
+    .map((char, index) => {
+      const gid = (index + 1).toString(16).padStart(4, "0");
+      const code = char.codePointAt(0)!.toString(16).padStart(4, "0");
+      return `<${gid}> <${code}>`;
+    })
+    .join("\n");
+  const hexString = gidChars
+    .map((_, index) => (index + 1).toString(16).padStart(4, "0"))
+    .join("");
+
+  const toUnicode = `/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def
+/CMapName /Adobe-Identity-UCS def
+/CMapType 2 def
+1 begincodespacerange
+<0000> <FFFF>
+endcodespacerange
+${gidChars.length} beginbfchar
+${bfchars}
+endbfchar
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end`;
+  const content = `BT /F1 14 Tf 20 300 Td <${hexString}> Tj ET`;
+
+  const enc = new TextEncoder();
+  const chunks: Uint8Array[] = [];
+  const offsets: number[] = [];
+  let length = 0;
+  const push = (data: string | Uint8Array) => {
+    const bytes = typeof data === "string" ? enc.encode(data) : data;
+    chunks.push(bytes);
+    length += bytes.length;
+  };
+  const add = (dict: string, stream?: Uint8Array | string) => {
+    offsets.push(length);
+    push(dict + "\n");
+    if (stream !== undefined) {
+      push("stream\n");
+      push(stream);
+      push("\nendstream\n");
+    }
+    push("endobj\n");
+  };
+
+  push("%PDF-1.7\n");
+  add("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>");
+  add("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
+  add(
+    "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 500 400] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+  );
+  add(
+    "4 0 obj\n<< /Type /Font /Subtype /Type0 /BaseFont /Fixture-CID /Encoding /Identity-H /DescendantFonts [6 0 R] /ToUnicode 7 0 R >>",
+  );
+  add(`5 0 obj\n<< /Length ${content.length} >>`, content);
+  add(
+    "6 0 obj\n<< /Type /Font /Subtype /CIDFontType2 /BaseFont /Fixture-CID /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor 8 0 R /DW 600 /CIDToGIDMap /Identity >>",
+  );
+  add(`7 0 obj\n<< /Length ${toUnicode.length} >>`, toUnicode);
+  add(
+    `8 0 obj\n<< /Type /FontDescriptor /FontName /Fixture-CID /Flags 4 /FontBBox [0 0 1000 1000] /ItalicAngle 0 /Ascent 800 /Descent -200 /CapHeight 700 /StemV 80 /FontFile2 9 0 R >>`,
+  );
+  add(`9 0 obj\n<< /Length ${ttf.length} /Length1 ${ttf.length} >>`, ttf);
+
+  const xrefStart = length;
+  let xref = `xref\n0 10\n0000000000 65535 f \n`;
+  for (const offset of offsets) {
+    xref += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  }
+  xref += `trailer\n<< /Size 10 /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  push(xref);
+
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const out = new Uint8Array(total);
+  let position = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, position);
+    position += chunk.length;
+  }
+  return out;
 }

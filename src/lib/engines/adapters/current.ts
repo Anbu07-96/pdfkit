@@ -1,14 +1,19 @@
 import "server-only";
 
-import type {
-  ConversionEngine,
-  EngineDescriptor,
-  EngineResult,
-} from "@/lib/engines/types";
-import { describeInputFile } from "@/lib/engines/profile";
-import { assessConversionQuality } from "@/lib/engines/quality";
-import { validateEngineResult } from "@/lib/engines/validation";
-import type { ProcessingArtifact, ToolProcessor } from "@/lib/processing/contract";
+import type { ConversionEngine } from "@/lib/engines/types";
+import {
+  processorEngineAdapter,
+  type ProcessorEngineSpec,
+} from "@/lib/engines/adapters/processor-engine";
+
+// Re-exported for existing importers (Phase 70 hardening tests, benchmark
+// runner): the marker-scan utilities moved to the shared adapter module in
+// Phase 73 so the alternative pdfjs engine uses the identical quality
+// signal computation.
+export {
+  MARKER_SCAN_MAX_BYTES,
+  textArtifactsMarkerOnly,
+} from "@/lib/engines/adapters/processor-engine";
 import { compareDocumentsProcessor } from "@/lib/processing/processors/compare-documents";
 import { compressPdfProcessor } from "@/lib/processing/processors/compress-pdf";
 import { extractImagesProcessor } from "@/lib/processing/processors/extract-images";
@@ -46,98 +51,16 @@ import { pdfToWordProcessor } from "@/lib/processing/processors/pdf-to-word";
  * unchanged — this file only establishes the abstraction boundary.
  */
 
-interface CurrentEngineSpec<TOptions = Record<string, unknown>> {
-  descriptor: EngineDescriptor;
-  processor: ToolProcessor<TOptions>;
-}
-
 /**
- * Upper bound for the marker-only scan: text artifacts above this size are
- * certainly not marker-only (a 50-page marker-only output is a few KiB).
+ * Phase 73: the wrapping, validation and quality logic lives in the shared
+ * `processorEngineAdapter` (adapters/processor-engine.ts) so the alternative
+ * pdfjs engine goes through the exact same path. `currentEngineAdapter`
+ * remains as the historical name every current engine uses.
  */
-/** Exported for boundary tests (Phase 70); the value is policy, not secret. */
-export const MARKER_SCAN_MAX_BYTES = 1024 * 1024;
-
-const PAGE_MARKER_PATTERNS = [
-  /--- Page \d+ ---/g,
-  /\[Page \d+ contains no extractable text\]/g,
-];
-
-/**
- * Derive (without retaining anything) whether every text artifact consists
- * entirely of the current processors' page markers — the honest signal that
- * a PDF → text conversion extracted no source text. Boolean only: no
- * content leaves this function.
- */
-export function textArtifactsMarkerOnly(artifacts: readonly ProcessingArtifact[]): boolean | undefined {
-  let sawTextArtifact = false;
-  for (const artifact of artifacts) {
-    if (!artifact.mimeType.toLowerCase().startsWith("text/")) continue;
-    sawTextArtifact = true;
-    if (artifact.bytes.length === 0 || artifact.bytes.length > MARKER_SCAN_MAX_BYTES) {
-      return false;
-    }
-    let text = new TextDecoder().decode(artifact.bytes);
-    for (const pattern of PAGE_MARKER_PATTERNS) {
-      text = text.replace(pattern, "");
-    }
-    if (text.trim().length > 0) return false;
-  }
-  return sawTextArtifact ? true : undefined;
-}
-
-/** Wrap an existing processor as a conversion engine. */
 export function currentEngineAdapter<TOptions>(
-  spec: CurrentEngineSpec<TOptions>,
+  spec: ProcessorEngineSpec<TOptions>,
 ): ConversionEngine<TOptions> {
-  const { descriptor, processor } = spec;
-  return {
-    descriptor,
-    input: processor.input,
-    async run(request, context) {
-      const startedAt = Date.now();
-      const success = await processor.process(request, context);
-      const result: EngineResult = {
-        ...success,
-        engineId: descriptor.id,
-        attempt: 1,
-        durationMs: Date.now() - startedAt,
-        warnings: [],
-        validation: { status: "not-evaluated" },
-        // Signature-tier input description (Phase 68): one scan of the
-        // first KiB, no parsing, never a routing input. Present whenever
-        // the request carried a file.
-        ...(request.files[0]
-          ? { profile: describeInputFile(request.files[0]) }
-          : {}),
-      };
-      // Structural validation (Phase 68) — records the verdict on the
-      // result and returns it unchanged either way. Diagnostic only.
-      const validated = validateEngineResult(result);
-
-      // QualityGate v1 (Phase 69, Stage 3) — a conservative, diagnostic-only
-      // quality verdict from signals the request already produced (profile
-      // tier, validation verdict, processor meta, artifact facts). It adds
-      // no parsing and never changes the outcome; Stage 4 (PLANNED) will
-      // decide what to do with it.
-      const outputBytes = validated.artifacts.reduce(
-        (total, artifact) => total + artifact.size,
-        0,
-      );
-      return {
-        ...validated,
-        quality: assessConversionQuality(descriptor.conversionType, {
-          profile: validated.profile,
-          validation: validated.validation,
-          meta: validated.meta,
-          artifactCount: validated.artifacts.length,
-          outputBytes,
-          inputFileCount: request.files.length,
-          outputTextMarkerOnly: textArtifactsMarkerOnly(validated.artifacts),
-        }),
-      };
-    },
-  };
+  return processorEngineAdapter(spec);
 }
 
 /** PDF → Word: pdfium (WASM) text extraction + docx generation. */

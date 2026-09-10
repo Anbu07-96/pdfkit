@@ -62,15 +62,20 @@ describe("engine registry — default set", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("holds no engines beyond the current set", () => {
-    expect(getDefaultEngineRegistry().list()).toHaveLength(
-      CONVERSION_TYPES.length,
-    );
+  it("holds the current defaults plus exactly one declared alternative (Phase 73)", () => {
+    const registry = getDefaultEngineRegistry();
+    expect(registry.list()).toHaveLength(CURRENT_ENGINES.length + 1);
+    // The defaults come first, in the exact previous order.
+    expect(registry.list().slice(0, CURRENT_ENGINES.length)).toEqual(CURRENT_ENGINES);
+    // The single addition is the pdf-to-text alternative.
+    const alternatives = registry.list().slice(CURRENT_ENGINES.length);
+    expect(alternatives.map((engine) => engine.descriptor.id)).toEqual(["pdfjs-text"]);
+    expect(alternatives[0].descriptor.conversionType).toBe("pdf-to-text");
   });
 
   it("exposes the current engines in a deterministic order", () => {
     const registry = getDefaultEngineRegistry();
-    expect(registry.list()).toEqual(CURRENT_ENGINES);
+    expect(registry.list().slice(0, CURRENT_ENGINES.length)).toEqual(CURRENT_ENGINES);
     expect(registry.list()).toEqual(registry.list());
   });
 
@@ -108,7 +113,7 @@ describe("engine registry — registration rules", () => {
     registry.register(fakeEngine("first", "pdf-to-word"));
     expect(() =>
       registry.register(fakeEngine("second", "pdf-to-word")),
-    ).toThrow(/primary engine/);
+    ).toThrow(/default engine/);
   });
 
   it("rejects an engine without a usable descriptor id", () => {
@@ -145,5 +150,111 @@ describe("engine registry — availability", () => {
     const registry = createEngineRegistry();
     expect(registry.byConversion("pdf-to-html" as ConversionType)).toEqual([]);
     expect(registry.hasConversion("pdf-to-html" as ConversionType)).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Phase 73 — multi-engine registry invariants                          */
+/* ------------------------------------------------------------------ */
+
+describe("registry alternatives (Phase 73 §6–§7)", () => {
+  it("registerAlternative attaches an alternative without touching the default", () => {
+    const registry = createEngineRegistry();
+    const defaultEngine = CURRENT_ENGINES.find(
+      (engine) => engine.descriptor.conversionType === "pdf-to-text",
+    )!;
+    registry.register(defaultEngine);
+    const alternative = fakeEngine("alt-text", "pdf-to-text");
+
+    registry.registerAlternative(alternative);
+
+    // Default routing is UNCHANGED by the alternative's existence.
+    expect(registry.byConversion("pdf-to-text")).toEqual([defaultEngine]);
+    expect(registry.conversionTypes()).toEqual(["pdf-to-text"]);
+    expect(registry.list()).toEqual([defaultEngine, alternative]);
+    expect(registry.alternativesFor("pdf-to-text")).toEqual([alternative]);
+  });
+
+  it("rejects an alternative without an existing default for the conversion", () => {
+    const registry = createEngineRegistry();
+    expect(() => registry.registerAlternative(fakeEngine("orphan-alt", "pdf-to-text"))).toThrow(
+      /no default engine/,
+    );
+  });
+
+  it("rejects a duplicate engine id across defaults and alternatives", () => {
+    const registry = createEngineRegistry();
+    const textEngine = CURRENT_ENGINES.find(
+      (engine) => engine.descriptor.conversionType === "pdf-to-text",
+    )!;
+    const wordEngine = CURRENT_ENGINES.find(
+      (engine) => engine.descriptor.conversionType === "pdf-to-word",
+    )!;
+    registry.register(textEngine);
+    registry.register(wordEngine);
+
+    // Same id as a default (even another conversion's default).
+    expect(() =>
+      registry.registerAlternative(fakeEngine("current-pdfium-text", "pdf-to-text")),
+    ).toThrow(/already registered/);
+    expect(() =>
+      registry.registerAlternative(fakeEngine("current-pdfium-docx", "pdf-to-text")),
+    ).toThrow(/already registered/);
+    // Same id as an existing alternative.
+    registry.registerAlternative(fakeEngine("alt-text", "pdf-to-text"));
+    expect(() =>
+      registry.registerAlternative(fakeEngine("alt-text", "pdf-to-text")),
+    ).toThrow(/already registered/);
+  });
+
+  it("registering a default still rejects a second default for a conversion with alternatives", () => {
+    const registry = createEngineRegistry();
+    const textEngine = CURRENT_ENGINES.find(
+      (engine) => engine.descriptor.conversionType === "pdf-to-text",
+    )!;
+    registry.register(textEngine);
+    registry.registerAlternative(fakeEngine("alt-text", "pdf-to-text"));
+    expect(() => registry.register(fakeEngine("second-default", "pdf-to-text"))).toThrow(
+      /exactly one default engine/i,
+    );
+  });
+
+  it("registration order never decides the default: the alternative stays an alternative", () => {
+    const registry = createEngineRegistry();
+    const textEngine = CURRENT_ENGINES.find(
+      (engine) => engine.descriptor.conversionType === "pdf-to-text",
+    )!;
+    registry.register(textEngine);
+    const first = fakeEngine("alt-a", "pdf-to-text");
+    const second = fakeEngine("alt-b", "pdf-to-text");
+    registry.registerAlternative(first);
+    registry.registerAlternative(second);
+
+    // However many alternatives exist, byConversion is the default only.
+    expect(registry.byConversion("pdf-to-text")).toEqual([textEngine]);
+    expect(registry.alternativesFor("pdf-to-text")).toEqual([first, second]);
+  });
+
+  it("conversions without alternatives behave exactly as before", () => {
+    const registry = getDefaultEngineRegistry();
+    for (const engine of CURRENT_ENGINES) {
+      const type = engine.descriptor.conversionType;
+      if (type === "pdf-to-text") continue;
+      expect(registry.byConversion(type), type).toEqual([engine]);
+      expect(registry.alternativesFor(type), type).toEqual([]);
+    }
+  });
+
+  it("an unavailable alternative stays inspectable but is never handed out by id-based resolution", () => {
+    const registry = createEngineRegistry();
+    registry.register(
+      CURRENT_ENGINES.find((e) => e.descriptor.conversionType === "pdf-to-text")!,
+    );
+    registry.registerAlternative(fakeEngine("alt-unavailable", "pdf-to-text", false));
+    const alternative = registry.byId("alt-unavailable");
+    expect(alternative).toBeDefined();
+    expect(alternative!.descriptor.available).toBe(false);
+    // Routing still returns only the default.
+    expect(registry.byConversion("pdf-to-text")).toHaveLength(1);
   });
 });
