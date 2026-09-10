@@ -149,12 +149,14 @@ src/
    │  ├─ client.ts            Browser-side API client (the only fetch)
    │  ├─ validation/          PDF signature and limit checks
    │  └─ processors/          merge-pdf.ts
-   ├─ engines/                Conversion engine abstraction (Phase 67, Stage 1)
+   ├─ engines/                Conversion engine abstraction (Phases 67-68)
    │  ├─ types.ts             ConversionType, EngineDescriptor, EngineResult…
    │  ├─ errors.ts            EngineRoutingError (internal invariant only)
    │  ├─ registry.ts          One engine per conversion type, deterministic
    │  ├─ router.ts            selectEngine(type) — always the current engine
    │  ├─ processor.ts         Engine-backed ToolProcessor factory
+   │  ├─ profile.ts           DocumentProfile (signature/full tiers, lazy)
+   │  ├─ validation.ts        Structural OutputValidator (diagnostic only)
    │  └─ adapters/current.ts  Thin adapters over the existing processors
    ├─ hardening/
    │  ├─ config.ts            Timeout/concurrency config (env, documented defaults)
@@ -1182,6 +1184,140 @@ PostgreSQL/Redis architecture real, testable and fail-closed:
 
 ---
 
+## 5z. Conversion engine abstraction (Phases 67-68)
+
+An **additive abstraction layer** between the processing registry and the
+conversion implementations PDFKit already ships. It introduces **no second
+engine, no retry, no fallback, no OCR and no quality-based rejection** —
+each of those is a later, separately approved stage.
+
+```text
+API route → hardening → runProcessingJob
+    → ToolProcessor (processing registry entry)
+        → ConversionRouter (src/lib/engines/router.ts)
+        → EngineRegistry (src/lib/engines/registry.ts)
+        → current engine adapter (src/lib/engines/adapters/current.ts)
+        → the existing processor implementation (unchanged)
+```
+
+### Stage 1 (Phase 67): the abstraction skeleton
+
+- `src/lib/engines/types.ts` — `ConversionType` (the eleven conversion
+  tools: pdf-to-word/excel/text/jpg/png, extract-images, extract-tables,
+  images-to-pdf, png-to-pdf, compress-pdf, compare-documents),
+  `EngineDescriptor`, `EngineRequest`, `EngineResult`, `EngineFailure`
+  (typed for later stages, never constructed) and the `ConversionEngine`
+  interface.
+- `src/lib/engines/registry.ts` — exactly one engine per conversion type
+  (duplicate ids and duplicate primary registrations throw at import
+  time), deterministic ordering, engines marked unavailable are never
+  routed to.
+- `src/lib/engines/adapters/current.ts` — thin adapters that delegate
+  straight to the existing processors. No conversion logic is duplicated;
+  input rules are borrowed from the underlying processor so request
+  validation is identical.
+- `src/lib/engines/router.ts` — `selectEngine(conversionType)` returns the
+  one registered engine. Routing takes **only** the conversion type as
+  input: document profiles, tier, bulk mode, engine health and quality
+  requirements are PLANNED future inputs and cannot influence routing.
+  Unknown types throw `EngineRoutingError` (an internal invariant) rather
+  than guessing.
+- `src/lib/engines/processor.ts` — `createEngineProcessor()` produces the
+  engine-backed `ToolProcessor` entries that the processing registry maps
+  the eleven conversion tools to.
+
+### Stage 2 (Phase 68): DocumentProfile + OutputValidator
+
+Two diagnostic foundations. Neither changes engine selection, conversion
+behaviour, API contracts or user-visible output.
+
+**DocumentProfile** (`src/lib/engines/profile.ts`) — a versioned
+(`profileVersion: 1`), privacy-safe description of an input document:
+counts, ratios and flags only; never text content, names, titles or
+metadata. Two tiers, deliberately:
+
+- *Signature tier* (`describeInputFile`) — documentKind by real byte
+  signature (pdf/jpeg/png/unknown), fileSizeBytes, client-reported MIME.
+  One scan of the first KiB, no parsing. This is the only tier the live
+  conversion path uses: adapters attach it to `EngineResult.profile`.
+- *Full tier* (`buildDocumentProfile`) — diagnostic infrastructure that is
+  **not** invoked by the conversion request path, because every conversion
+  already parses its input exactly once and an upfront profile would
+  duplicate that work. Computes (FACT): pageCount, encrypted,
+  textPageCount, emptyTextPageCount, textCharacterCount, textYieldRatio
+  (textPageCount/pageCount), imageObjectCount, imageBearingPageCount
+  (structural pdf-lib walk, capped at 200 pages; pdfium text pass capped
+  at 200 pages) — and (HEURISTIC) likelyScannedPageCount /
+  likelyScannedRatio: pages with **no extractable text AND at least one
+  image object**. Absent text alone never counts as "scanned" (blank,
+  vector-only and malformed pages exist); no OCR exists. `analysisState`
+  says how far the analysis got (`signature-only` / `complete` /
+  `encrypted-input` / `unreadable-input` / `text-limited`) — absent fields
+  mean *unknown*, never false. `createLazyDocumentProfile` memoizes the
+  full tier for future consumers; nothing resolves it in Stage 2.
+
+**OutputValidator** (`src/lib/engines/validation.ts`) — structural
+validation of produced artifacts, diagnostic only.
+`validateEngineResult` runs after every successful engine execution and
+records its verdict on `EngineResult.validation` — it never throws, never
+fails a job and never reaches the user; the Stage 3 QualityGate (PLANNED)
+will decide what to do with the verdict.
+
+| Output class | Structural checks                              |
+| ------------ | ----------------------------------------------- |
+| PDF          | `%PDF-` signature, `%%EOF` trailer              |
+| DOCX         | ZIP central directory, required Office parts    |
+| XLSX         | ZIP central directory, required Office parts    |
+| ZIP          | ZIP central directory, non-empty entry list    |
+| PNG          | signature, IHDR-first, chunk walk reaches IEND  |
+| JPEG         | SOI signature, EOI marker                       |
+| text/*       | non-empty bytes                                 |
+| unknown      | non-empty + name sanity → `not-evaluated`       |
+
+All checks read in-memory bytes and never decompress, re-render or
+re-parse documents — a full output re-parse through pdfium/pdf-lib is a
+deliberate deferral. The ZIP check reads the central directory (entry
+names only), which cannot be made to allocate decompressed data.
+
+**What Stage 2 does NOT do:** no quality scoring or quality-based
+rejection (text-yield, layout, table, font, image or OCR fidelity are
+Stage 3 QualityGate — PLANNED), no retry, no fallback, no second engine,
+no OCR, no routing input from profiles, no bulk changes. The existing
+tool-local validators (pdf-to-word's throwing DOCX check, unlock-pdf's
+re-open verification, password-protect's encryption verification) remain
+the authoritative, behavior-defining checks and were not weakened or
+moved.
+
+### Behavioural guarantees
+
+Enforced by `src/lib/engines/equivalence.test.ts` and friends:
+
+- Router → current engine behaves exactly like the previous direct
+  processor call: the same request object, the same success shape, and
+  failures propagate as the original `ProcessingError` instances (no
+  catching, wrapping or classification anywhere in the layer).
+- The only observable difference is two additive `meta` keys on success —
+  `engineId` and `attempt` — type-compatible additions to the free-form
+  meta record. The HTTP layer surfaces meta only through explicitly
+  mapped `x-pdfkit-*` response headers; nothing maps these two keys and
+  no UI renders them, so the API contract is unchanged.
+- Zero new dependencies; everything runs in-process, in memory, with no
+  child processes, no temp files and no logging.
+
+### PLANNED (documented only — not implemented, not activated)
+
+- A second engine for any conversion type, selected by benchmarks run
+  before any replacement decision.
+- Retry and fallback (`EngineFailure` classification, engine chains).
+- QualityGate (Stage 3): quality thresholds consuming
+  `EngineResult.validation` plus `DocumentProfile` text-yield signals.
+- Document profiling in the request path and richer, typed routing
+  inputs.
+- Per-tool engine configuration (`PDFKIT_ENGINE_<CONVERSION>=a,b,c`) with
+  a kill switch that restores the current engine.
+
+---
+
 ## 6. Upload and the processing boundary
 
 `UploadZone` (client) handles selection only:
@@ -1277,57 +1413,6 @@ Every uploaded file is treated as untrusted input:
 - **Safe file names.** Output names come from one shared sanitiser
   (`file-names.ts`), and ZIP entry names are additionally stripped of
   directories, traversal (`../`), drive letters and control characters, then
-  de-duplicated.
-- **No empty documents.** Delete PDF Pages refuses to produce a zero-page PDF;
-  the check runs before any page is copied.
-- **Rotation is validated server-side.** Angles and page numbers are re-checked
-  against the real document before anything is written, and an invalid request
-  produces no output document at all.
-- **Rasterisation is bounded.** Page count, render width and per-image bytes are
-  all capped, with hard ceilings above the configurable values; a 4× aspect
-  ratio cap bounds the bitmap for unusual page shapes. Rendering happens in
-  memory only — no temporary files, so there is no cleanup path to get wrong and
-  nothing under `public/`.
-- **Safe errors.** Clients receive a code and a short message; stack traces,
-  library internals and causes never leave the server.
-- **Privacy-safe logging.** Counts, byte totals, durations and error codes only.
-- **Response hardening.** `no-store`, `nosniff` and a sanitised
-  `Content-Disposition` file name (control characters and quotes stripped, so
-  the header cannot be split).
-- **Secrets.** None exist; `.env*` is git-ignored apart from `.env.example`, and
-  future credentials must stay server-side (no `NEXT_PUBLIC_` prefix).
-
-This is a foundation, not a hardened production deployment: there is no rate
-limiting, no authentication, no virus scanning and no per-IP quota yet.
-
----
-
-## 10. Testing strategy
-
-- **Pure logic** (`src/lib`) is unit tested directly: catalog integrity, search
-  behaviour, file validation, formatting.
-- **Components** are tested through the DOM with Testing Library, using roles
-  and accessible names, covering navigation, theme switching, search, tool cards
-  and every meaningful upload state.
-- **Server tests** run in the Node environment and exercise the real processors
-  with real PDFs built by pdf-lib, plus the route handlers through their exported
-  `POST`/`GET` functions. Split PDF tests build documents whose page widths encode
-  the page number, so page identity and ordering can be asserted after copying.
-- **ZIP responses are opened in tests**, every PDF inside is parsed, and its page
-  count and page identity are checked — an HTTP 200 is never treated as proof.
-- **Page identity, not just page counts.** Fixtures encode the page number in
-  the page width, so tests prove that page 3 really is page 3 after extracting,
-  deleting, splitting or reordering. A document with the right number of wrong
-  pages fails.
-- **Thumbnail identity by pixels.** A fixture gives every page a distinct solid
-  colour; thumbnail tests decode the returned PNG and check the centre pixel, so
-  "three images were returned" can never pass for "the right three pages".
-- **Honesty guard:** a test fails if a tool is marked available without a
-  registered processor, or a processor exists without an available catalog entry
-  — the rule is enforced, not just documented.
-- `next/link` and `next/navigation` are mocked in `vitest.setup.ts` so component
-  tests run without the Next.js runtime.
-tories, traversal (`../`), drive letters and control characters, then
   de-duplicated.
 - **No empty documents.** Delete PDF Pages refuses to produce a zero-page PDF;
   the check runs before any page is copied.

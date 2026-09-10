@@ -6,6 +6,7 @@ import type {
   ProcessingRequest,
   ProcessorInputRules,
 } from "@/lib/processing/contract";
+import type { DocumentProfile } from "@/lib/engines/profile";
 
 /**
  * Conversion engine abstraction — public types (Phase 67, Stage 1).
@@ -128,6 +129,15 @@ export interface EngineDescriptor {
 export type EngineRequest<TOptions = Record<string, unknown>> =
   ProcessingRequest<TOptions>;
 
+// Re-exported for discoverability: the profile types live in their own
+// module next to their computation (see ./profile).
+export type {
+  DocumentProfile,
+  LazyDocumentProfile,
+  ProfileAnalysisState,
+  ProfiledDocumentKind,
+} from "@/lib/engines/profile";
+
 /** A non-fatal note about a produced output. Always empty in Stage 1. */
 export interface EngineWarning {
   readonly code: string;
@@ -137,10 +147,12 @@ export interface EngineWarning {
 /**
  * Validation state of an engine's output.
  *
- * Stage 1 never evaluates output quality: every result carries
- * `not-evaluated`. `passed`/`failed` are PLANNED for the OutputValidator /
- * QualityGate stages; they are typed now so those stages extend rather than
- * redesign this layer.
+ * Stage 2 (Phase 68): every successful engine run is structurally validated
+ * (`src/lib/engines/validation.ts`) — `passed` with the performed check ids,
+ * or `failed` when a structural check failed, or `not-evaluated` when the
+ * output class has no structural checks. The verdict is **diagnostic only**:
+ * it never fails a job, never alters artifacts and never reaches the user —
+ * the Stage 3 QualityGate (PLANNED) will decide what to do with it.
  */
 export type OutputValidationState =
   | { readonly status: "not-evaluated" }
@@ -167,10 +179,18 @@ export interface EngineResult {
   readonly attempt: number;
   /** Wall-clock duration of the engine run, in milliseconds. */
   readonly durationMs: number;
-  /** Non-fatal notes about the output. Always empty in Stage 1. */
+  /** Non-fatal notes about the output. Always empty in Stage 2. */
   readonly warnings: readonly EngineWarning[];
-  /** Quality/validation verdict. Always `not-evaluated` in Stage 1. */
+  /** Structural validation verdict (diagnostic only; see validation.ts). */
   readonly validation: OutputValidationState;
+  /**
+   * Signature-tier description of the primary input file (Phase 68): byte
+   * signature, size and client-reported MIME — no parsing, no content. The
+   * engine adapters attach it to every run; later stages (PLANNED) may
+   * resolve a full `DocumentProfile` via `createLazyDocumentProfile`.
+   * Present whenever the request carried at least one file.
+   */
+  readonly profile?: DocumentProfile;
 }
 
 /**

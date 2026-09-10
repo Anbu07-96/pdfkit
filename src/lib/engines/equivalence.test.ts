@@ -349,3 +349,79 @@ describe("Stage 1 equivalence: live service path (runProcessingJob)", () => {
     }
   });
 });
+
+describe("Stage 2 additions are invisible in the processing result (Phase 68)", () => {
+  it("meta is EXACTLY the processor meta plus engineId and attempt — nothing else", async () => {
+    const files = async () => [
+      await pdfFile("sample", await makePdf(["Equivalence text"])),
+    ];
+    const options = { pages: "all" };
+
+    const directWord = await pdfToWordProcessor.process(
+      makeRequest("pdf-to-word", await files()),
+      CONTEXT,
+    );
+    const liveWord = await getProcessor<Record<string, unknown>>("pdf-to-word").process(
+      makeRequest("pdf-to-word", await files()),
+      CONTEXT,
+    );
+    expect(liveWord.meta).toEqual({
+      ...(directWord.meta ?? {}),
+      engineId: "current-pdfium-docx",
+      attempt: 1,
+    });
+
+    const directText = await pdfToTextProcessor.process(
+      makeRequest("pdf-to-text", await files(), options),
+      CONTEXT,
+    );
+    const liveText = await getProcessor<Record<string, unknown>>("pdf-to-text").process(
+      makeRequest("pdf-to-text", await files(), options),
+      CONTEXT,
+    );
+    expect(liveText.meta).toEqual({
+      ...(directText.meta ?? {}),
+      engineId: "current-pdfium-text",
+      attempt: 1,
+    });
+
+    // Deterministic-format output is still byte-identical through the
+    // engine path (profile + validation changed nothing about it).
+    if (directText.status === "succeeded" && liveText.status === "succeeded") {
+      expect(Buffer.from(liveText.artifacts[0].bytes).toString("base64")).toBe(
+        Buffer.from(directText.artifacts[0].bytes).toString("base64"),
+      );
+    }
+  });
+
+  it("multi-artifact conversions validate every artifact without changing output", async () => {
+    const files = async () => [
+      await pdfFile("multi", await makePdf(["Page one", "Page two"])),
+    ];
+
+    const direct = await pdfToJpgProcessor.process(
+      makeRequest("pdf-to-jpg", await files()),
+      CONTEXT,
+    );
+    const live = await getProcessor<Record<string, unknown>>("pdf-to-jpg").process(
+      makeRequest("pdf-to-jpg", await files()),
+      CONTEXT,
+    );
+
+    expect(direct.status).toBe("succeeded");
+    expect(live.status).toBe("succeeded");
+    if (direct.status !== "succeeded" || live.status !== "succeeded") return;
+
+    expect(live.artifacts).toHaveLength(direct.artifacts.length);
+    expect(live.bundleName).toBe(direct.bundleName);
+    expect(
+      live.artifacts.map((artifact) => Buffer.from(artifact.bytes).toString("base64")),
+    ).toEqual(
+      direct.artifacts.map((artifact) => Buffer.from(artifact.bytes).toString("base64")),
+    );
+    const { engineId, attempt, ...restMeta } = live.meta ?? {};
+    expect(restMeta).toEqual(direct.meta ?? {});
+    expect(engineId).toBe("current-pdfium-jpeg");
+    expect(attempt).toBe(1);
+  });
+});

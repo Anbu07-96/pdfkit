@@ -157,4 +157,117 @@ describe("current engine adapters", () => {
     expect(serialised).not.toContain("node_modules");
     expect(serialised).not.toMatch(/\\\\/);
   });
+
+  it("attaches a signature-tier profile of the primary input (Phase 68)", async () => {
+    const engine = CURRENT_ENGINES.find(
+      (candidate) => candidate.descriptor.id === "current-pdfium-docx",
+    );
+    if (!engine) throw new Error("current-pdfium-docx engine missing");
+
+    const bytes = await makePdf(["Hello adapter"]);
+    const result = await engine.run(
+      {
+        toolId: "pdf-to-word",
+        files: [
+          {
+            id: "f1",
+            name: "doc.pdf",
+            size: bytes.length,
+            mimeType: "application/pdf",
+            bytes,
+          },
+        ],
+      },
+      CONTEXT,
+    );
+
+    // Signature tier only: no parsing happened to describe the input.
+    expect(result.profile).toEqual({
+      profileVersion: 1,
+      documentKind: "pdf",
+      fileSizeBytes: bytes.length,
+      inputMimeType: "application/pdf",
+      analysisState: "signature-only",
+    });
+    // The profile is characteristics only — never document content.
+    expect(JSON.stringify(result.profile)).not.toContain("Hello adapter");
+  });
+
+  it("structurally validates the output and records it as passed (Phase 68)", async () => {
+    const engine = CURRENT_ENGINES.find(
+      (candidate) => candidate.descriptor.id === "current-pdfium-docx",
+    );
+    if (!engine) throw new Error("current-pdfium-docx engine missing");
+
+    const bytes = await makePdf(["Hello adapter"]);
+    const result = await engine.run(
+      {
+        toolId: "pdf-to-word",
+        files: [
+          {
+            id: "f1",
+            name: "doc.pdf",
+            size: bytes.length,
+            mimeType: "application/pdf",
+            bytes,
+          },
+        ],
+      },
+      CONTEXT,
+    );
+
+    expect(result.validation.status).toBe("passed");
+    if (result.validation.status === "passed") {
+      expect(result.validation.checks).toContain("non-empty");
+      expect(result.validation.checks).toContain("zip-container");
+      expect(result.validation.checks).toContain("zip-required-parts");
+    }
+  });
+
+  it("omits the profile when the request carried no file", async () => {
+    const { processor, processMock } = fakeProcessor();
+    processMock.mockResolvedValue({
+      status: "succeeded",
+      artifacts: [
+        {
+          name: "out.docx",
+          mimeType: "application/x",
+          size: 1,
+          bytes: new Uint8Array([1]),
+        },
+      ],
+    });
+    const engine = currentEngineAdapter({ descriptor: DESCRIPTOR, processor });
+
+    const result = await engine.run({ toolId: "pdf-to-word", files: [] }, CONTEXT);
+    expect(result.profile).toBeUndefined();
+  });
+
+  it("records a failed structural verdict WITHOUT failing the job (diagnostic only)", async () => {
+    // A processor that returns a DOCX-labelled artifact which is not a ZIP:
+    // structurally invalid output. Stage 2 must observe and record, never
+    // reject — the result comes back exactly as the processor produced it.
+    const { processor, processMock } = fakeProcessor();
+    const badArtifact = {
+      name: "broken.docx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      size: 5,
+      bytes: new TextEncoder().encode("nope!"),
+    };
+    processMock.mockResolvedValue({
+      status: "succeeded",
+      artifacts: [badArtifact],
+    });
+    const engine = currentEngineAdapter({ descriptor: DESCRIPTOR, processor });
+
+    const result = await engine.run({ toolId: "pdf-to-word", files: [] }, CONTEXT);
+
+    expect(result.artifacts).toEqual([badArtifact]);
+    expect(result.validation.status).toBe("failed");
+    if (result.validation.status === "failed") {
+      expect(result.validation.checks).toContain("zip-container");
+    }
+    expect(result.warnings).toEqual([]);
+  });
 });

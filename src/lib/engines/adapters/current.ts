@@ -3,7 +3,10 @@ import "server-only";
 import type {
   ConversionEngine,
   EngineDescriptor,
+  EngineResult,
 } from "@/lib/engines/types";
+import { describeInputFile } from "@/lib/engines/profile";
+import { validateEngineResult } from "@/lib/engines/validation";
 import type { ToolProcessor } from "@/lib/processing/contract";
 import { compareDocumentsProcessor } from "@/lib/processing/processors/compare-documents";
 import { compressPdfProcessor } from "@/lib/processing/processors/compress-pdf";
@@ -29,9 +32,12 @@ import { pdfToWordProcessor } from "@/lib/processing/processors/pdf-to-word";
  * - `input` rules are borrowed from the processor (never redefined), so
  *   request validation is identical;
  * - `run()` calls `processor.process()` with the untouched request and
- *   context — the very same objects, no copies;
+ *   context — the very same objects, no copies — exactly once per run;
  * - a success is wrapped with engine-layer facts (`engineId`, `attempt`,
- *   `durationMs`, empty `warnings`, `not-evaluated` `validation`);
+ *   `durationMs`, empty `warnings`, the signature-tier input `profile`);
+ * - the wrapped result is passed through the structural OutputValidator
+ *   (Phase 68), which fills `validation` — diagnostic only, never a
+ *   failure path;
  * - a failure propagates as the original `ProcessingError` instance: no
  *   catching, no wrapping, no classification.
  *
@@ -55,14 +61,23 @@ export function currentEngineAdapter<TOptions>(
     async run(request, context) {
       const startedAt = Date.now();
       const success = await processor.process(request, context);
-      return {
+      const result: EngineResult = {
         ...success,
         engineId: descriptor.id,
         attempt: 1,
         durationMs: Date.now() - startedAt,
         warnings: [],
         validation: { status: "not-evaluated" },
+        // Signature-tier input description (Phase 68): one scan of the
+        // first KiB, no parsing, never a routing input. Present whenever
+        // the request carried a file.
+        ...(request.files[0]
+          ? { profile: describeInputFile(request.files[0]) }
+          : {}),
       };
+      // Structural validation (Phase 68) — records the verdict on the
+      // result and returns it unchanged either way. Diagnostic only.
+      return validateEngineResult(result);
     },
   };
 }
