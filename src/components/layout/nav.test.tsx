@@ -5,21 +5,41 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DesktopNav } from "@/components/layout/desktop-nav";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { getNavMenuEntries } from "@/components/layout/header-category";
 import { primaryNav } from "@/lib/config/site";
 import {
   TOOL_CATEGORIES,
+  getTool,
   getToolsByCategory,
   isToolUsable,
 } from "@/lib/tools";
+import {
+  BULK_OPERATIONS,
+  BULK_UNAVAILABLE_CONVERSIONS,
+} from "@/lib/tools/bulk";
 
 /** The primary-nav entries that are categories (dropdown targets). */
 const CATEGORY_NAV = primaryNav.flatMap((item) => {
   const category = TOOL_CATEGORIES.find((c) => c.route === item.href);
   return category ? [{ item, category }] : [];
 });
+/** Every primary-nav entry that carries a mega-menu: the categories above
+ *  plus the bulk registry (Phase 75D.3), in primaryNav order. */
+const MENU_NAV = primaryNav.flatMap((item) => {
+  const entry = getNavMenuEntries().find(
+    (candidate) => candidate.route === item.href,
+  );
+  return entry ? [{ item, entry }] : [];
+});
 const NON_CATEGORY_NAV = primaryNav.filter(
-  (item) => !CATEGORY_NAV.some((entry) => entry.item.href === item.href),
+  (item) => !MENU_NAV.some((menu) => menu.item.href === item.href),
 );
+/** The bulk registry's usable operations — availability is derived from the
+ *  underlying single-file catalog tool, exactly like the component does. */
+const BULK_AVAILABLE = BULK_OPERATIONS.filter((operation) => {
+  const tool = getTool(operation.id);
+  return tool ? isToolUsable(tool) : false;
+});
 
 function categoryButton(name: string): HTMLButtonElement {
   return screen.getByRole("button", { name: new RegExp(`^${name}`, "i") });
@@ -50,15 +70,137 @@ describe("desktop navigation", () => {
     }
   });
 
-  it("renders every category as a dropdown trigger", () => {
+  it("renders every menu entry — categories and Bulk — as a dropdown trigger", () => {
     render(<DesktopNav />);
-    for (const { item } of CATEGORY_NAV) {
+    for (const { item } of MENU_NAV) {
       expect(
         screen.getByRole("button", { name: new RegExp(`^${item.label}`, "i") }),
       ).toHaveAttribute("aria-expanded", "false");
     }
-    // No category panel is open by default.
+    // Bulk flows through the same menu system: one extra trigger, same behavior.
+    expect(MENU_NAV.length).toBe(CATEGORY_NAV.length + 1);
+    // No panel is open by default.
     expect(screen.queryByRole("link", { name: /view all/i })).not.toBeInTheDocument();
+  });
+
+  it("Bulk opens on hover and shows its registry-derived panel", async () => {
+    if (BULK_AVAILABLE.length === 0) throw new Error("bulk registry unexpectedly empty");
+    const user = userEvent.setup();
+    render(<DesktopNav />);
+    await openCategoryPanel(user, "Bulk");
+
+    expect(categoryButton("Bulk")).toHaveAttribute("aria-expanded", "true");
+    const panel = document.getElementById("nav-panel-bulk")!;
+    // Heading, description and count all come from existing data: the bulk
+    // landing page's title, the primary-nav description, the registry count.
+    expect(within(panel).getByText("Bulk tools")).toBeInTheDocument();
+    expect(within(panel).getByText("Convert many files at once")).toBeInTheDocument();
+    expect(
+      within(panel).getByText(
+        `${BULK_AVAILABLE.length} ${BULK_AVAILABLE.length === 1 ? "tool" : "tools"} available`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("link", { name: "View all Bulk tools" }),
+    ).toHaveAttribute("href", "/bulk");
+  });
+
+  it("Bulk panel lists exactly the bulk registry — available links, coming-soon chips", async () => {
+    const user = userEvent.setup();
+    render(<DesktopNav />);
+    await openCategoryPanel(user, "Bulk");
+    const panel = document.getElementById("nav-panel-bulk")!;
+
+    // Every usable bulk operation is a link to its existing bulk page —
+    // and nothing else links into /bulk/.
+    const bulkLinks = screen
+      .getAllByRole("link")
+      .filter((link) => link.getAttribute("href")?.startsWith("/bulk/"));
+    expect(bulkLinks.map((link) => link.getAttribute("href"))).toEqual(
+      BULK_AVAILABLE.map((operation) => operation.route),
+    );
+    for (const operation of BULK_AVAILABLE) {
+      const link = within(panel).getByRole("link", {
+        name: nameStartsWith(operation.name),
+      });
+      expect(within(link).getByText(operation.name)).toBeInTheDocument();
+      expect(within(link).getByText(operation.description)).toBeInTheDocument();
+      // Existing registry icon, rendered decoratively.
+      expect(link.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    }
+
+    // The conversions the bulk registry lists as unavailable are honest
+    // chips: present, dashed, never interactive.
+    for (const conversion of BULK_UNAVAILABLE_CONVERSIONS) {
+      const chip = within(panel).getByText(conversion.name);
+      expect(chip.closest("a")).toBeNull();
+      expect(chip.closest("button")).toBeNull();
+      expect(chip.closest("li")?.className).toContain("border-dashed");
+    }
+  });
+
+  it("switching between Convert, Edit and Bulk swaps content without re-animating the box", async () => {
+    const user = userEvent.setup();
+    render(<DesktopNav />);
+
+    await openCategoryPanel(user, "Convert");
+    expect(document.getElementById("nav-panel-convert")?.className).toContain(
+      "nav-panel-in",
+    );
+
+    // Straight hover hops between categories and Bulk keep the shared box
+    // in place — only the content cross-fades.
+    await openCategoryPanel(user, "Edit");
+    const editBox = document.getElementById("nav-panel-edit")!;
+    expect(editBox.className).not.toContain("nav-panel-in");
+    expect(editBox.querySelector(".nav-panel-content-in")).not.toBeNull();
+
+    await openCategoryPanel(user, "Bulk");
+    const bulkBox = document.getElementById("nav-panel-bulk")!;
+    expect(bulkBox.className).not.toContain("nav-panel-in");
+    expect(bulkBox.querySelector(".nav-panel-content-in")).not.toBeNull();
+
+    // …and back to a category, still smooth.
+    await openCategoryPanel(user, "Convert");
+    const convertBox = document.getElementById("nav-panel-convert")!;
+    expect(convertBox.className).not.toContain("nav-panel-in");
+  });
+
+  it("keyboard: arrows reach the Bulk menu, Tab enters its panel, arrows wrap", async () => {
+    const user = userEvent.setup();
+    render(<DesktopNav />);
+
+    // Focus the last category (AI)…
+    const ai = CATEGORY_NAV[CATEGORY_NAV.length - 1];
+    act(() => {
+      categoryButton(ai.item.label).focus();
+    });
+    expect(categoryButton(ai.item.label)).toHaveAttribute("aria-expanded", "true");
+
+    // …ArrowRight lands on Bulk (the next entry in primaryNav order)…
+    await user.keyboard("{ArrowRight}");
+    const bulk = categoryButton("Bulk");
+    expect(bulk).toHaveFocus();
+    expect(bulk).toHaveAttribute("aria-expanded", "true");
+
+    // …Tab moves into the open Bulk panel's links (bulk pages, not a trap).
+    await user.tab();
+    expect((document.activeElement as HTMLAnchorElement).getAttribute("href")).toMatch(
+      /^\/bulk\//,
+    );
+
+    // Escape closes and keeps focus on the trigger…
+    act(() => {
+      bulk.focus();
+    });
+    await user.keyboard("{Escape}");
+    expect(bulk).toHaveAttribute("aria-expanded", "false");
+    expect(bulk).toHaveFocus();
+
+    // …and ArrowRight from the last entry wraps to the first (Convert).
+    await user.keyboard("{ArrowRight}");
+    expect(categoryButton("Convert")).toHaveFocus();
+    expect(categoryButton("Convert")).toHaveAttribute("aria-expanded", "true");
   });
 
   it("hovering a category opens its tools; hovering another category switches", async () => {
@@ -439,7 +581,7 @@ describe("mobile navigation", () => {
         within(nav).getByRole("link", { name: nameStartsWith(item.label) }),
       ).toHaveAttribute("href", item.href);
     }
-    for (const { item } of CATEGORY_NAV) {
+    for (const { item } of MENU_NAV) {
       expect(
         within(nav).getByRole("button", { name: new RegExp(`^${item.label}`, "i") }),
       ).toHaveAttribute("aria-expanded", "false");
@@ -497,6 +639,36 @@ describe("mobile navigation", () => {
     }
   });
 
+  it("Bulk accordion lists the bulk registry; navigation closes the menu", async () => {
+    if (BULK_AVAILABLE.length === 0) throw new Error("bulk registry unexpectedly empty");
+    const user = userEvent.setup();
+    render(<MobileNav />);
+    await user.click(screen.getByRole("button", { name: /open menu/i }));
+
+    await user.click(categoryButton("Bulk"));
+    expect(categoryButton("Bulk")).toHaveAttribute("aria-expanded", "true");
+
+    const nav = screen.getByRole("navigation", { name: "Mobile" });
+    for (const operation of BULK_AVAILABLE) {
+      expect(
+        within(nav).getByRole("link", { name: nameStartsWith(operation.name) }),
+      ).toHaveAttribute("href", operation.route);
+    }
+    expect(
+      within(nav).getByRole("link", { name: "View all Bulk tools" }),
+    ).toHaveAttribute("href", "/bulk");
+    // Unavailable bulk conversions stay non-interactive chips.
+    for (const conversion of BULK_UNAVAILABLE_CONVERSIONS) {
+      expect(within(nav).getByText(conversion.name).closest("a")).toBeNull();
+    }
+
+    // Navigating a bulk tool link closes the menu.
+    await user.click(
+      within(nav).getByRole("link", { name: nameStartsWith(BULK_AVAILABLE[0].name) }),
+    );
+    expect(screen.queryByRole("navigation", { name: "Mobile" })).not.toBeInTheDocument();
+  });
+
   it("navigating a tool link closes the menu", async () => {
     const user = userEvent.setup();
     render(<MobileNav />);
@@ -546,6 +718,12 @@ describe("header category menus — catalog source of truth", () => {
     );
     expect(moduleSource).toContain("getToolsByCategory(category.id)");
     expect(moduleSource).not.toMatch(/name:\s*"(Merge PDF|PDF to Word|Split PDF)"/);
+    // The Bulk menu is derived from the existing bulk registry the same way —
+    // no duplicated bulk tool list either.
+    expect(moduleSource).toContain("BULK_OPERATIONS");
+    expect(moduleSource).not.toMatch(
+      /Bulk (PDF to Word|Word to PDF|PDF to Excel|Extract Images|Images to PDF)/,
+    );
   });
 
   it("every catalogued tool appears in exactly one category panel", async () => {
@@ -553,7 +731,9 @@ describe("header category menus — catalog source of truth", () => {
     render(<DesktopNav />);
 
     const seen: string[] = [];
-    for (const { item } of CATEGORY_NAV) {
+    // Every menu entry incl. Bulk: the bulk panel links to /bulk/ pages,
+    // so it must contribute no /tools/ links to this check.
+    for (const { item } of MENU_NAV) {
       await openCategoryPanel(user, item.label);
       for (const link of screen.getAllByRole("link")) {
         const href = link.getAttribute("href");

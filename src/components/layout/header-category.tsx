@@ -4,45 +4,157 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { ToolIcon } from "@/components/tools/tool-icon";
 import { cn } from "@/lib/utils/cn";
-import { TOOL_CATEGORIES, getToolsByCategory, isToolUsable } from "@/lib/tools";
-import type { Tool, ToolCategory } from "@/lib/tools/types";
+import {
+  TOOL_CATEGORIES,
+  getTool,
+  getToolsByCategory,
+  isToolUsable,
+} from "@/lib/tools";
+import { BULK_OPERATIONS, BULK_UNAVAILABLE_CONVERSIONS } from "@/lib/tools/bulk";
+import type { ToolCategory, ToolIconName } from "@/lib/tools/types";
 import { primaryNav } from "@/lib/config/site";
 
 /**
- * Header category menus (Phase 75D): the data + item rendering shared by the
- * desktop mega-menu and the mobile accordion.
+ * Header category menus (Phase 75D/75D.3): the data + item rendering shared
+ * by the desktop mega-menu and the mobile accordion.
  *
- * Source of truth: the EXISTING catalog (`getToolsByCategory`) and the
- * EXISTING primary navigation (`primaryNav`). No tool list is duplicated
- * here — the split below is computed from the catalog on every render, so
- * the header can never drift from the real tool statuses.
+ * Source of truth: the EXISTING registries — the tool catalog
+ * (`getToolsByCategory`/`isToolUsable`) for categories, and the EXISTING bulk
+ * registry (`BULK_OPERATIONS`/`BULK_UNAVAILABLE_CONVERSIONS`, Phase 61) for
+ * the Bulk entry — plus the EXISTING primary navigation (`primaryNav`). No
+ * tool list is duplicated here: entries and items are computed from those
+ * registries on every call, so the header can never drift from the real tool
+ * statuses. A bulk operation is only presented as usable when its underlying
+ * single-file catalog tool is usable.
  *
- * Availability honesty: only usable tools (AVAILABLE/PRO) render as links;
- * everything else renders in a clearly separated "Coming soon" strip of
- * muted, dashed, non-interactive chips so unavailable tools are never
- * presented as functional.
+ * Availability honesty: only usable tools render as links; everything else
+ * renders in a clearly separated "Coming soon" strip of muted, dashed,
+ * non-interactive chips so unavailable tools are never presented as
+ * functional.
  */
 
-/** Split a category's tools into usable links and honest "soon" rows. */
-export function splitCategoryTools(category: ToolCategory): {
-  available: Tool[];
-  comingSoon: Tool[];
-} {
-  const tools = getToolsByCategory(category.id);
+/** The existing bulk landing route (see `primaryNav` / `footerNav`). */
+const BULK_LANDING_ROUTE = "/bulk";
+
+/** One tool rendered inside a header menu panel. */
+export interface NavToolItem {
+  name: string;
+  description: string;
+  /** Route of the tool's page (bulk operations link to their bulk pages). */
+  route: string;
+  /** Catalog icon key, resolved by the shared presentation registry. */
+  icon: ToolIconName;
+  /** Only usable tools (AVAILABLE/PRO) render as links. */
+  available: boolean;
+}
+
+/** One header mega-menu: a tool category, or the bulk registry. */
+export interface NavMenuEntry {
+  /** Unique id (category id or "bulk") — used for panel ids and keys. */
+  id: string;
+  /** Trigger label, from primaryNav. */
+  label: string;
+  /** Panel heading (the category name, or the bulk landing page's title). */
+  name: string;
+  /** Panel heading description. */
+  description: string;
+  /** Heading icon key (existing presentation-layer registry). */
+  icon: ToolIconName;
+  /** "View all" target — the entry's existing route. */
+  route: string;
+  /** Label of the "View all" link. */
+  viewAllLabel: string;
+  /** The tools to list, derived from the catalog/registry. */
+  items: NavToolItem[];
+}
+
+/** A tool category as a menu entry (items straight from the catalog). */
+function categoryEntry(
+  category: ToolCategory,
+  label: string,
+  description: string,
+): NavMenuEntry {
   return {
-    available: tools.filter(isToolUsable),
-    comingSoon: tools.filter((tool) => !isToolUsable(tool)),
+    id: category.id,
+    label,
+    name: category.name,
+    description,
+    icon: category.icon,
+    route: category.route,
+    viewAllLabel: `View all ${category.name} tools`,
+    items: getToolsByCategory(category.id).map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      route: tool.route,
+      icon: tool.icon,
+      available: isToolUsable(tool),
+    })),
   };
 }
 
-/** The primary-nav entries that are tool categories (dropdown targets). */
-export function getCategoryNavEntries(): {
-  category: ToolCategory;
-  label: string;
-}[] {
+/**
+ * The bulk registry as a menu entry. Bulk operations link to their existing
+ * `/bulk/<id>` pages and are only presented as usable when the underlying
+ * single-file catalog tool is usable; the conversions the bulk registry
+ * itself lists as unavailable render as coming-soon chips.
+ */
+function bulkEntry(label: string, description: string, route: string): NavMenuEntry {
+  return {
+    id: "bulk",
+    label,
+    // Matches the bulk landing page's own title ("Bulk tools").
+    name: "Bulk tools",
+    description,
+    // An existing icon key from the presentation registry ("flatten" is
+    // the Layers glyph): a stack of files is the bulk metaphor.
+    icon: "flatten",
+    route,
+    viewAllLabel: `View all ${label} tools`,
+    items: [
+      ...BULK_OPERATIONS.map((operation) => {
+        const tool = getTool(operation.id);
+        return {
+          name: operation.name,
+          description: operation.description,
+          route: operation.route,
+          icon: operation.icon,
+          available: tool ? isToolUsable(tool) : false,
+        };
+      }),
+      ...BULK_UNAVAILABLE_CONVERSIONS.map((conversion) => ({
+        name: conversion.name,
+        description: "",
+        route: "",
+        // Chips never render icons; the catalog tool's key is the honest
+        // default when one exists.
+        icon: getTool(conversion.id)?.icon ?? "pdf",
+        available: false,
+      })),
+    ],
+  };
+}
+
+/**
+ * The primary-nav entries that carry a mega-menu: every tool category in the
+ * header plus the bulk registry — in primaryNav order, so keyboard arrow
+ * navigation walks the menu in the order it is displayed.
+ */
+export function getNavMenuEntries(): NavMenuEntry[] {
   return primaryNav.flatMap((item) => {
     const category = CATEGORY_BY_ROUTE.get(item.href);
-    return category ? [{ category, label: item.label }] : [];
+    if (category) {
+      return [
+        categoryEntry(
+          category,
+          item.label,
+          item.description ?? category.description,
+        ),
+      ];
+    }
+    if (item.href === BULK_LANDING_ROUTE) {
+      return [bulkEntry(item.label, item.description ?? "", item.href)];
+    }
+    return [];
   });
 }
 
@@ -51,17 +163,16 @@ const CATEGORY_BY_ROUTE = new Map<string, ToolCategory>(
 );
 
 /**
- * The catalog tools of a category (Phase 75D.2 layout).
+ * A menu entry's items (Phase 75D.2 layout).
  *
- * Available tools form a responsive grid of compact tiles — the catalog's
- * icon in a soft primary chip, the tool name and a one-line description,
- * with the whole tile as the link. Each tile is a card: its own surface and
- * border, a subtle hover lift (disabled under prefers-reduced-motion via
- * the global rule plus an explicit motion-reduce guard) and a directional
- * cue that only appears on hover/keyboard focus. Tiles fill their grid
- * row's height, and with an odd number of tiles the last one spans the
- * full width so the grid ends on a balanced edge instead of a half-empty
- * row.
+ * Available tools form a responsive grid of compact tiles — the item's icon
+ * in a soft primary chip, the name and a one-line description, with the
+ * whole tile as the link. Each tile is a card: its own surface and border, a
+ * subtle hover lift (disabled under prefers-reduced-motion via the global
+ * rule plus an explicit motion-reduce guard) and a directional cue that only
+ * appears on hover/keyboard focus. Tiles fill their grid row's height, and
+ * with an odd number of tiles the last one spans the full width so the grid
+ * ends on a balanced edge instead of a half-empty row.
  *
  * Coming-soon tools follow in a divided strip of dashed chips: visibly
  * unlike the tiles, and not interactive in any way.
@@ -71,14 +182,15 @@ const CATEGORY_BY_ROUTE = new Map<string, ToolCategory>(
  * trigger text.
  */
 export function CategoryToolsList({
-  category,
+  items,
   onNavigate,
 }: {
-  category: ToolCategory;
+  items: NavToolItem[];
   /** Called when a link is clicked (e.g. to close the surrounding panel). */
   onNavigate?: () => void;
 }) {
-  const { available, comingSoon } = splitCategoryTools(category);
+  const available = items.filter((item) => item.available);
+  const comingSoon = items.filter((item) => !item.available);
 
   if (available.length === 0 && comingSoon.length === 0) {
     return (
@@ -98,11 +210,10 @@ export function CategoryToolsList({
         <ul className="grid grid-cols-1 gap-2 px-3 pb-3 pt-2.5 sm:grid-cols-2">
           {available.map((tool, index) => {
             const spansFullRow =
-              available.length % 2 === 1 &&
-              index === available.length - 1;
+              available.length % 2 === 1 && index === available.length - 1;
             return (
               <li
-                key={tool.id}
+                key={tool.name}
                 className={cn(spansFullRow && "sm:col-span-2")}
               >
                 <Link
@@ -160,7 +271,7 @@ export function CategoryToolsList({
           <ul className="flex flex-wrap gap-1.5 px-3 pb-3">
             {comingSoon.map((tool) => (
               <li
-                key={tool.id}
+                key={tool.name}
                 className="rounded-full border border-dashed border-border px-2.5 py-1 text-xs text-subtle"
               >
                 {tool.name}

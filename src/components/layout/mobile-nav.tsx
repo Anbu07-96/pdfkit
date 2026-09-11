@@ -7,11 +7,10 @@ import * as React from "react";
 import { Logo } from "@/components/layout/logo";
 import {
   CategoryToolsList,
-  getCategoryNavEntries,
+  getNavMenuEntries,
 } from "@/components/layout/header-category";
 import { ButtonLink } from "@/components/ui/button";
 import { primaryNav } from "@/lib/config/site";
-import type { ToolCategoryId } from "@/lib/tools/types";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -23,17 +22,15 @@ export function MobileNav() {
   const [open, setOpen] = React.useState(false);
   // Phase 75D: one expanded tool-category section at a time (accordion) —
   // tap/click interaction, never hover.
-  const [expandedId, setExpandedId] = React.useState<ToolCategoryId | null>(
-    null,
-  );
+  const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const pathname = usePathname();
   const panelRef = React.useRef<HTMLDivElement>(null);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const panelId = React.useId();
-  const categoryEntries = React.useMemo(() => getCategoryNavEntries(), []);
-  const categoryRoutes = React.useMemo(
-    () => new Set(categoryEntries.map((entry) => entry.category.route)),
-    [categoryEntries],
+  const menuEntries = React.useMemo(() => getNavMenuEntries(), []);
+  const menuRoutes = React.useMemo(
+    () => new Set(menuEntries.map((entry) => entry.route)),
+    [menuEntries],
   );
 
   const closeMenu = React.useCallback(() => setOpen(false), []);
@@ -114,7 +111,7 @@ export function MobileNav() {
               {primaryNav.map((item) => {
                 const active = pathname === item.href;
 
-                if (!categoryRoutes.has(item.href)) {
+                if (!menuRoutes.has(item.href)) {
                   return (
                     <li key={item.href}>
                       <Link
@@ -138,20 +135,20 @@ export function MobileNav() {
                   );
                 }
 
-                // Tool category: a tap-to-expand section listing the
-                // category's tools (Phase 75D).
-                const entry = categoryEntries.find(
-                  (candidate) => candidate.category.route === item.href,
+                // Menu entry (tool category or the bulk registry):
+                // a tap-to-expand section listing its tools (Phase 75D).
+                const entry = menuEntries.find(
+                  (candidate) => candidate.route === item.href,
                 )!;
-                const expanded = expandedId === entry.category.id;
+                const expanded = expandedId === entry.id;
                 return (
                   <li key={item.href} className="rounded-lg">
                     <button
                       type="button"
                       aria-expanded={expanded}
-                      aria-controls={`mobile-panel-${entry.category.id}`}
+                      aria-controls={`mobile-panel-${entry.id}`}
                       onClick={() =>
-                        setExpandedId(expanded ? null : entry.category.id)
+                        setExpandedId(expanded ? null : entry.id)
                       }
                       className={cn(
                         "flex min-h-12 w-full items-center justify-between rounded-lg px-3 py-2 text-start transition-colors",
@@ -177,15 +174,15 @@ export function MobileNav() {
                     </button>
                     {expanded ? (
                       <div
-                        id={`mobile-panel-${entry.category.id}`}
+                        id={`mobile-panel-${entry.id}`}
                         className="mt-1 pb-2"
                       >
                         <CategoryToolsList
-                          category={entry.category}
+                          items={entry.items}
                           onNavigate={closeMenu}
                         />
                         <Link
-                          href={entry.category.route}
+                          href={entry.route}
                           onClick={closeMenu}
                           className={cn(
                             "flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-primary",
@@ -193,7 +190,7 @@ export function MobileNav() {
                             "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring",
                           )}
                         >
-                          View all {entry.category.name} tools
+                          {entry.viewAllLabel}
                         </Link>
                       </div>
                     ) : null}

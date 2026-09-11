@@ -6,13 +6,11 @@ import { usePathname } from "next/navigation";
 import * as React from "react";
 import {
   CategoryToolsList,
-  getCategoryNavEntries,
-  splitCategoryTools,
+  getNavMenuEntries,
 } from "@/components/layout/header-category";
 import { Badge } from "@/components/ui/badge";
 import { ToolIcon } from "@/components/tools/tool-icon";
 import { primaryNav } from "@/lib/config/site";
-import type { ToolCategoryId } from "@/lib/tools/types";
 import { cn } from "@/lib/utils/cn";
 
 /** How long the panel stays open after the pointer leaves the nav (ms). */
@@ -46,10 +44,11 @@ const CLOSE_DELAY_MS = 140;
  */
 export function DesktopNav() {
   const pathname = usePathname();
-  const [openId, setOpenIdState] = React.useState<ToolCategoryId | null>(null);
+  // Menu entry ids ("convert", "edit", … "bulk") — see getNavMenuEntries.
+  const [openId, setOpenIdState] = React.useState<string | null>(null);
   /** Mirrors openId so event handlers read the current value, not a stale
    * closure (also survives the grace-close timer). */
-  const openIdRef = React.useRef<ToolCategoryId | null>(null);
+  const openIdRef = React.useRef<string | null>(null);
   /** How the next mounted panel animates: its box ("open", the menu was
    * closed) or only its content ("switch", another panel is already open —
    * the shared box position must not blink). */
@@ -59,16 +58,16 @@ export function DesktopNav() {
   // hover-open (mouse click, or a touch tap that fired compat hover events)
   // must not close the panel it just opened.
   const hoverOpen = React.useRef(false);
-  const categoryEntries = React.useMemo(() => getCategoryNavEntries(), []);
-  const categoryRoutes = React.useMemo(
-    () => new Set(categoryEntries.map((entry) => entry.category.route)),
-    [categoryEntries],
+  const menuEntries = React.useMemo(() => getNavMenuEntries(), []);
+  const menuRoutes = React.useMemo(
+    () => new Set(menuEntries.map((entry) => entry.route)),
+    [menuEntries],
   );
   const triggerRefs = React.useRef<
     Record<string, HTMLButtonElement | null>
   >({});
 
-  const setOpenId = React.useCallback((id: ToolCategoryId | null) => {
+  const setOpenId = React.useCallback((id: string | null) => {
     openIdRef.current = id;
     setOpenIdState(id);
   }, []);
@@ -81,7 +80,7 @@ export function DesktopNav() {
   }, []);
 
   const openCategory = React.useCallback(
-    (id: ToolCategoryId) => {
+    (id: string) => {
       cancelScheduledClose();
       if (openIdRef.current !== id) {
         setPanelAnim(openIdRef.current === null ? "open" : "switch");
@@ -92,7 +91,7 @@ export function DesktopNav() {
   );
 
   const openByHover = React.useCallback(
-    (id: ToolCategoryId) => {
+    (id: string) => {
       hoverOpen.current = true;
       openCategory(id);
     },
@@ -116,16 +115,14 @@ export function DesktopNav() {
   const focusCategory = React.useCallback(
     (index: number) => {
       const next =
-        categoryEntries[
-          (index + categoryEntries.length) % categoryEntries.length
-        ];
-      const node = triggerRefs.current[next.category.id];
+        menuEntries[(index + menuEntries.length) % menuEntries.length];
+      const node = triggerRefs.current[next.id];
       if (node) {
         node.focus();
-        openCategory(next.category.id);
+        openCategory(next.id);
       }
     },
-    [categoryEntries, openCategory],
+    [menuEntries, openCategory],
   );
 
   return (
@@ -141,7 +138,7 @@ export function DesktopNav() {
     >
       <ul className="flex items-center gap-1">
         {primaryNav.map((item) => {
-          if (!categoryRoutes.has(item.href)) {
+          if (!menuRoutes.has(item.href)) {
             const active = pathname === item.href;
             return (
               <li key={item.href}>
@@ -162,18 +159,20 @@ export function DesktopNav() {
             );
           }
 
-          const entry = categoryEntries.find(
-            (candidate) => candidate.category.route === item.href,
+          const entry = menuEntries.find(
+            (candidate) => candidate.route === item.href,
           )!;
-          const index = categoryEntries.indexOf(entry);
-          const open = openId === entry.category.id;
-          const panelId = `nav-panel-${entry.category.id}`;
-          const { available } = splitCategoryTools(entry.category);
+          const index = menuEntries.indexOf(entry);
+          const open = openId === entry.id;
+          const panelId = `nav-panel-${entry.id}`;
+          const availableCount = entry.items.filter(
+            (tool) => tool.available,
+          ).length;
 
           return (
             <li
               key={item.href}
-              onMouseEnter={() => openByHover(entry.category.id)}
+              onMouseEnter={() => openByHover(entry.id)}
               onBlur={(event) => {
                 // Focus leaving the whole menu item (trigger + panel) closes —
                 // unless it moves straight to another category trigger, whose
@@ -198,10 +197,10 @@ export function DesktopNav() {
             >
               <button
                 ref={(node) => {
-                  triggerRefs.current[entry.category.id] = node;
+                  triggerRefs.current[entry.id] = node;
                 }}
                 type="button"
-                data-nav-trigger={entry.category.id}
+                data-nav-trigger={entry.id}
                 aria-expanded={open}
                 aria-haspopup="true"
                 aria-controls={open ? panelId : undefined}
@@ -213,10 +212,10 @@ export function DesktopNav() {
                   // or focus loss instead.
                   if (!open || !hoverOpen.current) {
                     hoverOpen.current = false;
-                    openCategory(entry.category.id);
+                    openCategory(entry.id);
                   }
                 }}
-                onFocus={() => openCategory(entry.category.id)}
+                onFocus={() => openCategory(entry.id)}
                 onKeyDown={(event) => {
                   if (event.key === "ArrowRight") {
                     event.preventDefault();
@@ -272,33 +271,32 @@ export function DesktopNav() {
                           pill — name reads strongest, description softest. */}
                       <div className="flex items-center gap-2.5 border-b border-border px-3 py-2.5">
                         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary-soft-foreground">
-                          <ToolIcon
-                            name={entry.category.icon}
-                            className="size-4"
-                          />
+                          <ToolIcon name={entry.icon} className="size-4" />
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-semibold text-foreground">
-                              {entry.category.name}
+                              {entry.name}
                             </p>
                             <Badge tone="neutral" className="ml-auto">
-                              {available.length === 1
+                              {availableCount === 1
                                 ? "1 tool available"
-                                : `${available.length} tools available`}
+                                : `${availableCount} tools available`}
                             </Badge>
                           </div>
-                          <p className="mt-0.5 line-clamp-1 text-xs text-muted">
-                            {entry.category.description}
-                          </p>
+                          {entry.description ? (
+                            <p className="mt-0.5 line-clamp-1 text-xs text-muted">
+                              {entry.description}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
 
-                      <CategoryToolsList category={entry.category} />
+                      <CategoryToolsList items={entry.items} />
 
                       <div className="border-t border-border p-1.5">
                         <Link
-                          href={entry.category.route}
+                          href={entry.route}
                           onClick={closeNow}
                           className={cn(
                             "group flex min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-primary",
@@ -306,7 +304,7 @@ export function DesktopNav() {
                             "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring",
                           )}
                         >
-                          View all {entry.category.name} tools
+                          {entry.viewAllLabel}
                           <ArrowRight
                             aria-hidden="true"
                             className={cn(
