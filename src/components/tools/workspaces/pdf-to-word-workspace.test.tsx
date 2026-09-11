@@ -196,6 +196,37 @@ describe("PdfToWordWorkspace", () => {
     expect(screen.queryByTestId("job-visual")).not.toBeInTheDocument();
   });
 
+  it("plays a short success settle beat before the result panel takes over", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await uploadPdf(user);
+
+    let resolveConvert!: (response: Response) => void;
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/api/documents/inspect")) return inspectResponse(6);
+      return new Promise<Response>((resolve) => (resolveConvert = resolve));
+    });
+
+    await user.click(screen.getByRole("button", { name: /^convert to word$/i }));
+    resolveConvert!(docxResponse());
+
+    // The processing panel lingers briefly with the success visual…
+    expect(await screen.findByText(/finishing up…/i)).toBeInTheDocument();
+    const scene = screen
+      .getByTestId("job-visual")
+      .querySelector(".job-visual-scene");
+    expect(scene?.getAttribute("data-status")).toBe("success");
+    // …the convert button stays inert during the beat…
+    expect(
+      screen.getByRole("button", { name: /^convert to word$/i }),
+    ).toBeDisabled();
+
+    // …then the existing result UI takes over.
+    await screen.findByRole("heading", { name: /word document ready/i });
+    expect(screen.queryByText(/finishing up…/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("job-visual")).not.toBeInTheDocument();
+  });
+
   it("removes the processing visual when the conversion fails", async () => {
     const user = userEvent.setup();
     renderWorkspace();

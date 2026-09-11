@@ -25,7 +25,30 @@ export interface PdfToWordWorkspaceProps {
   };
 }
 
-type Status = "idle" | "reading" | "ready" | "processing" | "success" | "error";
+type Status =
+  | "idle"
+  | "reading"
+  | "ready"
+  | "processing"
+  | "completing"
+  | "success"
+  | "error";
+
+/**
+ * Phase 75D.4.1: how long the processing panel lingers in its success
+ * state so the visual can play its settle beat before the result UI takes
+ * over. Presentational only — the job itself is already finished.
+ */
+const SUCCESS_SETTLE_MS = 650;
+
+/** True when the user asked for reduced motion (the beat is then skipped). */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
 
 interface FailureState {
   message: string;
@@ -54,6 +77,7 @@ export function PdfToWordWorkspace({ limits }: PdfToWordWorkspaceProps) {
   const [result, setResult] = React.useState<ProcessedDocument | null>(null);
   const [failure, setFailure] = React.useState<FailureState | null>(null);
   const abortRef = React.useRef<AbortController | null>(null);
+  const settleTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const { showToast } = useToast();
 
   const file = files[0] ?? null;
@@ -64,13 +88,24 @@ export function PdfToWordWorkspace({ limits }: PdfToWordWorkspaceProps) {
   }, [result]);
 
   React.useEffect(() => {
-    return () => abortRef.current?.abort();
+    return () => {
+      abortRef.current?.abort();
+      if (settleTimer.current !== null) clearTimeout(settleTimer.current);
+    };
   }, []);
+
+  function clearSettleTimer() {
+    if (settleTimer.current !== null) {
+      clearTimeout(settleTimer.current);
+      settleTimer.current = null;
+    }
+  }
 
   /** Ask the server for the real page count whenever a document is chosen. */
   async function handleFilesChange(next: SelectedFile[]) {
     abortRef.current?.abort();
     abortRef.current = null;
+    clearSettleTimer();
 
     setFiles(next);
     setResult(null);
@@ -101,9 +136,15 @@ export function PdfToWordWorkspace({ limits }: PdfToWordWorkspaceProps) {
   }
 
   const busy = status === "processing";
+  const settling = status === "completing";
   const overLimit = pageCount !== null && pageCount > limits.maxPages;
   const canConvert =
-    Boolean(file) && pageCount !== null && !busy && status !== "error" && !overLimit;
+    Boolean(file) &&
+    pageCount !== null &&
+    !busy &&
+    !settling &&
+    status !== "error" &&
+    !overLimit;
 
   async function handleConvert() {
     if (!canConvert || !file) return;
@@ -120,17 +161,32 @@ export function PdfToWordWorkspace({ limits }: PdfToWordWorkspaceProps) {
         file: file.file,
         signal: controller.signal,
       });
-      setResult(document);
-      setStatus("success");
-      const characters = document.extraction?.characters ?? 0;
-      showToast({
-        tone: "success",
-        title: "Word document ready",
-        description:
-          characters === 0
-            ? "No text was found in this PDF — the document may contain only images."
-            : `${characters.toLocaleString()} characters of text extracted.`,
-      });
+
+      /** Show the result panel (and its toast) — now or after the beat. */
+      const finish = () => {
+        settleTimer.current = null;
+        setResult(document);
+        setStatus("success");
+        const characters = document.extraction?.characters ?? 0;
+        showToast({
+          tone: "success",
+          title: "Word document ready",
+          description:
+            characters === 0
+              ? "No text was found in this PDF — the document may contain only images."
+              : `${characters.toLocaleString()} characters of text extracted.`,
+        });
+      };
+
+      if (prefersReducedMotion()) {
+        finish();
+        return;
+      }
+
+      // Hold the processing panel for a short success beat so the visual
+      // can complete its transformation before the result UI takes over.
+      setStatus("completing");
+      settleTimer.current = setTimeout(finish, SUCCESS_SETTLE_MS);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         setStatus("ready");
@@ -145,6 +201,7 @@ export function PdfToWordWorkspace({ limits }: PdfToWordWorkspaceProps) {
 
   function handleStartOver() {
     abortRef.current?.abort();
+    clearSettleTimer();
     setFiles([]);
     setPageCount(null);
     setResult(null);
@@ -269,7 +326,9 @@ export function PdfToWordWorkspace({ limits }: PdfToWordWorkspaceProps) {
       <p role="status" aria-live="polite" className="sr-only">
         {status === "reading"
           ? "Reading the PDF to count its pages."
-          : status === "processing"
+          : status === "completing"
+            ? "Finishing up."
+            : status === "processing"
             ? "Converting your PDF to a Word document. This may take a moment."
             : status === "success" && result
               ? `Word document ready. ${
@@ -284,15 +343,19 @@ export function PdfToWordWorkspace({ limits }: PdfToWordWorkspaceProps) {
                   : ""}
       </p>
 
-      {busy ? (
+      {busy || settling ? (
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
-          {/* Phase 75D.4 prototype: decorative motion layer. Purely additive
-              and aria-hidden — the job, its text and its status handling are
-              unchanged; remove this element and the layer is gone. */}
-          <JobProcessingVisual toolId="pdf-to-word" status="processing" />
+          {/* Phase 75D.4/75D.4.1 prototype: decorative motion layer. Purely
+              additive and aria-hidden — the job, its text and its status
+              handling are unchanged; remove this element and the layer is
+              gone. */}
+          <JobProcessingVisual
+            toolId="pdf-to-word"
+            status={settling ? "success" : "processing"}
+          />
           <div>
             <p className="text-sm font-medium text-foreground">
-              Converting to Word…
+              {settling ? "Finishing up…" : "Converting to Word…"}
             </p>
             <p className="text-sm text-muted">
               Your file is processed on the server and discarded as soon as the
