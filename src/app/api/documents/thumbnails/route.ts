@@ -1,3 +1,4 @@
+import { withHardenedRequest } from "@/lib/hardening/route";
 import { ProcessingError, toErrorResponseBody } from "@/lib/processing/errors";
 import {
   methodNotAllowed,
@@ -34,35 +35,43 @@ import {
  * Data URLs keep the response self-contained and ephemeral: no temporary files,
  * no storage, no URLs anyone else could fetch, and nothing for the browser to
  * revoke. Shared infrastructure rather than a tool, hence `/api/documents/`.
+ *
+ * Phase 75B: the endpoint runs behind the SAME hardening sequence as the
+ * tool routes (content-length gate, quota preflight check, IP rate limit,
+ * concurrency slot, request watchdog) via the shared wrapper — no second
+ * hardening implementation. The handler, request format and response
+ * format are unchanged.
  */
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
-  const upload = await readSingleUploadedPdf(request);
-  if ("response" in upload) return upload.response;
+  return withHardenedRequest(request, { toolId: "documents-thumbnails" }, async () => {
+    const upload = await readSingleUploadedPdf(request);
+    if ("response" in upload) return upload.response;
 
-  try {
-    const pages = parseRequestedPages(upload.form.get("pages") as string | null);
-    const rotations = parseRequestedRotations(
-      upload.form.get("rotations") as string | null,
-    );
-    const body = await createPageThumbnails(upload.file, { pages, rotations });
+    try {
+      const pages = parseRequestedPages(upload.form.get("pages") as string | null);
+      const rotations = parseRequestedRotations(
+        upload.form.get("rotations") as string | null,
+      );
+      const body = await createPageThumbnails(upload.file, { pages, rotations });
 
-    return Response.json(body, { status: 200, headers: JSON_RESPONSE_HEADERS });
-  } catch (error) {
-    if (!(error instanceof ProcessingError)) {
-      console.error("[thumbnails] unexpected failure while rendering previews", error);
+      return Response.json(body, { status: 200, headers: JSON_RESPONSE_HEADERS });
+    } catch (error) {
+      if (!(error instanceof ProcessingError)) {
+        console.error("[thumbnails] unexpected failure while rendering previews", error);
+      }
+      return Response.json(toErrorResponseBody(error), {
+        status: error instanceof ProcessingError ? error.status : 500,
+        headers: JSON_RESPONSE_HEADERS,
+      });
+    } finally {
+      // Release the document bytes as soon as the previews are encoded.
+      upload.release();
     }
-    return Response.json(toErrorResponseBody(error), {
-      status: error instanceof ProcessingError ? error.status : 500,
-      headers: JSON_RESPONSE_HEADERS,
-    });
-  } finally {
-    // Release the document bytes as soon as the previews are encoded.
-    upload.release();
-  }
+  });
 }
 
 export function GET(): Response {

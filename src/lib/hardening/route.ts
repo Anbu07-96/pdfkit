@@ -17,6 +17,7 @@ import {
   tryAcquireDistributedSlot,
 } from "@/lib/hardening/distributed-protection";
 import { captureServerException } from "@/lib/monitoring/sentry";
+import type { UserIdentity } from "@/lib/auth/types";
 import { recordTelemetryEvent } from "@/lib/monitoring/telemetry";
 import { getUserIdentity } from "@/lib/auth/session";
 import { getUsageService } from "@/lib/usage/service";
@@ -46,16 +47,64 @@ import { getUsageService } from "@/lib/usage/service";
 
 export { methodNotAllowed };
 
+/** Options for {@link withHardenedRequest}. */
+export interface HardenedRequestOptions {
+  /**
+   * Endpoint label used for guard telemetry (`http_response`,
+   * `quota_rejected`, `server_busy`, `request_timeout`). Tool routes pass
+   * their tool id; shared document endpoints pass their endpoint label.
+   */
+  toolId: string;
+  /** Pre-resolved identity (tests / internal callers); resolved otherwise. */
+  identity?: UserIdentity;
+}
+
+/** What the protected handler receives. */
+export interface HardenedRequestContext {
+  identity: UserIdentity;
+  requestId: string;
+}
+
 export async function handleProcessingRequest<TOptions = Record<string, unknown>>(
   request: Request,
   options: HandleProcessingRequestOptions<TOptions>,
+): Promise<Response> {
+  // Phase 75B: the guard sequence lives in the shared wrapper below so the
+  // document endpoints (inspect / thumbnails) run through the IDENTICAL
+  // protection. Tool-route behaviour here is unchanged.
+  return withHardenedRequest(
+    request,
+    { toolId: options.toolId, identity: options.identity },
+    ({ identity, requestId }) =>
+      handleProcessingRequestCore<TOptions>(request, { ...options, identity, requestId }),
+  );
+}
+
+/**
+ * Run an arbitrary request handler behind the full production hardening
+ * sequence (Phase 28/41/43/63; extracted in Phase 75B so the shared
+ * document endpoints get the same protection as tool routes with ONE
+ * implementation, not a second one):
+ *
+ * 1. numeric Content-Length gate; 2. identity resolution; 3. plan quota
+ * preflight (a CHECK only — usage is recorded by the tool flow, never
+ * here, so nothing is double-counted); 4. IP rate limit; 5. concurrency
+ * slot (fail fast 503, no queue); 6. request watchdog (504; the job is
+ * never aborted — the slot is released exactly once, when the real work
+ * ends). Every final response carries `x-pdfkit-request-id` and records
+ * one `http_response` telemetry event.
+ */
+export async function withHardenedRequest(
+  request: Request,
+  options: HardenedRequestOptions,
+  handler: (context: HardenedRequestContext) => Promise<Response>,
 ): Promise<Response> {
   const startedAt = Date.now();
   // Correlation id for logs/telemetry. Server-generated, carried in the
   // response header so a user reporting a problem can quote it.
   const requestId = `req_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
 
-  const response = await handleGuardedRequest<TOptions>(request, options, requestId);
+  const response = await runGuardedRequest(request, options, handler, requestId);
 
   response.headers.set("x-pdfkit-request-id", requestId);
   recordTelemetryEvent({
@@ -68,9 +117,10 @@ export async function handleProcessingRequest<TOptions = Record<string, unknown>
   return response;
 }
 
-async function handleGuardedRequest<TOptions = Record<string, unknown>>(
+async function runGuardedRequest(
   request: Request,
-  options: HandleProcessingRequestOptions<TOptions>,
+  options: HardenedRequestOptions,
+  handler: (context: HardenedRequestContext) => Promise<Response>,
   requestId: string,
 ): Promise<Response> {
   const config = getHardeningConfig();
@@ -133,10 +183,8 @@ async function handleGuardedRequest<TOptions = Record<string, unknown>>(
   // real job ends — never when the timeout fires.
   let timer: ReturnType<typeof setTimeout> | undefined;
 
-  const jobOptions = { ...options, identity, requestId };
-
   const job: Promise<Response> = Promise.resolve()
-    .then(() => handleProcessingRequestCore<TOptions>(request, jobOptions))
+    .then(() => handler({ identity, requestId }))
     .catch((error: unknown) => {
       // The adapter converts every expected failure already; this protects the
       // race below from an unexpected throw (and from an unhandled rejection
