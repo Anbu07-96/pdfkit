@@ -81,6 +81,138 @@ describe("desktop navigation", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows a category heading strip with the catalog tool count", async () => {
+    const user = userEvent.setup();
+    render(<DesktopNav />);
+    const first = CATEGORY_NAV[0];
+    await openCategoryPanel(user, first.item.label);
+
+    const panel = document.getElementById(
+      `nav-panel-${first.category.id}`,
+    )!;
+    expect(within(panel).getByText(first.category.name)).toBeInTheDocument();
+    const available = getToolsByCategory(first.category.id).filter(isToolUsable);
+    expect(within(panel).getByText(first.category.description)).toBeInTheDocument();
+    expect(
+      within(panel).getByText(
+        `${available.length} ${available.length === 1 ? "tool" : "tools"} available`,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("renders available tools as compact cards — icon, name and description in a grid", async () => {
+    const user = userEvent.setup();
+    render(<DesktopNav />);
+    const first = CATEGORY_NAV[0];
+    const available = getToolsByCategory(first.category.id).filter(isToolUsable);
+    if (available.length === 0) throw new Error("pick a category with available tools");
+    await openCategoryPanel(user, first.item.label);
+
+    const panel = document.getElementById(`nav-panel-${first.category.id}`)!;
+    // The tools sit in a responsive multi-column grid, not stacked rows.
+    const grid = panel.querySelector("ul");
+    expect(grid?.className).toContain("grid");
+    expect(grid?.className).toContain("sm:grid-cols-2");
+
+    for (const tool of available) {
+      const link = within(panel).getByRole("link", {
+        name: nameStartsWith(tool.name),
+      });
+      // Hierarchy inside the card: decorative icon + name + description.
+      expect(within(link).getByText(tool.name)).toBeInTheDocument();
+      expect(within(link).getByText(tool.description)).toBeInTheDocument();
+      expect(link.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    }
+  });
+
+  it("renders coming-soon tools as dashed, non-interactive chips in a labeled section", async () => {
+    const user = userEvent.setup();
+    render(<DesktopNav />);
+    const first = CATEGORY_NAV[0];
+    const comingSoon = getToolsByCategory(first.category.id).filter(
+      (tool) => !isToolUsable(tool),
+    );
+    if (comingSoon.length === 0) throw new Error("pick a category with coming-soon tools");
+    await openCategoryPanel(user, first.item.label);
+
+    const panel = document.getElementById(`nav-panel-${first.category.id}`)!;
+    expect(within(panel).getByText("Coming soon")).toBeInTheDocument();
+    for (const tool of comingSoon) {
+      const chip = within(panel).getByText(tool.name);
+      expect(chip.closest("a")).toBeNull();
+      expect(chip.closest("button")).toBeNull();
+      // Dashed chip styling — visibly unlike the available-tool cards.
+      expect(chip.closest("li")?.className).toContain("border-dashed");
+    }
+  });
+
+  it("opening animates the panel box in; switching categories animates content only", async () => {
+    const user = userEvent.setup();
+    render(<DesktopNav />);
+    const [first, second] = CATEGORY_NAV;
+
+    // Opening from closed: the whole box animates in.
+    await openCategoryPanel(user, first.item.label);
+    const firstBox = document.getElementById(`nav-panel-${first.category.id}`);
+    expect(firstBox?.className).toContain("nav-panel-in");
+
+    // Switching: the old box unmounts and the new one mounts at the same
+    // anchored position WITHOUT re-animating the box — only the content
+    // cross-fades, so the container never blinks between categories.
+    await openCategoryPanel(user, second.item.label);
+    expect(document.getElementById(`nav-panel-${first.category.id}`)).toBeNull();
+    const secondBox = document.getElementById(`nav-panel-${second.category.id}`);
+    expect(secondBox?.className).not.toContain("nav-panel-in");
+    expect(secondBox?.querySelector(".nav-panel-content-in")).not.toBeNull();
+
+    // Keyboard switching is equally smooth: arrow-hopping between triggers
+    // swaps content in place instead of closing and re-animating the box.
+    act(() => {
+      categoryButton(second.item.label).focus();
+    });
+    await user.keyboard("{ArrowLeft}");
+    const firstBoxAgain = document.getElementById(
+      `nav-panel-${first.category.id}`,
+    );
+    expect(firstBoxAgain?.className).not.toContain("nav-panel-in");
+    expect(firstBoxAgain?.querySelector(".nav-panel-content-in")).not.toBeNull();
+    // …and closing then reopening brings the box animation back.
+    await user.keyboard("{Escape}");
+    await openCategoryPanel(user, first.item.label);
+    expect(
+      document.getElementById(`nav-panel-${first.category.id}`)?.className,
+    ).toContain("nav-panel-in");
+  });
+
+  it("caps the panel to the viewport and scrolls internally", async () => {
+    const user = userEvent.setup();
+    render(<DesktopNav />);
+    const first = CATEGORY_NAV[0];
+    await openCategoryPanel(user, first.item.label);
+
+    const box = document.getElementById(`nav-panel-${first.category.id}`)!;
+    expect(box.className).toContain("overflow-y-auto");
+    expect(box.className).toMatch(/max-h-\[/);
+    expect(box.className).toMatch(/max-w-\[/);
+  });
+
+  it("panel animations are CSS-only and disabled under prefers-reduced-motion", async () => {
+    // The panel animates via CSS classes; the global stylesheet zeroes
+    // every animation/transition duration for reduced-motion users, which
+    // makes the menu fully instant with no JavaScript branch involved.
+    const css = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
+    expect(css).toContain("prefers-reduced-motion: reduce");
+    expect(css).toContain("animation-duration: 0.01ms");
+    expect(css).toContain("transition-duration: 0.01ms");
+
+    const navSource = readFileSync(
+      join(process.cwd(), "src/components/layout/desktop-nav.tsx"),
+      "utf8",
+    );
+    expect(navSource).toContain("nav-panel-in"); // CSS animation class
+    expect(navSource).not.toMatch(/requestAnimationFrame|setInterval/); // no JS motion
+  });
+
   it("each panel lists exactly the category's catalog tools — no duplicates", async () => {
     const user = userEvent.setup();
     render(<DesktopNav />);
@@ -291,6 +423,14 @@ describe("mobile navigation", () => {
     expect(
       within(nav).getByRole("link", { name: `View all ${first.category.name} tools` }),
     ).toHaveAttribute("href", first.category.route);
+
+    // The shared card rendering applies on mobile too: each tool card
+    // carries its (decorative) catalog icon alongside the name.
+    const mobileAvailable = getToolsByCategory(first.category.id).filter(isToolUsable);
+    for (const tool of mobileAvailable) {
+      const link = within(nav).getByRole("link", { name: nameStartsWith(tool.name) });
+      expect(link.querySelector("svg")).not.toBeNull();
+    }
 
     await user.click(categoryButton(first.item.label));
     expect(categoryButton(first.item.label)).toHaveAttribute("aria-expanded", "false");

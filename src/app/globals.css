@@ -224,4 +224,33 @@
     outline: 2px solid var(--color-ring);
     outline-offset: 2px;
   }
+
+  /* Header category menu (Phase 75D.1). Plain CSS animations: the global
+     prefers-reduced-motion rule above zeroes every animation/transition
+     duration, which disables them entirely for users who opt out of
+     motion — no JavaScript branch is involved. */
+  .nav-panel-in {
+    animation: pdfkit-nav-panel-in 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .nav-panel-content-in {
+    animation: pdfkit-nav-panel-content-in 120ms ease-out;
+  }
+}
+
+/* The whole panel box fades in (and settles up from the header) when the
+   menu opens from closed. */
+@keyframes pdfkit-nav-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.375rem);
+  }
+}
+
+/* Switching categories keeps the panel box in place; only its content
+   cross-fades, so the container never blinks between categories. */
+@keyframes pdfkit-nav-panel-content-in {
+  from {
+    opacity: 0;
+  }
 }

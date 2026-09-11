@@ -178,7 +178,7 @@ export function MobileNav() {
                     {expanded ? (
                       <div
                         id={`mobile-panel-${entry.category.id}`}
-                        className="mt-1 pb-2 ps-3"
+                        className="mt-1 pb-2"
                       >
                         <CategoryToolsList
                           category={entry.category}

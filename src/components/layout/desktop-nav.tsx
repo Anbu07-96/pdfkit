@@ -1,12 +1,13 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ArrowRight, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as React from "react";
 import {
   CategoryToolsList,
   getCategoryNavEntries,
+  splitCategoryTools,
 } from "@/components/layout/header-category";
 import { primaryNav } from "@/lib/config/site";
 import type { ToolCategoryId } from "@/lib/tools/types";
@@ -16,10 +17,22 @@ import { cn } from "@/lib/utils/cn";
 const CLOSE_DELAY_MS = 140;
 
 /**
- * Desktop main navigation (Phase 75D): plain links for non-category entries,
- * a hover/focus mega-menu per tool category.
+ * Desktop main navigation (Phase 75D.1): plain links for non-category
+ * entries, a hover/focus mega-menu per tool category.
  *
- * Interaction contract:
+ * Layout: every open panel is anchored to the NAV (the positioned
+ * ancestor), not to its trigger, so all categories share one panel
+ * position — switching swaps content in place, and the wide panel sits
+ * underneath every trigger, which keeps pointer travel into it short. The
+ * box is capped to the viewport and scrolls internally when needed.
+ *
+ * Animation: opening from closed animates the box in (CSS class
+ * `nav-panel-in`); switching categories animates only the content
+ * (`nav-panel-content-in`), so the container never blinks. Both are plain
+ * CSS animations, disabled entirely by the global prefers-reduced-motion
+ * rule.
+ *
+ * Interaction contract (unchanged from Phase 75D):
  * - pointer over a category (or its open panel) opens that category's panel;
  * - moving to another category switches the panel immediately;
  * - leaving the nav entirely closes after a short grace delay, so diagonal
@@ -31,7 +44,14 @@ const CLOSE_DELAY_MS = 140;
  */
 export function DesktopNav() {
   const pathname = usePathname();
-  const [openId, setOpenId] = React.useState<ToolCategoryId | null>(null);
+  const [openId, setOpenIdState] = React.useState<ToolCategoryId | null>(null);
+  /** Mirrors openId so event handlers read the current value, not a stale
+   * closure (also survives the grace-close timer). */
+  const openIdRef = React.useRef<ToolCategoryId | null>(null);
+  /** How the next mounted panel animates: its box ("open", the menu was
+   * closed) or only its content ("switch", another panel is already open —
+   * the shared box position must not blink). */
+  const [panelAnim, setPanelAnim] = React.useState<"open" | "switch">("open");
   const closeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   // True while the pointer is inside the nav: a click right after a
   // hover-open (mouse click, or a touch tap that fired compat hover events)
@@ -46,6 +66,11 @@ export function DesktopNav() {
     Record<string, HTMLButtonElement | null>
   >({});
 
+  const setOpenId = React.useCallback((id: ToolCategoryId | null) => {
+    openIdRef.current = id;
+    setOpenIdState(id);
+  }, []);
+
   const cancelScheduledClose = React.useCallback(() => {
     if (closeTimer.current !== null) {
       clearTimeout(closeTimer.current);
@@ -56,9 +81,12 @@ export function DesktopNav() {
   const openCategory = React.useCallback(
     (id: ToolCategoryId) => {
       cancelScheduledClose();
-      setOpenId(id);
+      if (openIdRef.current !== id) {
+        setPanelAnim(openIdRef.current === null ? "open" : "switch");
+        setOpenId(id);
+      }
     },
-    [cancelScheduledClose],
+    [cancelScheduledClose, setOpenId],
   );
 
   const openByHover = React.useCallback(
@@ -72,13 +100,13 @@ export function DesktopNav() {
   const closeNow = React.useCallback(() => {
     cancelScheduledClose();
     setOpenId(null);
-  }, [cancelScheduledClose]);
+  }, [cancelScheduledClose, setOpenId]);
 
   const scheduleClose = React.useCallback(() => {
     hoverOpen.current = false;
     cancelScheduledClose();
     closeTimer.current = setTimeout(() => setOpenId(null), CLOSE_DELAY_MS);
-  }, [cancelScheduledClose]);
+  }, [cancelScheduledClose, setOpenId]);
 
   React.useEffect(() => cancelScheduledClose, [cancelScheduledClose]);
 
@@ -92,16 +120,16 @@ export function DesktopNav() {
       const node = triggerRefs.current[next.category.id];
       if (node) {
         node.focus();
-        setOpenId(next.category.id);
+        openCategory(next.category.id);
       }
     },
-    [categoryEntries],
+    [categoryEntries, openCategory],
   );
 
   return (
     <nav
       aria-label="Main"
-      className="hidden lg:block"
+      className="relative hidden lg:block"
       onMouseEnter={() => {
         // Re-entering the nav counts as hover again; the grace timer is
         // cancelled by the item's own mouseEnter that immediately follows.
@@ -138,17 +166,26 @@ export function DesktopNav() {
           const index = categoryEntries.indexOf(entry);
           const open = openId === entry.category.id;
           const panelId = `nav-panel-${entry.category.id}`;
+          const { available } = splitCategoryTools(entry.category);
 
           return (
             <li
               key={item.href}
-              className="relative"
               onMouseEnter={() => openByHover(entry.category.id)}
               onBlur={(event) => {
-                // Focus leaving the whole menu item (trigger + panel) closes.
-                if (!event.currentTarget.contains(event.relatedTarget)) {
-                  closeNow();
+                // Focus leaving the whole menu item (trigger + panel) closes —
+                // unless it moves straight to another category trigger, whose
+                // own focus handling switches the panel in place (a content
+                // swap, not a close-and-reopen with a replayed animation).
+                const related = event.relatedTarget;
+                if (event.currentTarget.contains(related)) return;
+                if (
+                  related instanceof HTMLElement &&
+                  related.dataset.navTrigger !== undefined
+                ) {
+                  return;
                 }
+                closeNow();
               }}
               onKeyDown={(event) => {
                 if (event.key === "Escape" && open) {
@@ -162,6 +199,7 @@ export function DesktopNav() {
                   triggerRefs.current[entry.category.id] = node;
                 }}
                 type="button"
+                data-nav-trigger={entry.category.id}
                 aria-expanded={open}
                 aria-haspopup="true"
                 aria-controls={open ? panelId : undefined}
@@ -205,30 +243,64 @@ export function DesktopNav() {
               </button>
 
               {open ? (
-                <div
-                  id={panelId}
-                  className="absolute left-0 top-full z-50 pt-2"
-                >
+                /* Anchored to the nav (its positioned ancestor), so every
+                   category's panel shares one position. The pt-3 padding
+                   spans the 12px between the nav bar's bottom edge and the
+                   header's bottom edge (h-16 header, h-10 nav): the pointer
+                   stays inside the nav's DOM all the way down, and the box
+                   hangs flush from the header. */
+                <div className="absolute left-0 top-full z-50 pt-3">
                   <div
+                    id={panelId}
                     className={cn(
-                      "w-72 max-w-[min(18rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-border",
-                      "bg-surface-raised p-1.5 shadow-lg",
-                      "max-h-[min(24rem,calc(100vh-6rem))]",
+                      "w-[34rem] max-w-[min(34rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain rounded-xl border border-border",
+                      "bg-surface-raised shadow-lg",
+                      "max-h-[min(30rem,calc(100vh-6rem))]",
+                      panelAnim === "open" && "nav-panel-in",
                     )}
                   >
-                    <CategoryToolsList category={entry.category} />
-                    <div className="border-t border-border p-1.5">
-                      <Link
-                        href={entry.category.route}
-                        onClick={closeNow}
-                        className={cn(
-                          "flex min-h-10 items-center rounded-lg px-3 text-sm font-medium text-primary",
-                          "transition-colors hover:bg-surface-muted",
-                          "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring",
-                        )}
-                      >
-                        View all {entry.category.name} tools
-                      </Link>
+                    <div
+                      className={cn(
+                        panelAnim === "switch" && "nav-panel-content-in",
+                      )}
+                    >
+                      {/* Heading strip: category name, catalog-derived count
+                          and the category's own description. */}
+                      <div className="border-b border-border px-3 pb-2.5 pt-2.5">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <p className="text-sm font-semibold text-foreground">
+                            {entry.category.name}
+                          </p>
+                          <p className="shrink-0 text-xs text-subtle">
+                            {available.length === 1
+                              ? "1 tool available"
+                              : `${available.length} tools available`}
+                          </p>
+                        </div>
+                        <p className="mt-0.5 line-clamp-1 text-xs text-muted">
+                          {entry.category.description}
+                        </p>
+                      </div>
+
+                      <CategoryToolsList category={entry.category} />
+
+                      <div className="border-t border-border p-1.5">
+                        <Link
+                          href={entry.category.route}
+                          onClick={closeNow}
+                          className={cn(
+                            "group flex min-h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-primary",
+                            "transition-colors hover:bg-surface-muted",
+                            "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring",
+                          )}
+                        >
+                          View all {entry.category.name} tools
+                          <ArrowRight
+                            aria-hidden="true"
+                            className="size-3.5 transition-transform group-hover:translate-x-0.5"
+                          />
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 </div>
