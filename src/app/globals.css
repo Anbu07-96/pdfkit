@@ -255,3 +255,315 @@
     opacity: 0;
   }
 }
+
+/* ------------------------------------------------------------------------ */
+/* Phase 75D.4 — job processing visual prototype (UI-only, easy to remove). */
+/* Decorative motion for the processing experience: documents and data      */
+/* moving through a conversion system. Every animation is transform/opacity */
+/* on a fixed handful of elements; no canvas, no per-page animation, no JS  */
+/* timers. The whole layer is aria-hidden; the real job status always       */
+/* remains in the surrounding UI.                                           */
+/* ------------------------------------------------------------------------ */
+@layer components {
+  .job-visual {
+    width: 100%;
+  }
+
+  .job-visual-scene {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    height: 6rem;
+  }
+
+  @media (min-width: 640px) {
+    .job-visual-scene {
+      gap: 1rem;
+      height: 7rem;
+    }
+  }
+
+  /* Documents ------------------------------------------------------- */
+
+  .job-visual-doc {
+    position: relative;
+    width: 2.75rem;
+    height: 3.5rem;
+    flex: none;
+  }
+
+  .job-visual-page {
+    position: absolute;
+    inset: 0;
+    border-radius: 0.375rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-raised);
+  }
+
+  .job-visual-page--back {
+    transform: translate(-0.375rem, 0.375rem) rotate(-4deg);
+    opacity: 0.45;
+  }
+
+  .job-visual-page--mid {
+    transform: translate(-0.1875rem, 0.1875rem) rotate(-2deg);
+    opacity: 0.7;
+  }
+
+  .job-visual-page--front {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1875rem;
+    padding: 0.4rem 0.3rem;
+  }
+
+  /* The source stack breathes very gently; the target document stays
+     still — the contrast reads as "extracting from here, building there". */
+  .job-visual-doc--pdf {
+    animation: pdfkit-job-float 3.2s ease-in-out infinite;
+  }
+
+  .job-visual-pdf-line {
+    height: 2px;
+    border-radius: 9999px;
+    background: var(--color-border-strong);
+  }
+
+  .job-visual-pdf-line:nth-child(1) {
+    width: 100%;
+  }
+
+  .job-visual-pdf-line:nth-child(2) {
+    width: 85%;
+  }
+
+  .job-visual-pdf-line:nth-child(3) {
+    width: 60%;
+  }
+
+  .job-visual-wordpage {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3125rem;
+    padding: 0.5rem 0.4rem;
+  }
+
+  .job-visual-line {
+    height: 3px;
+    border-radius: 9999px;
+    background: var(--color-muted);
+    opacity: 0.35;
+    animation: pdfkit-job-line 1.8s ease-in-out infinite;
+  }
+
+  .job-visual-line:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .job-visual-line:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  .job-visual-line:nth-child(4) {
+    animation-delay: 0.6s;
+  }
+
+  .job-visual-line:nth-child(5) {
+    animation-delay: 0.8s;
+  }
+
+  .job-visual-line:nth-last-child(1) {
+    width: 62%;
+  }
+
+  /* Conversion channel ---------------------------------------------- */
+
+  .job-visual-flow {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 1.5rem;
+    height: 2px;
+    border-radius: 9999px;
+    background: var(--color-border);
+  }
+
+  /* Each fragment is a full-channel wrapper whose translateX(0→100%)
+     carries the dot exactly across, whatever the channel width. */
+  .job-visual-fragment {
+    position: absolute;
+    inset: 0;
+    animation: pdfkit-job-fragment 2.4s linear infinite;
+  }
+
+  .job-visual-fragment:nth-of-type(2) {
+    animation-delay: 0.8s;
+  }
+
+  .job-visual-fragment:nth-of-type(3) {
+    animation-delay: 1.6s;
+  }
+
+  .job-visual-dot {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 0.625rem;
+    height: 0.625rem;
+    margin: -0.3125rem 0 0 -0.3125rem;
+    border-radius: 0.25rem;
+    background: var(--color-primary-soft);
+    border: 1px solid color-mix(in oklab, var(--color-primary) 45%, transparent);
+    animation: pdfkit-job-dot 0.9s linear infinite;
+  }
+
+  /* Outcome badges --------------------------------------------------- */
+
+  .job-visual-badge {
+    position: absolute;
+    top: -0.5rem;
+    right: -0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 9999px;
+    animation: pdfkit-job-pop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .job-visual-badge--success {
+    background: var(--color-success-soft);
+    color: var(--color-success);
+    border: 1px solid color-mix(in oklab, var(--color-success) 40%, transparent);
+  }
+
+  .job-visual-badge--error {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+    border: 1px solid color-mix(in oklab, var(--color-danger) 40%, transparent);
+  }
+
+  /* Status presentation ---------------------------------------------- */
+
+  .job-visual-scene[data-status="success"] .job-visual-fragment,
+  .job-visual-scene[data-status="error"] .job-visual-fragment {
+    animation: none;
+    opacity: 0;
+  }
+
+  .job-visual-scene[data-status="success"] .job-visual-doc--pdf,
+  .job-visual-scene[data-status="error"] .job-visual-doc--pdf {
+    animation: none;
+  }
+
+  .job-visual-scene[data-status="success"] .job-visual-line {
+    animation: none;
+    opacity: 1;
+  }
+
+  .job-visual-scene[data-status="error"] .job-visual-line {
+    animation: none;
+    opacity: 0.25;
+  }
+
+  .job-visual-scene[data-status="success"] .job-visual-flow {
+    background: color-mix(in oklab, var(--color-success) 35%, transparent);
+  }
+
+  .job-visual-scene[data-status="error"] .job-visual-flow {
+    background: color-mix(in oklab, var(--color-danger) 35%, transparent);
+  }
+
+  /* Reduced motion: a static diagram — pages, fragments resting evenly
+     along the channel, solid text lines. (On top of the global rule that
+     already zeroes every animation duration.) */
+  @media (prefers-reduced-motion: reduce) {
+    .job-visual-doc,
+    .job-visual-line,
+    .job-visual-fragment,
+    .job-visual-dot,
+    .job-visual-badge {
+      animation: none !important;
+    }
+
+    .job-visual-line {
+      opacity: 0.8;
+    }
+
+    .job-visual-fragment {
+      transform: translateX(28%);
+    }
+
+    .job-visual-fragment:nth-of-type(2) {
+      transform: translateX(52%);
+    }
+
+    .job-visual-fragment:nth-of-type(3) {
+      transform: translateX(76%);
+    }
+  }
+}
+
+@keyframes pdfkit-job-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-0.1875rem);
+  }
+}
+
+@keyframes pdfkit-job-fragment {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  85% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes pdfkit-job-dot {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(90deg);
+  }
+}
+
+@keyframes pdfkit-job-line {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes pdfkit-job-pop {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

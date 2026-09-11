@@ -2,6 +2,7 @@
 
 import { CheckCircle2, Download, FileText, Loader2, Type } from "lucide-react";
 import * as React from "react";
+import { JobProcessingVisual } from "@/components/jobs/job-processing-visual";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/states";
@@ -284,11 +285,11 @@ export function PdfToWordWorkspace({ limits }: PdfToWordWorkspaceProps) {
       </p>
 
       {busy ? (
-        <div className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4">
-          <Loader2
-            aria-hidden="true"
-            className="size-5 shrink-0 animate-spin text-primary"
-          />
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
+          {/* Phase 75D.4 prototype: decorative motion layer. Purely additive
+              and aria-hidden — the job, its text and its status handling are
+              unchanged; remove this element and the layer is gone. */}
+          <JobProcessingVisual toolId="pdf-to-word" status="processing" />
           <div>
             <p className="text-sm font-medium text-foreground">
               Converting to Word…

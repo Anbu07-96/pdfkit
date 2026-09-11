@@ -174,6 +174,55 @@ describe("PdfToWordWorkspace", () => {
     await screen.findByRole("heading", { name: /word document ready/i });
   });
 
+  it("shows the processing visual while converting, removed on completion", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await uploadPdf(user);
+
+    let resolveConvert: (response: Response) => void;
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/api/documents/inspect")) return inspectResponse(6);
+      return new Promise<Response>((resolve) => (resolveConvert = resolve));
+    });
+
+    await user.click(screen.getByRole("button", { name: /^convert to word$/i }));
+    // The decorative motion layer appears next to the honest text status…
+    const visual = await screen.findByTestId("job-visual");
+    expect(visual.getAttribute("aria-hidden")).toBe("true");
+    expect(visual.textContent).toBe("");
+
+    resolveConvert!(docxResponse());
+    await screen.findByRole("heading", { name: /word document ready/i });
+    expect(screen.queryByTestId("job-visual")).not.toBeInTheDocument();
+  });
+
+  it("removes the processing visual when the conversion fails", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await uploadPdf(user);
+
+    let respond!: (response: Response) => void;
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/api/documents/inspect")) return inspectResponse(6);
+      return new Promise<Response>((resolve) => (respond = resolve));
+    });
+
+    await user.click(screen.getByRole("button", { name: /^convert to word$/i }));
+    expect(await screen.findByTestId("job-visual")).toBeInTheDocument();
+
+    respond!(
+      fakeResponse({
+        ok: false,
+        status: 500,
+        json: {
+          error: { code: "INTERNAL", message: "Conversion failed on the server." },
+        },
+      }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(/failed/i);
+    expect(screen.queryByTestId("job-visual")).not.toBeInTheDocument();
+  });
+
   it("cancels the browser request via AbortController", async () => {
     const user = userEvent.setup();
     renderWorkspace();
