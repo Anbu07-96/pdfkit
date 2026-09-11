@@ -239,11 +239,12 @@
 }
 
 /* The whole panel box fades in (and settles up from the header) when the
-   menu opens from closed. */
+   menu opens from closed. The travel is deliberately tiny (4px): enough
+   to feel like the surface belongs to the header, never theatrical. */
 @keyframes pdfkit-nav-panel-in {
   from {
     opacity: 0;
-    transform: translateY(-0.375rem);
+    transform: translateY(-0.25rem);
   }
 }
 

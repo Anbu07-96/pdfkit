@@ -98,6 +98,9 @@ describe("desktop navigation", () => {
         `${available.length} ${available.length === 1 ? "tool" : "tools"} available`,
       ),
     ).toBeInTheDocument();
+    // The heading carries the category's own (decorative) catalog icon.
+    const headingIcon = panel.querySelector("svg");
+    expect(headingIcon?.getAttribute("aria-hidden")).toBe("true");
   });
 
   it("renders available tools as compact cards — icon, name and description in a grid", async () => {
@@ -118,10 +121,53 @@ describe("desktop navigation", () => {
       const link = within(panel).getByRole("link", {
         name: nameStartsWith(tool.name),
       });
-      // Hierarchy inside the card: decorative icon + name + description.
+      // Hierarchy inside the tile: decorative icon + name + description.
       expect(within(link).getByText(tool.name)).toBeInTheDocument();
       expect(within(link).getByText(tool.description)).toBeInTheDocument();
-      expect(link.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+      const svgs = link.querySelectorAll("svg");
+      expect(svgs[0].getAttribute("aria-hidden")).toBe("true");
+      // Interactive target stays comfortably tappable.
+      expect(link.className).toContain("min-h-11");
+      // Premium tile motion: hover lift + surface transition, disabled
+      // under prefers-reduced-motion (global rule + explicit guard).
+      expect(link.className).toContain("hover:-translate-y-0.5");
+      expect(link.className).toContain("hover:shadow-xs");
+      expect(link.className).toContain("motion-reduce:transform-none");
+      // The icon chip scales very subtly on hover, also guarded.
+      const iconChip = link.querySelector("span");
+      expect(iconChip?.className).toContain("group-hover:scale-105");
+      expect(iconChip?.className).toContain("motion-reduce:transform-none");
+      // Directional cue: a second decorative svg, invisible until hover
+      // or keyboard focus.
+      expect(svgs.length).toBe(2);
+      expect(svgs[1].getAttribute("aria-hidden")).toBe("true");
+      expect(svgs[1].getAttribute("class")).toContain("opacity-0");
+      expect(svgs[1].getAttribute("class")).toContain("group-focus-visible:opacity-100");
+    }
+  });
+
+  it("balances an odd number of tiles with a full-width final tile", async () => {
+    const odd = CATEGORY_NAV.find(
+      ({ category }) =>
+        getToolsByCategory(category.id).filter(isToolUsable).length % 2 === 1,
+    );
+    // No odd category in the catalog today: nothing to balance.
+    if (!odd) return;
+
+    const user = userEvent.setup();
+    render(<DesktopNav />);
+    await openCategoryPanel(user, odd.item.label);
+
+    const panel = document.getElementById(`nav-panel-${odd.category.id}`)!;
+    const grid = panel.querySelector("ul")!;
+    const tiles = Array.from(grid.children);
+    const available = getToolsByCategory(odd.category.id).filter(isToolUsable);
+    expect(tiles.length).toBe(available.length);
+    // The last tile spans the grid so no half-empty row remains…
+    expect(tiles[tiles.length - 1].className).toContain("sm:col-span-2");
+    // …and only the last one does.
+    for (const tile of tiles.slice(0, -1)) {
+      expect(tile.className).not.toContain("col-span-2");
     }
   });
 

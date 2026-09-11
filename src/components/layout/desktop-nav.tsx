@@ -9,6 +9,8 @@ import {
   getCategoryNavEntries,
   splitCategoryTools,
 } from "@/components/layout/header-category";
+import { Badge } from "@/components/ui/badge";
+import { ToolIcon } from "@/components/tools/tool-icon";
 import { primaryNav } from "@/lib/config/site";
 import type { ToolCategoryId } from "@/lib/tools/types";
 import { cn } from "@/lib/utils/cn";
@@ -264,22 +266,32 @@ export function DesktopNav() {
                         panelAnim === "switch" && "nav-panel-content-in",
                       )}
                     >
-                      {/* Heading strip: category name, catalog-derived count
-                          and the category's own description. */}
-                      <div className="border-b border-border px-3 pb-2.5 pt-2.5">
-                        <div className="flex items-baseline justify-between gap-3">
-                          <p className="text-sm font-semibold text-foreground">
-                            {entry.category.name}
-                          </p>
-                          <p className="shrink-0 text-xs text-subtle">
-                            {available.length === 1
-                              ? "1 tool available"
-                              : `${available.length} tools available`}
+                      {/* Heading strip: the category's own icon (existing
+                          catalog data), its name and description, and the
+                          catalog-derived count of available tools as a quiet
+                          pill — name reads strongest, description softest. */}
+                      <div className="flex items-center gap-2.5 border-b border-border px-3 py-2.5">
+                        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary-soft-foreground">
+                          <ToolIcon
+                            name={entry.category.icon}
+                            className="size-4"
+                          />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-foreground">
+                              {entry.category.name}
+                            </p>
+                            <Badge tone="neutral" className="ml-auto">
+                              {available.length === 1
+                                ? "1 tool available"
+                                : `${available.length} tools available`}
+                            </Badge>
+                          </div>
+                          <p className="mt-0.5 line-clamp-1 text-xs text-muted">
+                            {entry.category.description}
                           </p>
                         </div>
-                        <p className="mt-0.5 line-clamp-1 text-xs text-muted">
-                          {entry.category.description}
-                        </p>
                       </div>
 
                       <CategoryToolsList category={entry.category} />
@@ -297,7 +309,10 @@ export function DesktopNav() {
                           View all {entry.category.name} tools
                           <ArrowRight
                             aria-hidden="true"
-                            className="size-3.5 transition-transform group-hover:translate-x-0.5"
+                            className={cn(
+                              "size-3.5 transition-transform duration-200 group-hover:translate-x-1",
+                              "motion-reduce:transform-none",
+                            )}
                           />
                         </Link>
                       </div>
