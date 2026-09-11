@@ -239,7 +239,7 @@ export const TOOLS: readonly Tool[] = [
     howItWorks: [
       "Upload the PDF whose text you need in Word.",
       "Every page's text is extracted in order, one paragraph per line.",
-      "Download a .docx file. Text only — formatting, images, tables and exact layout are not preserved.",
+      "Download a .docx file. Text is not re-formatted; pages with no extractable text (e.g. scans) are embedded as page images. OCR is not performed.",
     ],
   }),
   pdfTool({

@@ -504,9 +504,20 @@ describe("QualityGate — behavioral equivalence (Phase 69 changes nothing user-
 
     expect(result.status).toBe("succeeded");
     if (result.status === "succeeded") {
-      // Exactly the Phase 67 contract: processor meta + engineId + attempt.
+      // Exactly the Phase 67 contract: processor meta + engineId + attempt
+      // (Phase 75C added the additive `imagePages` embed count — no quality
+      // key may ever appear here, which is this test's invariant).
       expect(Object.keys(result.meta ?? {}).sort()).toEqual(
-        ["attempt", "characters", "engineId", "mode", "outputPages", "pages", "paragraphs"].sort(),
+        [
+          "attempt",
+          "characters",
+          "engineId",
+          "imagePages",
+          "mode",
+          "outputPages",
+          "pages",
+          "paragraphs",
+        ].sort(),
       );
       expect(result.meta?.engineId).toBe("current-pdfium-docx");
       expect(result.meta?.attempt).toBe(1);

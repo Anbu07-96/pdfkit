@@ -137,7 +137,7 @@ const FULL_PAGE_MAX_PIXELS = 12_000_000;
  */
 export async function renderEachPdfPage(
   bytes: Uint8Array,
-  options: { dpi: number; maxPages: number },
+  options: { dpi: number; maxPages: number; pages?: readonly number[] },
   handlePage: (page: FullPageBitmap) => void | Promise<void>,
 ): Promise<{ pageCount: number }> {
   return runWithPdfiumDocument(bytes, async (document) => {
@@ -152,9 +152,32 @@ export async function renderEachPdfPage(
       );
     }
 
+    // Optional 1-based page filter (Phase 75C): callers that need only some
+    // pages (pdf-to-word embeds page images only for pages with no
+    // extractable text) skip rendering the rest — same limits, same caps,
+    // strictly less work. No filter = render every page (unchanged
+    // behavior for pdf-to-jpg / pdf-to-png).
+    let wanted: ReadonlySet<number> | undefined;
+    if (options.pages !== undefined) {
+      const unique = new Set<number>();
+      for (const page of options.pages) {
+        if (!Number.isInteger(page) || page < 1 || page > pageCount) {
+          throw new ProcessingError(
+            "PAGE_OUT_OF_RANGE",
+            `Page ${page} does not exist. This PDF has ${pageCount} ${
+              pageCount === 1 ? "page" : "pages"
+            }.`,
+          );
+        }
+        unique.add(page);
+      }
+      wanted = unique;
+    }
+
     const scaleWanted = options.dpi / 72;
 
     for (let index = 0; index < pageCount; index += 1) {
+      if (wanted !== undefined && !wanted.has(index + 1)) continue;
       // Page objects are single-use in pdfium: fetch a fresh one per call.
       const { originalWidth, originalHeight } = document
         .getPage(index)

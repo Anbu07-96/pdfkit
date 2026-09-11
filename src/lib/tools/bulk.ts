@@ -100,7 +100,7 @@ export const BULK_OPERATIONS: readonly BulkOperation[] = [
     howItWorks: [
       "Add the PDF files you want converted (drag and drop works).",
       "Each PDF is converted on the server, one file at a time, with live status per file.",
-      "Download each .docx individually, or everything as one ZIP. Text only — formatting and images are not preserved.",
+      "Download each .docx individually, or everything as one ZIP. Text is not re-formatted; pages with no extractable text (e.g. scans) are embedded as page images.",
     ],
   }),
   pdfOperation({

@@ -428,3 +428,55 @@ describe("parseRequestedRotations", () => {
     expect(() => parseRequestedRotations("{")).toThrowError(ProcessingError);
   });
 });
+
+describe("renderEachPdfPage — optional page filter (Phase 75C)", () => {
+  it("renders only the requested pages, in document order", async () => {
+    const { renderEachPdfPage } = await import("@/lib/thumbnails/renderer");
+    const bytes = await makeNumberedPdf(4);
+
+    const seen: number[] = [];
+    const { pageCount } = await renderEachPdfPage(
+      bytes,
+      { dpi: 40, maxPages: DEFAULT_PROCESSING_LIMITS.maxConversionPages, pages: [3, 1] },
+      (page) => {
+        seen.push(page.pageNumber);
+      },
+    );
+
+    expect(pageCount).toBe(4);
+    // Document order (1 before 3), duplicates collapsed, pages 2 and 4 skipped.
+    expect(seen).toEqual([1, 3]);
+  });
+
+  it("renders every page when no filter is given (unchanged behavior)", async () => {
+    const { renderEachPdfPage } = await import("@/lib/thumbnails/renderer");
+    const bytes = await makeNumberedPdf(3);
+
+    const seen: number[] = [];
+    await renderEachPdfPage(
+      bytes,
+      { dpi: 40, maxPages: DEFAULT_PROCESSING_LIMITS.maxConversionPages },
+      (page) => {
+        seen.push(page.pageNumber);
+      },
+    );
+    expect(seen).toEqual([1, 2, 3]);
+  });
+
+  it("rejects a page filter outside the document with a typed error", async () => {
+    const { renderEachPdfPage } = await import("@/lib/thumbnails/renderer");
+    const bytes = await makeNumberedPdf(2);
+
+    try {
+      await renderEachPdfPage(
+        bytes,
+        { dpi: 40, maxPages: 10, pages: [1, 5] },
+        () => undefined,
+      );
+      throw new Error("expected PAGE_OUT_OF_RANGE");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ProcessingError);
+      expect((error as ProcessingError).code).toBe("PAGE_OUT_OF_RANGE");
+    }
+  });
+});

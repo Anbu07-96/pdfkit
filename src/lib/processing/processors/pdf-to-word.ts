@@ -1,6 +1,6 @@
 import "server-only";
 
-import { Document, Packer, PageBreak, Paragraph, TextRun } from "docx";
+import { Document, ImageRun, Packer, PageBreak, Paragraph, TextRun } from "docx";
 import { unzipSync } from "fflate";
 import type {
   ProcessingContext,
@@ -12,7 +12,11 @@ import { ProcessingError } from "@/lib/processing/errors";
 import { baseDocumentName } from "@/lib/processing/file-names";
 import { loadPdfDocument, readPageCount } from "@/lib/processing/pdf-document";
 import { PDF_TO_WORD_INPUT_RULES } from "@/lib/processing/rules";
-import { extractPdfPageTexts } from "@/lib/thumbnails/renderer";
+import { encodePng } from "@/lib/thumbnails/png";
+import {
+  extractPdfPageTexts,
+  renderEachPdfPage,
+} from "@/lib/thumbnails/renderer";
 
 /**
  * PDF → Word (.docx), **text only**.
@@ -20,11 +24,23 @@ import { extractPdfPageTexts } from "@/lib/thumbnails/renderer";
  * What this tool honestly does: extract the text of every page with pdfium
  * (the same rasteriser that powers previews and image exports) and write it
  * into a real Word document — one paragraph per extracted line and a page
- * break between pages. Nothing else: formatting, fonts, images, tables and
- * exact layout are **not** preserved, and the interface and catalog say so.
- * There is no fake reconstruction. Extracted text is additionally stripped of
- * XML-invalid control characters (see `stripXmlInvalidCharacters`), because
- * unusual PDF text must never be able to malform the generated document.
+ * break between pages. Formatting, fonts, tables and exact layout are
+ * **not** preserved, and the interface and catalog say so. There is no fake
+ * reconstruction.
+ *
+ * Pages with NO extractable text (scanned / image-only pages) are embedded
+ * as rendered page images (Phase 75C: the honest fix for "scanned PDFs are
+ * not converted" — the previous marker-only output was technically a success
+ * but practically useless). Rendering reuses the pdf-to-image infrastructure
+ * (same serialized pdfium queue, same DPI, same per-image byte cap); when a
+ * page image cannot be produced or exceeds the cap, the page degrades to
+ * the honest `[Page N contains no extractable text]` marker instead of
+ * failing the conversion. Recovering TEXT from scanned pages still requires
+ * OCR, which this tool deliberately does not do.
+ *
+ * Extracted text is additionally stripped of XML-invalid control characters
+ * (see `stripXmlInvalidCharacters`), because unusual PDF text must never be
+ * able to malform the generated document.
  *
  * Everything runs in memory: no temp files, no child processes, no external
  * services. The produced DOCX is validated before it is returned — it must be
@@ -64,8 +80,23 @@ function pageLines(text: string): string[] {
     .filter((line) => line.length > 0);
 }
 
-/** Build the document structure from per-page texts. */
-function buildDocx(pageTexts: string[]): Document {
+/** A rendered page image to embed for a page that has no extractable text. */
+interface PageImage {
+  png: Uint8Array;
+  /** Rendered bitmap size in pixels (used to size the image in Word). */
+  widthPx: number;
+  heightPx: number;
+}
+
+/** Word renders image dimensions in pixels at 96 DPI. */
+const WORD_DPI = 96;
+
+/** Build the document structure from per-page texts (+ optional page images). */
+function buildDocx(
+  pageTexts: string[],
+  pageImages: ReadonlyMap<number, PageImage>,
+  renderDpi: number,
+): Document {
   const children: Paragraph[] = [];
 
   pageTexts.forEach((text, index) => {
@@ -73,7 +104,30 @@ function buildDocx(pageTexts: string[]): Document {
 
     const lines = pageLines(text);
     if (lines.length === 0) {
-      // Image-only page: an honest marker instead of an invisible gap.
+      const image = pageImages.get(index + 1);
+      if (image) {
+        // Image-only page: embed the rendered page so scanned documents
+        // still carry their visual content into Word (Phase 75C).
+        children.push(
+          new Paragraph({
+            children: [
+              new ImageRun({
+                type: "png",
+                data: image.png,
+                transformation: {
+                  // Preserve the rendered page's physical size: the bitmap
+                  // was rendered at `renderDpi`, Word sizes images at 96.
+                  width: Math.max(1, Math.round((image.widthPx * WORD_DPI) / renderDpi)),
+                  height: Math.max(1, Math.round((image.heightPx * WORD_DPI) / renderDpi)),
+                },
+              }),
+            ],
+          }),
+        );
+        return;
+      }
+      // No embeddable image (over the per-image cap, or rendering was not
+      // possible): the honest marker instead of an invisible gap.
       children.push(
         new Paragraph({
           children: [
@@ -159,14 +213,56 @@ export class PdfToWordProcessor implements ToolProcessor {
     });
 
     const characters = texts.reduce((total, text) => total + text.length, 0);
-    const paragraphs = texts.reduce(
-      (total, text) => total + pageLines(text).length,
-      0,
-    );
+    const linesPerPage = texts.map(pageLines);
+    const paragraphs = linesPerPage.reduce((total, lines) => total + lines.length, 0);
+
+    // Pages without extractable text: render them (and only them) so the
+    // DOCX can embed the visual page instead of a bare marker. Rendering
+    // reuses the pdf-to-image path — same queue, DPI and per-image cap.
+    const imagePageNumbers = linesPerPage
+      .map((lines, index) => (lines.length === 0 ? index + 1 : 0))
+      .filter((pageNumber) => pageNumber > 0);
+    const pageImages = new Map<number, PageImage>();
+    if (imagePageNumbers.length > 0) {
+      await renderEachPdfPage(
+        file.bytes,
+        {
+          dpi: context.limits.conversionDpi,
+          maxPages: context.limits.maxConversionPages,
+          pages: imagePageNumbers,
+        },
+        (page) => {
+          try {
+            const png = encodePng({
+              width: page.width,
+              height: page.height,
+              pixels: page.pixels,
+              level: 6,
+            });
+            if (png.length > context.limits.conversionMaxImageBytes) {
+              // Over the per-image cap: degrade to the marker for this
+              // page rather than failing a conversion whose text pages
+              // are perfectly fine.
+              return;
+            }
+            pageImages.set(page.pageNumber, {
+              png,
+              widthPx: page.width,
+              heightPx: page.height,
+            });
+          } catch {
+            // Encoding failure for one page: marker fallback, never a
+            // whole-conversion failure (the text content is unaffected).
+          }
+        },
+      );
+    }
 
     let bytes: Uint8Array;
     try {
-      const packed = await Packer.toBuffer(buildDocx(texts));
+      const packed = await Packer.toBuffer(
+        buildDocx(texts, pageImages, context.limits.conversionDpi),
+      );
       bytes = new Uint8Array(packed);
     } catch (cause) {
       throw new ProcessingError(
@@ -193,7 +289,10 @@ export class PdfToWordProcessor implements ToolProcessor {
         outputPages: pageCount,
         paragraphs,
         characters,
-        mode: "text-only",
+        // Truthful output description (surfaced as x-pdfkit-mode): a
+        // document with embedded page images is no longer "text-only".
+        mode: pageImages.size > 0 ? "text-and-page-images" : "text-only",
+        imagePages: pageImages.size,
       },
     };
   }
