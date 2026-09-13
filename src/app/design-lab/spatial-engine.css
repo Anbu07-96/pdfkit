@@ -1,0 +1,1554 @@
+/* -------------------------------------------------------------------------- */
+/* Phase 75D.7 — Spatial Document Engine (design-lab experiment, never prod).  */
+/* Scope: .se-  (dl-banner/dl-switcher chrome reused from design-lab.css).    */
+/*                                                                             */
+/* The document is the interface: a staged PDF object that responds to the     */
+/* pointer, decomposes into real structures (text/images/tables/layout), and   */
+/* rebuilds as a Word document. Transform/opacity only; fixed element counts;  */
+/* one rAF loop drives four custom properties (--px/--py/--dragx/--dragy).     */
+/* -------------------------------------------------------------------------- */
+
+.se-root {
+  /* scene locals (paper stays light in both themes; ink is tuned for paper) */
+  --se-paper: oklch(100% 0 0);
+  --se-paper-dim: oklch(97.5% 0.002 264);
+  --se-ink: oklch(43% 0.13 266);
+  --se-ink-soft: oklch(43% 0.13 266 / 0.16);
+  --se-line: oklch(30% 0.02 264 / 0.30);
+  --se-guide: oklch(55% 0.13 266 / 0.55);
+
+  /* stage geometry (overridden per breakpoint) */
+  --doc-w: 320px;
+  --pdf-x: -258px;
+  --pdf-y: 0px;
+  --word-x: 258px;
+  --word-y: 0px;
+  --travel-x: 516px;
+
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 24px 40px;
+}
+
+/* dev chrome: the 6-state switcher must wrap on small screens */
+.se-root .dl-switcher {
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 100%;
+}
+
+.se-root .dl-switcher__btn {
+  padding: 4px 10px;
+  font-size: 11.5px;
+}
+
+/* ------------------------------ header ---------------------------------- */
+
+.se-head {
+  text-align: center;
+  padding: 26px 0 4px;
+}
+
+.se-head__title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--pdfkit-foreground);
+}
+
+.se-head__sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--pdfkit-muted-foreground);
+  transition: opacity 0.4s ease;
+}
+
+/* ------------------------------- stage ---------------------------------- */
+
+.se-stage {
+  position: relative;
+  height: 545px;
+  margin-top: 6px;
+  --px: 0;
+  --py: 0;
+  --dragx: 0px;
+  --dragy: 0px;
+}
+
+.se-root[data-state="empty"] .se-stage {
+  cursor: pointer;
+}
+
+.se-scene {
+  position: absolute;
+  inset: 0;
+  perspective: 1300px;
+  perspective-origin: 50% 38%;
+}
+
+/* barely-there tonal field: grounds the light-box without a panel */
+.se-scene::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    72% 62% at 50% 42%,
+    oklch(97.8% 0.004 264 / 0.9),
+    transparent 78%
+  );
+}
+
+.se-world {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+.se-floor {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 26px;
+  height: 190px;
+  pointer-events: none;
+  transform: translateX(calc(var(--px) * -9px));
+  background:
+    radial-gradient(58% 95% at 50% 100%, oklch(55% 0.03 264 / 0.14), transparent 74%);
+}
+
+.se-floor::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in oklab, var(--pdfkit-border-strong) 65%, transparent) 50%,
+    transparent
+  );
+}
+
+/* --------------------------- document objects ---------------------------- */
+
+.se-docwrap {
+  position: absolute;
+  left: 50%;
+  top: 47%;
+  width: var(--doc-w);
+  height: calc(var(--doc-w) * 1.294);
+  margin: calc(var(--doc-w) * -0.647) 0 0 calc(var(--doc-w) / -2);
+  transition:
+    transform 0.62s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.5s ease;
+}
+
+.se-docwrap--pdf {
+  transform: translate3d(0, 0, 0);
+}
+
+.se-docwrap--word {
+  transform: translate3d(0, 44px, -90px);
+  opacity: 0;
+}
+
+.se-root[data-state="processing"] .se-docwrap--pdf {
+  transform: translate3d(var(--pdf-x), var(--pdf-y), -14px);
+}
+
+.se-root[data-state="processing"] .se-docwrap--word {
+  transform: translate3d(var(--word-x), var(--word-y), 0);
+  opacity: 1;
+}
+
+.se-root[data-state="completed"] .se-docwrap--pdf {
+  transform: translate3d(0, 84px, -160px);
+  opacity: 0;
+  transition:
+    transform 0.6s cubic-bezier(0.5, 0, 0.75, 0),
+    opacity 0.5s ease;
+}
+
+.se-root[data-state="completed"] .se-docwrap--word {
+  transform: translate3d(0, 0, 40px);
+  transition: transform 0.68s cubic-bezier(0.34, 1.4, 0.5, 1);
+}
+
+.se-root[data-state="error"] .se-docwrap--word {
+  opacity: 0;
+}
+
+.se-drift,
+.se-magnet,
+.se-doc,
+.se-strata {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+.se-drift--a {
+  animation: se-float-a 6.5s ease-in-out infinite alternate;
+}
+
+.se-drift--b {
+  animation: se-float-b 7.8s ease-in-out infinite alternate;
+}
+
+.se-magnet {
+  /* pointer micro-tilt pivots around the document's own center: depth
+     response without dragging hover targets out from under the cursor */
+  transform: translate(var(--dragx), var(--dragy))
+    rotateY(calc(var(--px) * 1.5deg))
+    rotateX(calc(var(--py) * -1.1deg));
+}
+
+.se-shadow {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  top: calc(100% + 12px);
+  height: 42px;
+  pointer-events: none;
+  transform: translateZ(-80px) translateX(calc(var(--px) * -5px));
+  background: radial-gradient(
+    50% 100% at 50% 50%,
+    oklch(28% 0.03 264 / 0.30),
+    oklch(28% 0.03 264 / 0.12) 55%,
+    transparent 75%
+  );
+  transition: opacity 0.5s ease;
+}
+
+/* ------------------------------ PDF object -------------------------------- */
+
+.se-doc--pdf {
+  transform: rotateX(16deg) rotateY(-12deg);
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.se-root[data-state="empty"] .se-doc--pdf {
+  transform: rotateX(16deg) rotateY(-12deg) scale(1.16);
+}
+
+.se-root[data-state="dragover"] .se-doc--pdf,
+.se-stage[data-drag="on"] .se-doc--pdf {
+  transform: rotateX(11deg) rotateY(-7deg) scale(1.2);
+}
+
+.se-root[data-state="selected"] .se-doc--pdf {
+  transform: rotateX(13deg) rotateY(-9deg) scale(1.05);
+}
+
+.se-root[data-state="processing"] .se-doc--pdf {
+  transform: rotateX(15deg) rotateY(-10deg);
+}
+
+.se-root[data-state="error"] .se-doc--pdf {
+  transform: rotateX(24deg) rotateY(-5deg) translateY(10px);
+}
+
+.se-root[data-state="completed"] .se-doc--pdf {
+  transform: rotateX(20deg) rotateY(-10deg);
+}
+
+/* page stack (depth behind the live page) */
+.se-page {
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  background: var(--se-paper-dim);
+  border: 1px solid var(--pdfkit-border);
+  box-shadow: 0 1px 2px oklch(28% 0.03 264 / 0.10);
+  transform:
+    translateX(calc(var(--px) * var(--pd, 0) * -4px))
+    translateZ(calc(var(--pd, 0) * -10px))
+    rotateZ(calc(var(--pd, 0) * -0.7deg));
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.se-page:nth-child(1) { --pd: 2; }
+.se-page:nth-child(2) { --pd: 1.2; }
+.se-page:nth-child(3) { --pd: 0.6; }
+
+/* drag-over: pages fan open, stack breathes */
+.se-root[data-state="dragover"] .se-page,
+.se-stage[data-drag="on"] .se-page {
+  transform:
+    translateX(calc(var(--px) * var(--pd, 0) * -6px))
+    translateZ(calc(var(--pd, 0) * -20px))
+    rotateZ(calc(var(--pd, 0) * -1.6deg));
+}
+
+.se-root[data-state="selected"] .se-page {
+  transform:
+    translateX(calc(var(--px) * var(--pd, 0) * -3px))
+    translateZ(calc(var(--pd, 0) * -6px))
+    rotateZ(calc(var(--pd, 0) * -0.4deg));
+}
+
+/* the live page surface */
+.se-base {
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  background: var(--se-paper);
+  border: 1px solid var(--pdfkit-border);
+  box-shadow:
+    0 2px 4px oklch(28% 0.03 264 / 0.08),
+    0 18px 40px -14px oklch(28% 0.03 264 / 0.28);
+  transform: translateZ(1px);
+}
+
+.se-root[data-state="error"] .se-base {
+  border-color: color-mix(in oklab, var(--pdfkit-danger) 45%, var(--pdfkit-border));
+  box-shadow:
+    0 2px 4px oklch(28% 0.03 264 / 0.08),
+    0 18px 40px -14px oklch(28% 0.03 264 / 0.28),
+    inset 0 0 0 1px color-mix(in oklab, var(--pdfkit-danger) 18%, transparent);
+}
+
+.se-base__chip {
+  position: absolute;
+  top: -11px;
+  left: 14px;
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: oklch(38% 0.02 264);
+  color: oklch(98% 0 0);
+}
+
+.se-base__glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  background: linear-gradient(
+    105deg,
+    transparent 32%,
+    oklch(100% 0 0 / 0.5) 46%,
+    transparent 60%
+  );
+  background-size: 220% 100%;
+  background-position: calc(50% + var(--px) * 55px) 0;
+}
+
+.se-root[data-state="dragover"] .se-base__glow,
+.se-stage[data-drag="on"] .se-base__glow {
+  opacity: 0.9;
+}
+
+.se-base__content {
+  position: absolute;
+  inset: 13% 10% 9% 10%;
+}
+
+.se-line {
+  display: block;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--se-line);
+  margin-bottom: 10px;
+  width: 96%;
+}
+
+.se-line--title {
+  height: 13px;
+  width: 58%;
+  margin-bottom: 16px;
+  background: oklch(30% 0.02 264 / 0.55);
+}
+
+.se-line--short {
+  width: 44%;
+}
+
+.se-base__figure {
+  height: 27%;
+  margin: 4px 0 14px;
+  border-radius: 3px;
+  border: 1px solid oklch(30% 0.02 264 / 0.16);
+  background:
+    radial-gradient(120% 90% at 24% 20%, oklch(88% 0.05 240 / 0.7), transparent 60%),
+    linear-gradient(155deg, oklch(90% 0.03 240), oklch(80% 0.05 235));
+}
+
+/* base margin imprint (lights up with the layout layer) */
+.se-guides {
+  position: absolute;
+  inset: 7%;
+  border: 1px dashed var(--se-guide);
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+
+/* ------------------------- structural strata ------------------------------ */
+/* Each stratum is sized to its content region. Layout is first in DOM so it  */
+/* renders beneath the other planes in the shared 3D space.                    */
+
+.se-strata {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  /* purely decorative: no pointer events (exploration runs through 2D chips) */
+  pointer-events: none;
+}
+
+.se-stratum {
+  position: absolute;
+  opacity: 1;
+  transform-style: preserve-3d;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.se-stratum--text {
+  top: 9%;
+  left: 8%;
+  right: 8%;
+  height: 27%;
+  --rise-y: -60px;
+  --rise-z: 50px;
+  --rise-rx: -2deg;
+  --ty: 66px;
+}
+
+.se-stratum--images {
+  top: 42%;
+  left: 8%;
+  width: 52%;
+  height: 27%;
+  --rise-y: -135px;
+  --rise-z: 100px;
+  --rise-rx: -3deg;
+  --ty: 141px;
+}
+
+.se-stratum--tables {
+  top: 44%;
+  left: 66%;
+  width: 26%;
+  height: 31%;
+  --rise-y: -205px;
+  --rise-z: 150px;
+  --rise-rx: -4deg;
+  --ty: 211px;
+}
+
+.se-stratum--layout {
+  inset: 6%;
+  --rise-y: -20px;
+  --rise-z: 26px;
+  --rise-rx: 0deg;
+  --ty: 40px;
+}
+
+.se-lift {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  border-radius: 4px;
+  background: oklch(100% 0 0 / 0.78);
+  border: 1px solid color-mix(in oklab, var(--se-ink) 26%, var(--pdfkit-border));
+  box-shadow: 0 12px 26px -12px oklch(25% 0.03 264 / 0.38);
+  overflow: hidden;
+}
+
+.se-lift::after {
+  /* analysis sheen (fires once per structure at the "reading" beat) */
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-130%);
+  background: linear-gradient(
+    100deg,
+    transparent 38%,
+    oklch(70% 0.15 266 / 0.30) 50%,
+    transparent 62%
+  );
+}
+
+.se-lift--text {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    oklch(35% 0.03 264 / 0.42) 0 6px,
+    transparent 6px 15px
+  );
+}
+
+.se-lift--text::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 52%;
+  height: 9px;
+  border-radius: 2px;
+  background: oklch(35% 0.03 264 / 0.75);
+}
+
+.se-lift--images {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  overflow: visible;
+}
+
+.se-imgblock {
+  border-radius: 3px;
+  border: 1px solid color-mix(in oklab, var(--se-ink) 30%, var(--pdfkit-border));
+  box-shadow: 0 12px 26px -12px oklch(25% 0.03 264 / 0.38);
+  background:
+    radial-gradient(120% 100% at 25% 15%, oklch(92% 0.04 240 / 0.85), transparent 62%),
+    linear-gradient(155deg, oklch(91% 0.03 240), oklch(82% 0.05 235));
+}
+
+.se-lift--tables {
+  background:
+    linear-gradient(to bottom, var(--se-ink-soft) 0 16px, transparent 16px),
+    repeating-linear-gradient(to bottom, oklch(35% 0.03 264 / 0.5) 0 1px, transparent 1px 16px),
+    linear-gradient(
+      to right,
+      transparent calc(33.33% - 0.5px),
+      oklch(35% 0.03 264 / 0.5) calc(33.33% - 0.5px) calc(33.33% + 0.5px),
+      transparent calc(33.33% + 0.5px) calc(66.66% - 0.5px),
+      oklch(35% 0.03 264 / 0.5) calc(66.66% - 0.5px) calc(66.66% + 0.5px),
+      transparent calc(66.66% + 0.5px)
+    ),
+    oklch(100% 0 0 / 0.78);
+}
+
+.se-lift--layout {
+  border-radius: 3px;
+  border: 1px dashed var(--se-guide);
+  background:
+    linear-gradient(
+      to right,
+      transparent calc(33.33% - 0.5px),
+      var(--se-guide) calc(33.33% - 0.5px) calc(33.33% + 0.5px),
+      transparent calc(33.33% + 0.5px) calc(66.66% - 0.5px),
+      var(--se-guide) calc(66.66% - 0.5px) calc(66.66% + 0.5px),
+      transparent calc(66.66% + 0.5px)
+    ),
+    radial-gradient(4px 4px at 33.33% 18%, var(--se-ink) 98%, transparent),
+    radial-gradient(4px 4px at 66.66% 62%, var(--se-ink) 98%, transparent),
+    radial-gradient(4px 4px at 33.33% 88%, var(--se-ink) 98%, transparent);
+  background-repeat: no-repeat;
+}
+
+/* captions (technical-drawing labels on a left rail) */
+.se-cap {
+  position: absolute;
+  right: calc(100% + 20px);
+  top: var(--cap-top, 0px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.se-cap::before {
+  content: "";
+  width: 18px;
+  height: 1px;
+  background: var(--pdfkit-border-strong);
+}
+
+.se-stratum--text .se-cap    { --cap-top: -2px; }
+.se-stratum--images .se-cap  { --cap-top: -6px; }
+.se-stratum--tables .se-cap  { --cap-top: 46px; }
+.se-stratum--layout .se-cap  { --cap-top: calc(100% - 24px); }
+
+.se-cap__k,
+.se-cap__v {
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--pdfkit-border);
+  background: var(--pdfkit-surface);
+}
+
+.se-cap__k {
+  font-weight: 650;
+  color: var(--pdfkit-foreground);
+}
+
+.se-cap__v {
+  font-variant-numeric: tabular-nums;
+  color: var(--pdfkit-muted-foreground);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+/* ------------------------------ Word object -------------------------------- */
+
+.se-doc--word {
+  transform: rotateX(15deg) rotateY(10deg);
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.se-root[data-state="completed"] .se-doc--word {
+  transform: rotateX(9deg) rotateY(0deg) scale(1.09);
+}
+
+.se-wface {
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  background: var(--se-paper);
+  border: 1px solid var(--pdfkit-border);
+  box-shadow:
+    0 2px 4px oklch(28% 0.03 264 / 0.08),
+    0 18px 40px -14px oklch(28% 0.03 264 / 0.28);
+}
+
+.se-root[data-state="processing"] .se-wface {
+  /* faint cool tint while the document is being formed */
+  background: color-mix(in oklab, var(--se-paper) 96.5%, oklch(72% 0.11 266) 3.5%);
+}
+
+.se-wskeleton,
+.se-wtext,
+.se-wimage,
+.se-wtable {
+  position: absolute;
+  opacity: 0;
+}
+
+.se-wskeleton {
+  inset: 9%;
+  border: 1px dashed var(--se-guide);
+  border-radius: 2px;
+}
+
+.se-wskeleton::before {
+  content: "";
+  position: absolute;
+  top: 8%;
+  left: 6%;
+  width: 44%;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px dashed var(--se-guide);
+}
+
+.se-wtext {
+  top: 11%;
+  left: 12%;
+  right: 12%;
+  height: 33%;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    oklch(35% 0.03 264 / 0.44) 0 6px,
+    transparent 6px 15px
+  );
+}
+
+.se-wtext::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 56%;
+  height: 10px;
+  border-radius: 2px;
+  background: oklch(35% 0.03 264 / 0.68);
+}
+
+.se-wimage {
+  top: 50%;
+  left: 12%;
+  width: 40%;
+  height: 27%;
+  border-radius: 3px;
+  border: 1px solid oklch(30% 0.02 264 / 0.16);
+  background:
+    radial-gradient(120% 90% at 24% 20%, oklch(88% 0.05 240 / 0.7), transparent 60%),
+    linear-gradient(155deg, oklch(90% 0.03 240), oklch(80% 0.05 235));
+}
+
+.se-wtable {
+  top: 50%;
+  left: 58%;
+  width: 30%;
+  height: 30%;
+  background:
+    linear-gradient(to bottom, var(--se-ink-soft) 0 14px, transparent 14px),
+    repeating-linear-gradient(to bottom, oklch(35% 0.03 264 / 0.4) 0 1px, transparent 1px 14px),
+    linear-gradient(
+      to right,
+      transparent calc(33.33% - 0.5px),
+      oklch(35% 0.03 264 / 0.4) calc(33.33% - 0.5px) calc(33.33% + 0.5px),
+      transparent calc(33.33% + 0.5px) calc(66.66% - 0.5px),
+      oklch(35% 0.03 264 / 0.4) calc(66.66% - 0.5px) calc(66.66% + 0.5px),
+      transparent calc(66.66% + 0.5px)
+    );
+}
+
+.se-wchip {
+  position: absolute;
+  top: -11px;
+  right: 12px;
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: var(--se-ink);
+  color: oklch(98% 0 0);
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+/* -------------------------------- arcs -------------------------------------- */
+
+.se-arcs {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateZ(30px);
+}
+
+.se-arc {
+  fill: none;
+  stroke: var(--pdfkit-primary);
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-dasharray: 2 8;
+}
+
+.se-arc--1 { opacity: 0.5; }
+.se-arc--2 { opacity: 0.32; }
+.se-arc--3 { opacity: 0.2; }
+
+/* --------------------------- hint + stage button ----------------------------- */
+
+.se-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  margin: 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+.se-hint__main {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--pdfkit-foreground);
+}
+
+.se-hint__alt {
+  font-size: 12px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.se-root[data-state="selected"] .se-hint,
+.se-root[data-state="processing"] .se-hint,
+.se-root[data-state="completed"] .se-hint,
+.se-root[data-state="error"] .se-hint {
+  opacity: 0;
+}
+
+.se-stage[data-drag="on"] .se-hint {
+  opacity: 1;
+}
+
+.se-root[data-state="dragover"] .se-hint__main,
+.se-stage[data-drag="on"] .se-hint__main {
+  color: var(--pdfkit-primary);
+}
+
+.se-root[data-state="dragover"] .se-hint__alt,
+.se-stage[data-drag="on"] .se-hint__alt {
+  opacity: 0;
+}
+
+.se-stageclick {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.se-stageclick:focus-visible {
+  outline: 2px solid var(--pdfkit-ring);
+  outline-offset: -8px;
+  border-radius: 16px;
+}
+
+/* -------------------------------- actions ------------------------------------ */
+
+.se-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0 0;
+  text-align: center;
+  min-height: 92px;
+}
+
+.se-status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pdfkit-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.se-root[data-state="completed"] .se-status {
+  color: var(--pdfkit-success);
+  font-weight: 600;
+}
+
+.se-root[data-state="error"] .se-status {
+  color: var(--pdfkit-danger);
+  font-weight: 600;
+}
+
+.se-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--pdfkit-muted-foreground);
+  max-width: 560px;
+}
+
+.se-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.se-fileplate,
+.se-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: left;
+}
+
+.se-fileplate__name,
+.se-result__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pdfkit-foreground);
+}
+
+.se-fileplate__meta,
+.se-result__meta {
+  font-size: 11.5px;
+  color: var(--pdfkit-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.se-btn {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.se-btn:focus-visible {
+  outline: 2px solid var(--pdfkit-ring);
+  outline-offset: 2px;
+}
+
+.se-btn:active {
+  transform: scale(0.98);
+}
+
+.se-btn--primary {
+  background: var(--pdfkit-primary);
+  color: var(--pdfkit-primary-foreground);
+}
+
+.se-btn--primary:hover {
+  background: var(--pdfkit-primary-hover);
+}
+
+.se-btn--ghost {
+  background: transparent;
+  border-color: var(--pdfkit-border);
+  color: var(--pdfkit-foreground);
+}
+
+.se-btn--ghost:hover {
+  border-color: var(--pdfkit-border-strong);
+  background: var(--pdfkit-surface-muted);
+}
+
+.se-btn--lg {
+  padding: 12px 28px;
+  font-size: 15px;
+  border-radius: 9px;
+  box-shadow: var(--pdfkit-shadow-md);
+}
+
+.se-root[data-state="completed"] .se-btn--lg {
+  animation: se-rise-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.se-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--pdfkit-muted-foreground);
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: color 0.3s ease, background-color 0.3s ease;
+}
+
+.se-step__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pdfkit-border-strong);
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.se-step[data-active="true"] {
+  color: var(--pdfkit-foreground);
+  font-weight: 600;
+  background: var(--pdfkit-surface-muted);
+}
+
+.se-step[data-active="true"] .se-step__dot {
+  background: var(--pdfkit-primary);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--pdfkit-primary) 22%, transparent);
+}
+
+.se-err {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+}
+
+.se-err__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pdfkit-danger);
+}
+
+.se-err__why {
+  font-size: 12px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+/* --------------------- processing choreography (CSS timeline) ----------------- */
+/* Deterministic beats, seconds from entering the processing state:             */
+/*   0.0–0.6 stage widens (wraps transition)                                    */
+/*   0.25–0.95 blank Word surface fades in                                      */
+/*   0.55–1.05 page stack tucks into one document                               */
+/*   1.05–1.75 layout guides draw                                               */
+/*   1.25–2.45 text/images/tables planes rise (staggered) + captions            */
+/*   2.34–3.30 analysis sheen sweeps per structure + counts appear              */
+/*   3.30–3.90 guides fade as the Word skeleton draws (layout → skeleton)       */
+/*   3.70–5.40 planes travel to the Word document (staggered handoffs)          */
+/*   4.35–5.80 Word fills: text, image, table                                   */
+/*   5.60–6.60 emptied PDF recedes; arcs fade                                   */
+/*   6.40–6.95 Word settles (overshoot) + .docx chip                            */
+/*   7.20 JS switches to completed (exit + recenter + download, ~0.7s)          */
+/* ----------------------------------------------------------------------------- */
+
+.se-root[data-state="processing"] .se-head__sub {
+  opacity: 0.55;
+}
+
+.se-root[data-state="processing"] .se-docwrap--word {
+  animation: se-word-in 0.7s ease 0.25s both;
+}
+
+.se-root[data-state="processing"] .se-page {
+  animation: se-pages-tuck 0.5s ease 0.55s both;
+}
+
+.se-root[data-state="processing"] .se-base__content {
+  animation: se-base-dim 1s ease 1.2s both, se-base-fade 0.9s ease 5.7s both;
+}
+
+.se-root[data-state="processing"] .se-guides {
+  animation: se-fade-9 0.7s ease 1.05s both, se-fade-0 0.7s ease 3.3s both;
+}
+
+.se-root[data-state="processing"] .se-stratum--layout .se-lift {
+  animation: se-rise 0.7s ease 1.05s both, se-travel 0.9s ease 3.3s both;
+}
+
+.se-root[data-state="processing"] .se-stratum--text .se-lift {
+  animation: se-rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) 1.25s both,
+    se-travel 1s cubic-bezier(0.4, 0, 0.2, 1) 3.7s both;
+}
+
+.se-root[data-state="processing"] .se-stratum--images .se-lift {
+  animation: se-rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) 1.45s both,
+    se-travel 1s cubic-bezier(0.4, 0, 0.2, 1) 4.05s both;
+}
+
+.se-root[data-state="processing"] .se-stratum--tables .se-lift {
+  animation: se-rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) 1.65s both,
+    se-travel 1s cubic-bezier(0.4, 0, 0.2, 1) 4.4s both;
+}
+
+/* analysis sheen: one sweep per structure */
+.se-root[data-state="processing"] .se-stratum--layout .se-lift::after {
+  animation: se-sweep 0.7s ease 2.34s both;
+}
+.se-root[data-state="processing"] .se-stratum--text .se-lift::after {
+  animation: se-sweep 0.7s ease 2.5s both;
+}
+.se-root[data-state="processing"] .se-stratum--images .se-lift::after {
+  animation: se-sweep 0.7s ease 2.66s both;
+}
+.se-root[data-state="processing"] .se-stratum--tables .se-lift::after {
+  animation: se-sweep 0.7s ease 2.82s both;
+}
+
+/* captions appear with their plane, gain their count at analysis, fade at travel */
+.se-root[data-state="processing"] .se-cap {
+  animation: se-fade-1 0.45s ease 1.35s both, se-fade-0 0.4s ease 3.6s both;
+}
+
+.se-root[data-state="processing"] .se-stratum--text .se-cap {
+  animation: se-fade-1 0.45s ease 1.55s both, se-fade-0 0.4s ease 3.7s both;
+}
+.se-root[data-state="processing"] .se-stratum--images .se-cap {
+  animation: se-fade-1 0.45s ease 1.75s both, se-fade-0 0.4s ease 4.05s both;
+}
+.se-root[data-state="processing"] .se-stratum--tables .se-cap {
+  animation: se-fade-1 0.45s ease 1.95s both, se-fade-0 0.4s ease 4.4s both;
+}
+.se-root[data-state="processing"] .se-stratum--layout .se-cap {
+  animation: se-fade-1 0.45s ease 1.35s both, se-fade-0 0.4s ease 3.45s both;
+}
+
+.se-root[data-state="processing"] .se-cap__v {
+  animation: se-fade-1 0.4s ease 2.6s both;
+}
+
+/* Word fills */
+.se-root[data-state="processing"] .se-wskeleton {
+  animation: se-skel-in 0.6s ease 3.5s both;
+}
+
+.se-root[data-state="processing"] .se-wtext {
+  animation: se-wtext-in 0.75s ease 4s both;
+}
+
+.se-root[data-state="processing"] .se-wimage {
+  animation: se-wimage-in 0.65s ease 4.45s both;
+}
+
+.se-root[data-state="processing"] .se-wtable {
+  animation: se-wtable-in 0.75s ease 4.85s both;
+}
+
+.se-root[data-state="processing"] .se-wchip {
+  animation: se-chip-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 6.5s both;
+}
+
+/* emptied PDF recedes; Word settles */
+.se-root[data-state="processing"] .se-drift--a {
+  animation: se-float-a 6.5s ease-in-out infinite alternate,
+    se-pdf-rest 0.8s ease 5.8s both;
+}
+
+.se-root[data-state="processing"] .se-drift--b {
+  animation: se-float-b 7.8s ease-in-out infinite alternate,
+    se-word-settle 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 6.4s both;
+}
+
+.se-root[data-state="processing"] .se-arcs {
+  animation: se-arcs-in 0.6s ease 3.4s both, se-arcs-out 0.6s ease 5.5s both;
+}
+
+.se-root[data-state="processing"] .se-arc {
+  animation: se-arc-dash 2.2s linear infinite;
+}
+
+/* ------------------------- structure exploration ----------------------------- */
+/* The 3D scene is decorative and pointer-transparent (see .se-strata).       */
+/* Emphasis is driven through the 2D Explore chip row (hover / focus / tap)   */
+/* — reliable across browsers, keyboard-accessible, honestly optional.        */
+
+.se-stratum[data-focus="on"] {
+  transform: translateZ(36px);
+}
+
+.se-root[data-state="processing"] .se-doc--pdf:has(.se-stratum[data-focus="on"]) .se-stratum:not([data-focus="on"]) {
+  opacity: 0.3;
+}
+
+.se-root[data-state="processing"] .se-doc--pdf:has(.se-stratum[data-focus="on"]) .se-base__content {
+  /* !important: must beat the se-base-dim keyframe fill during processing */
+  opacity: 0.1 !important;
+}
+
+.se-stratum[data-focus="on"] .se-cap__k {
+  border-color: color-mix(in oklab, var(--pdfkit-primary) 55%, var(--pdfkit-border));
+  color: var(--pdfkit-primary);
+}
+
+.se-row--explore {
+  gap: 6px;
+}
+
+.se-explore__label {
+  font-size: 11.5px;
+  color: var(--pdfkit-muted-foreground);
+  margin-right: 2px;
+}
+
+.se-chip {
+  border: 1px solid var(--pdfkit-border);
+  background: var(--pdfkit-surface);
+  color: var(--pdfkit-foreground);
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 3px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.se-chip:hover,
+.se-chip:focus-visible {
+  border-color: color-mix(in oklab, var(--pdfkit-primary) 55%, var(--pdfkit-border));
+  color: var(--pdfkit-primary);
+  background: color-mix(in oklab, var(--pdfkit-primary) 7%, var(--pdfkit-surface));
+}
+
+.se-chip:focus-visible {
+  outline: 2px solid var(--pdfkit-ring);
+  outline-offset: 1px;
+}
+
+/* ------------------------------- keyframes ------------------------------------ */
+
+@keyframes se-float-a {
+  from { transform: translateY(-3px); }
+  to { transform: translateY(3px); }
+}
+
+@keyframes se-float-b {
+  from { transform: translateY(3px); }
+  to { transform: translateY(-3px); }
+}
+
+@keyframes se-word-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes se-pages-tuck {
+  from {
+    transform: translateX(calc(var(--px) * var(--pd, 0) * -4px))
+      translateZ(calc(var(--pd, 0) * -10px))
+      rotateZ(calc(var(--pd, 0) * -0.7deg));
+  }
+  to {
+    transform: translateX(calc(var(--px) * var(--pd, 0) * -2px))
+      translateZ(calc(var(--pd, 0) * -4px))
+      rotateZ(calc(var(--pd, 0) * -0.2deg));
+  }
+}
+
+@keyframes se-base-dim {
+  to { opacity: 0.28; }
+}
+
+@keyframes se-base-fade {
+  to { opacity: 0.1; }
+}
+
+@keyframes se-fade-9 {
+  from { opacity: 0; }
+  to { opacity: 0.9; }
+}
+
+@keyframes se-fade-1 {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes se-fade-0 {
+  to { opacity: 0; }
+}
+
+@keyframes se-rise {
+  from {
+    transform: translate3d(0, 0, 0) rotateX(0deg);
+    opacity: 0;
+  }
+  40% { opacity: 1; }
+  to {
+    transform: translate3d(6px, var(--rise-y), var(--rise-z)) rotateX(var(--rise-rx, 0deg));
+    opacity: 1;
+  }
+}
+
+@keyframes se-travel {
+  from {
+    transform: translate3d(6px, var(--rise-y), var(--rise-z)) rotateX(var(--rise-rx, 0deg));
+    opacity: 1;
+  }
+  78% { opacity: 1; }
+  to {
+    transform: translate3d(var(--travel-x, 516px), var(--ty, 66px), 40px) scale(0.94);
+    opacity: 0;
+  }
+}
+
+@keyframes se-sweep {
+  from { transform: translateX(-130%); }
+  to { transform: translateX(130%); }
+}
+
+@keyframes se-skel-in {
+  from { opacity: 0; clip-path: inset(0 100% 0 0); }
+  to { opacity: 0.9; clip-path: inset(0 0 0 0); }
+}
+
+@keyframes se-wtext-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes se-wimage-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes se-wtable-in {
+  from { opacity: 0; clip-path: inset(0 0 100% 0); }
+  to { opacity: 1; clip-path: inset(0 0 0 0); }
+}
+
+@keyframes se-chip-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.85); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes se-pdf-rest {
+  to { transform: translateY(12px) scale(0.965); }
+}
+
+@keyframes se-word-settle {
+  0% { transform: translateY(0) scale(1); }
+  55% { transform: translateY(-5px) scale(1.018); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes se-arcs-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes se-arcs-out {
+  to { opacity: 0; }
+}
+
+@keyframes se-arc-dash {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -30; }
+}
+
+@keyframes se-rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ------------------------------ completed ------------------------------------- */
+/* (transitions carry the exit; these define the resting composition)             */
+
+.se-root[data-state="completed"] .se-wskeleton {
+  opacity: 0.55;
+}
+
+.se-root[data-state="completed"] .se-wtext,
+.se-root[data-state="completed"] .se-wimage,
+.se-root[data-state="completed"] .se-wtable {
+  opacity: 1;
+}
+
+.se-root[data-state="completed"] .se-wchip {
+  opacity: 1;
+}
+
+/* --------------------------------- dark ---------------------------------------- */
+
+.dark .se-root {
+  --se-paper: oklch(93.5% 0.004 264);
+  --se-paper-dim: oklch(90% 0.004 264);
+  --se-guide: oklch(60% 0.13 266 / 0.6);
+}
+
+.dark .se-lift {
+  background: oklch(97% 0 0 / 0.82);
+}
+
+.dark .se-lift--tables {
+  background:
+    linear-gradient(to bottom, var(--se-ink-soft) 0 16px, transparent 16px),
+    repeating-linear-gradient(to bottom, oklch(35% 0.03 264 / 0.5) 0 1px, transparent 1px 16px),
+    linear-gradient(
+      to right,
+      transparent calc(33.33% - 0.5px),
+      oklch(35% 0.03 264 / 0.5) calc(33.33% - 0.5px) calc(33.33% + 0.5px),
+      transparent calc(33.33% + 0.5px) calc(66.66% - 0.5px),
+      oklch(35% 0.03 264 / 0.5) calc(66.66% - 0.5px) calc(66.66% + 0.5px),
+      transparent calc(66.66% + 0.5px)
+    ),
+    oklch(97% 0 0 / 0.82);
+}
+
+.dark .se-scene::before {
+  background: radial-gradient(
+    72% 62% at 50% 42%,
+    oklch(24% 0.02 266 / 0.75),
+    transparent 78%
+  );
+}
+
+.dark .se-floor {
+  background: radial-gradient(58% 95% at 50% 100%, oklch(45% 0.05 266 / 0.26), transparent 74%);
+}
+
+.dark .se-shadow {
+  background: radial-gradient(
+    50% 100% at 50% 50%,
+    oklch(12% 0.02 264 / 0.55),
+    oklch(12% 0.02 264 / 0.25) 55%,
+    transparent 75%
+  );
+}
+
+.dark .se-base__glow {
+  background: linear-gradient(
+    105deg,
+    transparent 32%,
+    oklch(80% 0.02 266 / 0.16) 46%,
+    transparent 60%
+  );
+}
+
+.dark .se-arc {
+  stroke: oklch(75% 0.13 266);
+}
+
+/* ------------------------------ reduced motion --------------------------------- */
+/* Deliberate static compositions, not frozen mid-flight frames.                   */
+
+@media (prefers-reduced-motion: reduce) {
+  .se-root,
+  .se-root * {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* processing: the exploded diagram, held — structures labeled, Word half-formed */
+  .se-root[data-state="processing"] .se-lift {
+    opacity: 1;
+    transform: translate3d(6px, var(--rise-y), var(--rise-z)) rotateX(var(--rise-rx, 0deg));
+  }
+
+  .se-root[data-state="processing"] .se-lift::after {
+    transform: none;
+    background: none;
+  }
+
+  .se-root[data-state="processing"] .se-cap,
+  .se-root[data-state="processing"] .se-cap__v {
+    opacity: 1;
+  }
+
+  .se-root[data-state="processing"] .se-guides {
+    opacity: 0.9;
+  }
+
+  .se-root[data-state="processing"] .se-base__content {
+    opacity: 0.28;
+  }
+
+  .se-root[data-state="processing"] .se-wskeleton {
+    opacity: 0.9;
+    clip-path: none;
+  }
+
+  .se-root[data-state="processing"] .se-wtext,
+  .se-root[data-state="processing"] .se-wimage {
+    opacity: 1;
+    transform: none;
+    clip-path: none;
+  }
+
+  .se-root[data-state="processing"] .se-wtable {
+    opacity: 0.45;
+    clip-path: none;
+  }
+
+  .se-root[data-state="processing"] .se-wchip {
+    opacity: 1;
+    transform: none;
+  }
+
+  .se-root[data-state="processing"] .se-arcs {
+    opacity: 0.6;
+  }
+
+  /* emphasis without motion under reduced motion */
+  .se-stratum[data-focus="on"] {
+    transform: none;
+  }
+}
+
+/* --------------------------------- mobile --------------------------------------- */
+
+@media (max-width: 1100px) {
+  .se-root {
+    --pdf-x: -212px;
+    --word-x: 212px;
+    --travel-x: 424px;
+  }
+
+  /* captions move onto their planes (side captions would clip) */
+  .se-cap {
+    top: -26px;
+    left: 0;
+    right: auto;
+  }
+
+  .se-cap::before {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .se-root {
+    --doc-w: 198px;
+    --pdf-x: 0px;
+    --pdf-y: -124px;
+    --word-x: 0px;
+    --word-y: 130px;
+    --travel-x: 0px;
+    padding: 0 14px 28px;
+  }
+
+  .se-head {
+    padding-top: 18px;
+  }
+
+  .se-head__title {
+    font-size: 18px;
+  }
+
+  .se-stage {
+    height: 470px;
+  }
+
+  .se-scene {
+    perspective: 950px;
+    perspective-origin: 50% 42%;
+  }
+
+  .se-doc--pdf {
+    transform: rotateX(10deg) rotateY(-6deg);
+  }
+
+  .se-root[data-state="dragover"] .se-doc--pdf,
+  .se-stage[data-drag="on"] .se-doc--pdf {
+    transform: rotateX(8deg) rotateY(-3deg) scale(1.05);
+  }
+
+  .se-root[data-state="selected"] .se-doc--pdf {
+    transform: rotateX(9deg) rotateY(-4deg) scale(1.03);
+  }
+
+  .se-root[data-state="processing"] .se-doc--pdf {
+    transform: rotateX(10deg) rotateY(-5deg);
+  }
+
+  .se-root[data-state="error"] .se-doc--pdf {
+    transform: rotateX(18deg) rotateY(-2deg) translateY(8px);
+  }
+
+  .se-doc--word {
+    transform: rotateX(10deg) rotateY(6deg);
+  }
+
+  .se-root[data-state="completed"] .se-doc--word {
+    transform: rotateX(6deg) rotateY(0deg);
+  }
+
+  .se-stratum--text    { --rise-y: -34px; --rise-z: 30px; --ty: 236px; }
+  .se-stratum--images  { --rise-y: -70px;  --rise-z: 56px; --ty: 272px; }
+  .se-stratum--tables  { --rise-y: -104px; --rise-z: 80px; --ty: 306px; }
+  .se-stratum--layout  { --rise-y: -12px;  --rise-z: 16px; --ty: 60px; }
+
+  .se-cap {
+    font-size: 8.5px;
+    gap: 3px;
+    top: -20px;
+  }
+
+  .se-cap__k,
+  .se-cap__v {
+    padding: 2px 5px;
+  }
+
+  .se-arcs {
+    display: none;
+  }
+
+  .se-hint__main {
+    font-size: 13.5px;
+  }
+
+  .se-hint__alt {
+    font-size: 11px;
+  }
+
+  .se-actions {
+    min-height: 120px;
+  }
+
+  .se-btn--lg {
+    width: 100%;
+    max-width: 340px;
+  }
+}
