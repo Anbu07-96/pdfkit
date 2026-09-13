@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PdfToWordWorkspace } from "@/components/tools/workspaces/pdf-to-word-workspace";
@@ -83,7 +83,11 @@ async function uploadPdf(
 ) {
   routeFetch();
   await user.upload(screen.getByLabelText(/upload a pdf/i), pdfFile(name));
-  await screen.findByText(/Text only — read this first/i);
+  // The compact layout: the premium file row appears and the server's page
+  // count lands in it.
+  const row = await screen.findByTestId("selected-file-row");
+  await within(row).findByText(/pages/i);
+  return row;
 }
 
 function routeFetch(handlers: {
@@ -114,28 +118,106 @@ describe("PdfToWordWorkspace", () => {
   it("starts with an upload prompt and a disabled action", () => {
     renderWorkspace();
     expect(screen.getByLabelText(/upload a pdf/i)).toBeInTheDocument();
+    // Compact layout: the primary action appears only once it is useful;
+    // while empty, the upload zone's browse action is the primary action.
     expect(
-      screen.getByRole("button", { name: /^convert to word$/i }),
-    ).toBeDisabled();
-    expect(screen.getByText(/upload a pdf to get started/i)).toBeInTheDocument();
+      screen.queryByRole("button", { name: /^convert to word$/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Upload a PDF")).toBeInTheDocument();
   });
 
-  it("shows the server page count and the honest text-only warning", async () => {
+  it("shows the server page count and the honest text-only caveat in a compact strip", async () => {
     const user = userEvent.setup();
     renderWorkspace();
     await uploadPdf(user, "report.pdf");
 
-    expect(screen.getByText("report.pdf", { selector: "span" })).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: /text only — read this first/i }),
+      within(screen.getByTestId("selected-file-row")).getByText("report.pdf"),
     ).toBeInTheDocument();
-    // The warning names the page count from the server and what is lost.
+    // The material limitation is always visible in the compact strip…
+    expect(screen.getByText(/Text extraction/i)).toBeInTheDocument();
+    expect(screen.getByText(/may not be preserved/i)).toBeInTheDocument();
+    // …and the full explanation stays available through the disclosure.
+    expect(screen.getByRole("group")).toBeInTheDocument();
+    expect(screen.getByText(/Details/i)).toBeInTheDocument();
     expect(screen.getAllByText(/6 pages/i).length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText(/not preserved/i)).toBeInTheDocument();
     expect(screen.getByText(/does not rebuild the document/i)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /^convert to word$/i }),
     ).toBeEnabled();
+  });
+
+  it("collapses the upload zone and shows the file exactly once when selected", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await uploadPdf(user, "once.pdf");
+
+    // The tall drop box collapsed into a slim replace strip…
+    const zone = screen.getByTestId("upload-zone");
+    expect(zone).toHaveAttribute("data-state", "selected");
+    expect(zone).toHaveAttribute("data-collapsed", "true");
+    expect(zone).toHaveTextContent(/replace/i);
+    // …the premium file row carries the name, size and server page count…
+    const row = screen.getByTestId("selected-file-row");
+    expect(within(row).getByText("once.pdf")).toBeInTheDocument();
+    expect(within(row).getByText(/4 KB/i)).toBeInTheDocument();
+    expect(within(row).getByText(/6 pages/i)).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: /remove/i })).toBeInTheDocument();
+    // …and the filename appears exactly once in the whole workspace.
+    expect(screen.getAllByText("once.pdf")).toHaveLength(1);
+  });
+
+  it("removing the selected file returns to the spacious empty state", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await uploadPdf(user, "gone.pdf");
+
+    await user.click(
+      within(screen.getByTestId("selected-file-row")).getByRole("button", {
+        name: /remove/i,
+      }),
+    );
+    expect(
+      screen.queryByTestId("selected-file-row"),
+    ).not.toBeInTheDocument();
+    const zone = screen.getByTestId("upload-zone");
+    expect(zone).toHaveAttribute("data-state", "empty");
+    expect(zone).not.toHaveAttribute("data-collapsed");
+    expect(
+      screen.queryByRole("button", { name: /^convert to word$/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("retries after a failed conversion without re-uploading", async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await uploadPdf(user);
+
+    let attempt = 0;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/api/documents/inspect")) return inspectResponse(6);
+      attempt += 1;
+      return attempt === 1
+        ? fakeResponse({
+            ok: false,
+            status: 500,
+            json: {
+              error: { code: "INTERNAL", message: "Conversion failed on the server." },
+            },
+          })
+        : docxResponse();
+    });
+
+    await user.click(screen.getByRole("button", { name: /^convert to word$/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/failed/i);
+    // The primary action is replaced by an inline retry in the error panel.
+    expect(
+      screen.queryByRole("button", { name: /^convert to word$/i }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /try again/i }));
+    await screen.findByRole("heading", { name: /word document ready/i });
+    expect(attempt).toBe(2);
   });
 
   it("declines documents above the page limit before converting", async () => {
@@ -165,8 +247,10 @@ describe("PdfToWordWorkspace", () => {
 
     await user.click(screen.getByRole("button", { name: /^convert to word$/i }));
     expect(
-      (await screen.findAllByText(/converting to word…/i)).length,
+      (await screen.findAllByText(/converting to word/i)).length,
     ).toBeGreaterThanOrEqual(1);
+    // Secondary status is honest and indeterminate — no fake percentages.
+    expect(screen.getByText(/analyzing document structure/i)).toBeInTheDocument();
     expect(document.querySelector("progress")).toBeNull();
     expect(screen.queryByText(/%\s*complete/i)).not.toBeInTheDocument();
 
@@ -216,10 +300,10 @@ describe("PdfToWordWorkspace", () => {
       .getByTestId("job-visual")
       .querySelector(".job-visual-scene");
     expect(scene?.getAttribute("data-status")).toBe("success");
-    // …the convert button stays inert during the beat…
+    // …the setup UI collapses during the beat (the button stays inert)…
     expect(
-      screen.getByRole("button", { name: /^convert to word$/i }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: /^convert to word$/i }),
+    ).not.toBeInTheDocument();
 
     // …then the existing result UI takes over.
     await screen.findByRole("heading", { name: /word document ready/i });
@@ -293,9 +377,7 @@ describe("PdfToWordWorkspace", () => {
     expect(screen.getByText(/88 paragraphs/i)).toBeInTheDocument();
     expect(screen.getAllByText(/6 pages/i).length).toBeGreaterThanOrEqual(1);
     // The text-only warning is repeated in the result.
-    expect(
-      screen.getAllByText(/not preserved/i).length,
-    ).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/not preserved/i).length).toBeGreaterThanOrEqual(1);
     expect(
       screen.getByRole("link", { name: /download word document/i }),
     ).toHaveAttribute("href");
@@ -375,8 +457,8 @@ describe("PdfToWordWorkspace", () => {
       /could not be opened/i,
     );
     expect(
-      screen.getByRole("button", { name: /^convert to word$/i }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: /^convert to word$/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("resets everything with start over", async () => {
@@ -387,11 +469,12 @@ describe("PdfToWordWorkspace", () => {
     await screen.findByRole("heading", { name: /word document ready/i });
 
     await user.click(screen.getByRole("button", { name: /start over/i }));
-    expect(screen.getByText(/upload a pdf to get started/i)).toBeInTheDocument();
-    expect(screen.queryByText(/text only — read this first/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId("upload-zone")).toHaveAttribute("data-state", "empty");
+    expect(screen.queryByTestId("selected-file-row")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Text extraction/i)).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /^convert to word$/i }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: /^convert to word$/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("converts a second document after a successful one", async () => {

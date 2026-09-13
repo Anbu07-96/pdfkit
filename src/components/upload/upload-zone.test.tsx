@@ -164,4 +164,53 @@ describe("UploadZone ordering", () => {
     expect(screen.getByRole("button", { name: /remove a\.pdf/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /remove all/i })).toBeDisabled();
   });
+  describe("compact variant (Phase 75D.5)", () => {
+    it("collapses the drop zone into a slim replace strip once a file is selected", async () => {
+      const user = userEvent.setup();
+      function StatefulZone() {
+        const [files, setFiles] = React.useState<SelectedFile[]>([]);
+        return (
+          <UploadZone
+            files={files}
+            onFilesChange={setFiles}
+            multiple={false}
+            maxFiles={1}
+            variant="compact"
+            showFileList={false}
+          />
+        );
+      }
+      render(<StatefulZone />);
+
+      const zone = screen.getByTestId("upload-zone");
+      expect(zone).toHaveAttribute("data-state", "empty");
+      expect(zone).not.toHaveAttribute("data-collapsed");
+
+      await user.upload(screen.getByLabelText(/upload your files/i), pdf());
+      expect(zone).toHaveAttribute("data-state", "selected");
+      expect(zone).toHaveAttribute("data-collapsed", "true");
+      expect(zone).toHaveTextContent(/replace/i);
+    });
+
+    it("keeps the classic spacious zone in the default variant", async () => {
+      const user = userEvent.setup();
+      render(
+        <UploadZone multiple={false} maxFiles={1} />,
+      );
+      await user.upload(screen.getByLabelText(/upload your files/i), pdf());
+      const zone = screen.getByTestId("upload-zone");
+      expect(zone).toHaveAttribute("data-state", "selected");
+      expect(zone).not.toHaveAttribute("data-collapsed");
+      expect(zone).toHaveTextContent(/browse/i);
+    });
+
+    it("can hide the built-in file list for workspaces with their own file row", async () => {
+      const user = userEvent.setup();
+      render(
+        <UploadZone multiple={false} maxFiles={1} showFileList={false} />,
+      );
+      await user.upload(screen.getByLabelText(/upload your files/i), pdf());
+      expect(screen.queryByRole("region", { name: /selected files/i })).toBeNull();
+    });
+  });
 });

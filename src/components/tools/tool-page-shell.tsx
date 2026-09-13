@@ -2,6 +2,7 @@ import { ArrowRight, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+import { cn } from "@/lib/utils/cn";
 import { Container } from "@/components/layout/container";
 import { ToolCard } from "@/components/tools/tool-card";
 import { ToolIcon } from "@/components/tools/tool-icon";
@@ -56,13 +57,25 @@ export interface ToolPageShellProps {
    * explanation instead.
    */
   workspace?: ReactNode;
+  /**
+   * Phase 75D.5: "compact" tightens vertical rhythm (header, spacing, and a
+   * consolidated "Trust & details" sidebar) so the primary workflow fits a
+   * laptop viewport. Default "default" is the classic roomy layout used by
+   * every other tool page.
+   */
+  variant?: "default" | "compact";
 }
 
 /**
  * Reusable layout for every tool page: breadcrumb, title, working area,
  * privacy information, how it works, related tools and FAQ.
  */
-export function ToolPageShell({ tool, workspace }: ToolPageShellProps) {
+export function ToolPageShell({
+  tool,
+  workspace,
+  variant = "default",
+}: ToolPageShellProps) {
+  const compact = variant === "compact";
   const category = getCategory(tool.category);
   const usable = isToolUsable(tool);
   const hasWorkspace = usable && Boolean(workspace);
@@ -75,7 +88,7 @@ export function ToolPageShell({ tool, workspace }: ToolPageShellProps) {
   );
 
   return (
-    <Container className="py-8 sm:py-12">
+    <Container className={compact ? "py-4 sm:py-6" : "py-8 sm:py-12"}>
       <Breadcrumbs
         items={[
           { label: "Home", href: "/" },
@@ -85,24 +98,47 @@ export function ToolPageShell({ tool, workspace }: ToolPageShellProps) {
         ]}
       />
 
-      <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div
+        className={cn(
+          "grid lg:grid-cols-[minmax(0,1fr)_20rem]",
+          compact ? "mt-4 gap-6" : "mt-6 gap-10",
+        )}
+      >
         <div className="min-w-0">
           <header>
             <div className="flex flex-wrap items-center gap-3">
-              <span className="flex size-11 items-center justify-center rounded-xl bg-primary-soft text-primary-soft-foreground">
-                <ToolIcon name={tool.icon} className="size-5" />
+              <span
+                className={cn(
+                  "flex items-center justify-center rounded-xl bg-primary-soft text-primary-soft-foreground",
+                  compact ? "size-9" : "size-11",
+                )}
+              >
+                <ToolIcon
+                  name={tool.icon}
+                  className={compact ? "size-4" : "size-5"}
+                />
               </span>
-              <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+              <h1
+                className={cn(
+                  "font-semibold tracking-tight text-foreground",
+                  compact ? "text-xl sm:text-2xl" : "text-2xl sm:text-3xl",
+                )}
+              >
                 {tool.name}
               </h1>
               <ToolStatusBadge status={tool.status} plannedTier={tool.plannedTier} />
             </div>
-            <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted">
+            <p
+              className={cn(
+                "max-w-2xl leading-relaxed text-muted",
+                compact ? "mt-1.5 text-sm" : "mt-3 text-base",
+              )}
+            >
               {tool.description}
             </p>
           </header>
 
-          <div className="mt-8">
+          <div className={compact ? "mt-4" : "mt-8"}>
             {hasWorkspace ? (
               workspace
             ) : (
@@ -144,7 +180,7 @@ export function ToolPageShell({ tool, workspace }: ToolPageShellProps) {
             ) : null}
           </div>
 
-          <section aria-labelledby="how-it-works" className="mt-12">
+          <section aria-labelledby="how-it-works" className={compact ? "mt-8" : "mt-12"}>
             <h2 id="how-it-works" className="text-xl font-semibold text-foreground">
               {usable ? "How it works" : "How it will work"}
             </h2>
@@ -164,7 +200,7 @@ export function ToolPageShell({ tool, workspace }: ToolPageShellProps) {
           </section>
 
           {related.length > 0 ? (
-            <section aria-labelledby="related-tools" className="mt-12">
+            <section aria-labelledby="related-tools" className={compact ? "mt-8" : "mt-12"}>
               <h2 id="related-tools" className="text-xl font-semibold text-foreground">
                 Related tools
               </h2>
@@ -176,7 +212,7 @@ export function ToolPageShell({ tool, workspace }: ToolPageShellProps) {
             </section>
           ) : null}
 
-          <section aria-labelledby="tool-faq" className="mt-12">
+          <section aria-labelledby="tool-faq" className={compact ? "mt-8" : "mt-12"}>
             <h2 id="tool-faq" className="text-xl font-semibold text-foreground">
               Frequently asked questions
             </h2>
@@ -185,6 +221,105 @@ export function ToolPageShell({ tool, workspace }: ToolPageShellProps) {
         </div>
 
         <aside className="lg:sticky lg:top-24 lg:self-start">
+          {compact ? (
+            <div className="rounded-xl border border-border bg-surface p-4 shadow-xs">
+              <div className="flex items-center gap-2">
+                <ShieldCheck aria-hidden="true" className="size-4 text-primary" />
+                <h2 className="text-sm font-semibold text-foreground">
+                  Trust &amp; details
+                </h2>
+              </div>
+              <ul className="mt-2.5 flex flex-col gap-1.5 text-sm text-muted">
+                <li className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="size-1.5 shrink-0 rounded-full bg-success"
+                  />
+                  Private processing — server-side, in memory
+                </li>
+                <li className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="size-1.5 shrink-0 rounded-full bg-success"
+                  />
+                  Files discarded as soon as the result is returned
+                </li>
+                <li className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="size-1.5 shrink-0 rounded-full bg-success"
+                  />
+                  No account, tracking or advertising
+                </li>
+              </ul>
+              <details className="mt-2 text-sm">
+                <summary className="cursor-pointer font-medium text-primary marker:content-['']">
+                  Full privacy information
+                </summary>
+                <ul className="mt-2 flex flex-col gap-2 text-sm text-muted">
+                  {usable ? (
+                    <>
+                      <li>
+                        Files are sent to the PDFKit server only when you start
+                        the operation.
+                      </li>
+                      <li>
+                        They are processed in memory, never written to disk and
+                        never stored.
+                      </li>
+                      <li>
+                        Documents are discarded as soon as the result is
+                        returned; only counts and timings are logged, never file
+                        names or contents.
+                      </li>
+                    </>
+                  ) : (
+                    <>
+                      <li>
+                        No processing exists for this tool, so no file leaves
+                        your device from this page.
+                      </li>
+                      <li>
+                        When it ships, files will be used only to complete the
+                        requested operation.
+                      </li>
+                      <li>
+                        Temporary data will be discarded automatically; documents
+                        will not be retained for any other purpose.
+                      </li>
+                    </>
+                  )}
+                </ul>
+              </details>
+              <dl className="mt-3 border-t border-border pt-3 text-sm">
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-muted">Category</dt>
+                  <dd className="text-end font-medium text-foreground">
+                    {category?.name ?? "—"}
+                  </dd>
+                </div>
+                <div className="mt-2 flex items-start justify-between gap-4">
+                  <dt className="text-muted">Input</dt>
+                  <dd className="text-end font-medium text-foreground">
+                    {formatExtensionList(tool.supportedFileTypes)}
+                  </dd>
+                </div>
+                <div className="mt-2 flex items-start justify-between gap-4">
+                  <dt className="text-muted">Availability</dt>
+                  <dd className="text-end font-medium text-foreground">
+                    {usable ? "Available" : "Coming soon"}
+                  </dd>
+                </div>
+                <div className="mt-2 flex items-start justify-between gap-4">
+                  <dt className="text-muted">Processing</dt>
+                  <dd className="text-end font-medium text-foreground">
+                    {usable ? "Server-side, in memory" : "Not implemented"}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          ) : (
+          <>
           <div className="rounded-xl border border-border bg-surface p-5 shadow-xs">
             <div className="flex items-center gap-2">
               <ShieldCheck aria-hidden="true" className="size-5 text-primary" />
@@ -255,6 +390,8 @@ export function ToolPageShell({ tool, workspace }: ToolPageShellProps) {
               </dd>
             </div>
           </dl>
+          </>
+          )}
         </aside>
       </div>
     </Container>

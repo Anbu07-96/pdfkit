@@ -257,15 +257,13 @@
 }
 
 /* ------------------------------------------------------------------------ */
-/* Phase 75D.4.2 — job processing visual: Intelligent Document              */
-/* Reconstruction (UI-only, easy to remove).                               */
-/* PDF page -> scan + deconstruct into structural blocks -> transformation */
-/* field (lanes, processing nodes, typed motes) -> progressive Word        */
-/* reconstruction. One shared 7.5s master loop keeps the choreography in   */
-/* sync with zero JavaScript. Every animation is transform/opacity on a    */
-/* fixed element count; no canvas, no WebGL, no per-page animation. The    */
-/* whole layer is aria-hidden; the real job status always remains in the  */
-/* surrounding UI.                                                         */
+/* ARCHIVED (Phase 75D.4.2) — "Structural Reconstruction V1".              */
+/* Kept for reference/reuse: the archived treatment                         */
+/* (StructuralReconstructionV1 in job-processing-visual.tsx) and the        */
+/* generic fallback treatment render these "rec-" classes. The active      */
+/* PDF -> Word treatment is the Document Intelligence Core ("dic-" block   */
+/* further below). One shared 7.5s master loop; transform/opacity only on  */
+/* a fixed element count; no canvas, no WebGL, no JS timers.               */
 /* ------------------------------------------------------------------------ */
 @layer components {
   .job-visual {
@@ -1567,5 +1565,941 @@
   100% {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+/* ------------------------------------------------------------------------ */
+/* Phase 75D.5 — Document Intelligence Core: the ACTIVE PDF -> Word         */
+/* processing visual (UI-only). A segmented source signal dissolves into    */
+/* particles that enter a central spatial core (precision grid, layered     */
+/* geometric planes breathing in 3D, orbital data points, pulsing nodes),  */
+/* are reorganized, and leave as particles from which a structured output  */
+/* assembles block by block. One shared 6s master loop; every animation    */
+/* is transform/opacity on a FIXED element count (8 particles + 4 orbital  */
+/* beads + 3 nodes + 3 planes); no canvas, no WebGL, no JS timers, no      */
+/* per-page elements. Wide and shallow (~150px) so it integrates into the  */
+/* compact workspace. The whole layer is aria-hidden.                      */
+/* ------------------------------------------------------------------------ */
+@layer components {
+  .dic-scene {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    height: 9.5rem;
+    max-width: 42rem;
+    margin-inline: auto;
+    perspective: 40rem;
+    perspective-origin: 50% 50%;
+  }
+
+  /* Source signal ---------------------------------------------------- */
+
+  .dic-source {
+    position: relative;
+    width: 1.75rem;
+    height: 2.5rem;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.3rem;
+    transform: rotateY(14deg) rotateX(4deg);
+    transform-style: preserve-3d;
+    animation: dic-source 6s ease-in-out infinite;
+  }
+
+  .dic-seg {
+    display: block;
+    height: 0.375rem;
+    border-radius: 0.125rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-raised);
+    box-shadow: var(--pdfkit-shadow-xs);
+    transform-origin: center;
+  }
+
+  .dic-seg--1 {
+    width: 100%;
+  }
+
+  .dic-seg--2 {
+    width: 82%;
+  }
+
+  .dic-seg--3 {
+    width: 60%;
+  }
+
+  /* Transformation fields -------------------------------------------- */
+
+  .dic-field {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 2rem;
+    height: 1px;
+    align-self: center;
+  }
+
+  .dic-path {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--color-border-strong) 85%, transparent),
+      transparent
+    );
+    opacity: 0.8;
+  }
+
+  /* Signal particles (in) and output particles (out): full-field wrappers
+     translated 0 -> 100% so travel adapts to any field width. */
+  .dic-sig,
+  .dic-out {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+  }
+
+  .dic-sig--1 {
+    animation: dic-sig 6s cubic-bezier(0.45, 0, 0.4, 1) infinite;
+  }
+
+  .dic-sig--2 {
+    animation: dic-sig 6s cubic-bezier(0.45, 0, 0.4, 1) infinite 0.35s;
+  }
+
+  .dic-sig--3 {
+    animation: dic-sig 6s cubic-bezier(0.45, 0, 0.4, 1) infinite 0.7s;
+  }
+
+  .dic-dot {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin: -0.25rem 0 0 -0.25rem;
+    border-radius: 0.1875rem;
+    background: var(--color-primary-soft);
+    border: 1px solid color-mix(in oklab, var(--color-primary) 50%, transparent);
+  }
+
+  .dic-sig .dic-dot {
+    animation: dic-dot-in 1.5s ease-in-out infinite;
+  }
+
+  .dic-out--1 {
+    animation: dic-out 6s cubic-bezier(0.45, 0, 0.4, 1) infinite;
+  }
+
+  .dic-out--2 {
+    animation: dic-out 6s cubic-bezier(0.45, 0, 0.4, 1) infinite 0.35s;
+  }
+
+  .dic-out--3 {
+    animation: dic-out 6s cubic-bezier(0.45, 0, 0.4, 1) infinite 0.7s;
+  }
+
+  /* The intelligence core --------------------------------------------- */
+
+  .dic-core {
+    position: relative;
+    width: 7rem;
+    height: 7rem;
+    flex: none;
+    transform-style: preserve-3d;
+  }
+
+  /* Precision grid backdrop, radially faded. */
+  .dic-grid {
+    position: absolute;
+    inset: -0.75rem;
+    border-radius: 1rem;
+    background-image:
+      linear-gradient(
+        color-mix(in oklab, var(--color-border-strong) 55%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        90deg,
+        color-mix(in oklab, var(--color-border-strong) 55%, transparent) 1px,
+        transparent 1px
+      );
+    background-size: 0.75rem 0.75rem;
+    -webkit-mask-image: radial-gradient(circle, black 30%, transparent 72%);
+    mask-image: radial-gradient(circle, black 30%, transparent 72%);
+    animation: dic-grid 6s ease-in-out infinite;
+  }
+
+  /* Layered geometric planes: rotated-square outlines at different depths,
+     breathing in 3D — never spinning. */
+  .dic-planes {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+  }
+
+  .dic-plane {
+    position: absolute;
+    inset: 0;
+    border-radius: 0.75rem;
+    border: 1.25px solid color-mix(in oklab, var(--color-primary) 38%, transparent);
+    background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
+    box-shadow: var(--pdfkit-shadow-xs);
+    transform-origin: center;
+  }
+
+  .dic-plane--top {
+    inset: 1.375rem;
+    animation: dic-plane-top 6s ease-in-out infinite;
+  }
+
+  .dic-plane--mid {
+    inset: 0.75rem;
+    border-color: color-mix(in oklab, var(--color-primary) 28%, transparent);
+    animation: dic-plane-mid 6s ease-in-out infinite;
+  }
+
+  .dic-plane--deep {
+    inset: 0.25rem;
+    border-style: dashed;
+    border-color: color-mix(in oklab, var(--color-border-strong) 80%, transparent);
+    background: transparent;
+    animation: dic-plane-deep 6s ease-in-out infinite;
+  }
+
+  .dic-nucleus {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0.875rem;
+    height: 0.875rem;
+    margin: -0.4375rem 0 0 -0.4375rem;
+    border-radius: 9999px;
+    background: var(--color-primary-soft);
+    border: 1.5px solid color-mix(in oklab, var(--color-primary) 55%, transparent);
+    animation: dic-nucleus 3s ease-in-out infinite;
+  }
+
+  /* Orbital data points: two tilted elliptical rings, each carrying two
+     beads in slow continuous orbit (transform only). */
+  .dic-orbit {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid color-mix(in oklab, var(--color-border-strong) 60%, transparent);
+    transform-style: preserve-3d;
+  }
+
+  .dic-orbit--a {
+    transform: rotateX(68deg) rotateZ(-12deg);
+    animation: dic-orbit-a 6s ease-in-out infinite;
+  }
+
+  .dic-orbit--b {
+    inset: 0.875rem;
+    transform: rotateX(68deg) rotateZ(28deg) rotateY(24deg);
+    animation: dic-orbit-b 6s ease-in-out infinite;
+  }
+
+  .dic-rotor {
+    position: absolute;
+    inset: 0;
+    animation: dic-rotor 9s linear infinite;
+  }
+
+  .dic-bead {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 0.4375rem;
+    height: 0.4375rem;
+    margin: -0.1875rem 0 0 -0.1875rem;
+    border-radius: 9999px;
+    background: color-mix(in oklab, var(--color-primary) 70%, var(--color-surface-raised));
+  }
+
+  .dic-bead--opposite {
+    top: auto;
+    bottom: 0;
+    margin: 0 0 -0.1875rem -0.1875rem;
+  }
+
+  /* Spatial nodes: small diamonds that pulse as particles pass. */
+  .dic-node {
+    position: absolute;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 0.125rem;
+    border: 1px solid color-mix(in oklab, var(--color-primary) 45%, transparent);
+    background: var(--color-primary-soft);
+    transform: rotate(45deg);
+    opacity: 0.35;
+    animation: dic-node 6s ease-in-out infinite;
+  }
+
+  .dic-node--1 {
+    left: -0.25rem;
+    top: 50%;
+    margin-top: -0.25rem;
+  }
+
+  .dic-node--2 {
+    right: 12%;
+    top: 6%;
+    animation-delay: 0.5s;
+  }
+
+  .dic-node--3 {
+    right: 6%;
+    bottom: 14%;
+    animation-delay: 1s;
+  }
+
+  /* Ambient particles drifting near the core. */
+  .dic-ambient {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    border-radius: 9999px;
+    background: color-mix(in oklab, var(--color-primary) 45%, transparent);
+    opacity: 0.3;
+    animation: dic-ambient 5s ease-in-out infinite;
+  }
+
+  .dic-ambient--1 {
+    left: 8%;
+    bottom: 10%;
+  }
+
+  .dic-ambient--2 {
+    right: 4%;
+    top: 22%;
+    animation-delay: 2.5s;
+  }
+
+  /* Structured output -------------------------------------------------
+     Abstract segmented geometry (deliberately not a document): a compact
+     block grid that assembles cell by cell from the core's emissions. */
+
+  .dic-output {
+    position: relative;
+    width: 2.5rem;
+    height: 2.5rem;
+    flex: none;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 0.25rem;
+    transform: rotateY(-14deg) rotateX(4deg);
+    transform-style: preserve-3d;
+  }
+
+  .dic-cell {
+    border-radius: 0.1875rem;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-raised);
+    box-shadow: var(--pdfkit-shadow-xs);
+    opacity: 0;
+    animation: dic-cell 6s ease-out infinite;
+  }
+
+  .dic-cell--1 {
+    animation-delay: 0s;
+  }
+
+  .dic-cell--2 {
+    animation-delay: 0.18s;
+  }
+
+  .dic-cell--3 {
+    animation-delay: 0.36s;
+  }
+
+  .dic-cell--4 {
+    animation-delay: 0.54s;
+  }
+
+  .dic-cell--5 {
+    animation-delay: 0.72s;
+  }
+
+  .dic-cell--6 {
+    animation-delay: 0.9s;
+  }
+
+  /* Outcome badge (shared look with the archived treatments). */
+  .dic-badge {
+    position: static;
+    flex: none;
+    align-self: flex-start;
+    margin-left: 0.25rem;
+  }
+
+  /* Status presentation ------------------------------------------------ */
+
+  /* Success: particles converge into the output and fade; the planes align
+     and settle; the output completes; the nucleus calms. */
+  .dic-scene.is-success .dic-sig,
+  .dic-scene.is-success .dic-out,
+  .dic-scene.is-success .dic-ambient {
+    animation: none;
+    opacity: 0;
+  }
+
+  .dic-scene.is-success .dic-source {
+    animation: none;
+    opacity: 0.55;
+    transform: rotateY(14deg) rotateX(4deg) scale(0.92);
+  }
+
+  .dic-scene.is-success .dic-grid,
+  .dic-scene.is-success .dic-orbit--a,
+  .dic-scene.is-success .dic-orbit--b {
+    animation: none;
+    opacity: 0.6;
+  }
+
+  .dic-scene.is-success .dic-rotor {
+    animation: none;
+  }
+
+  .dic-scene.is-success .dic-node {
+    animation: none;
+    opacity: 0.25;
+  }
+
+  .dic-scene.is-success .dic-nucleus {
+    animation: none;
+    opacity: 0.85;
+  }
+
+  .dic-scene.is-success .dic-plane--top,
+  .dic-scene.is-success .dic-plane--mid,
+  .dic-scene.is-success .dic-plane--deep {
+    animation: dic-plane-settle 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .dic-scene.is-success .dic-output {
+    animation: dic-output-settle 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .dic-scene.is-success .dic-cell {
+    animation: none;
+    opacity: 1;
+  }
+
+  /* Error: the transformation stops; the output stays visibly incomplete
+     (first cells only); everything dims with restraint. */
+  .dic-scene.is-error .dic-sig,
+  .dic-scene.is-error .dic-out,
+  .dic-scene.is-error .dic-ambient {
+    animation: none;
+    opacity: 0;
+  }
+
+  .dic-scene.is-error .dic-source,
+  .dic-scene.is-error .dic-grid,
+  .dic-scene.is-error .dic-orbit--a,
+  .dic-scene.is-error .dic-orbit--b,
+  .dic-scene.is-error .dic-rotor,
+  .dic-scene.is-error .dic-nucleus {
+    animation: none;
+    opacity: 0.45;
+  }
+
+  .dic-scene.is-error .dic-node {
+    animation: none;
+    opacity: 0.2;
+  }
+
+  .dic-scene.is-error .dic-plane--top,
+  .dic-scene.is-error .dic-plane--mid,
+  .dic-scene.is-error .dic-plane--deep {
+    animation: none;
+    opacity: 0.5;
+  }
+
+  .dic-scene.is-error .dic-cell {
+    animation: none;
+    opacity: 0;
+  }
+
+  .dic-scene.is-error .dic-cell--1,
+  .dic-scene.is-error .dic-cell--2 {
+    opacity: 0.45;
+  }
+
+  .dic-scene.is-error .dic-path {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--color-danger) 40%, transparent),
+      transparent
+    );
+  }
+
+  /* Mobile: a dedicated compact composition — smaller core and geometry,
+     shorter travel, one fewer particle per field, no orbital ring b. */
+  @media (max-width: 639px) {
+    .dic-scene {
+      gap: 0.25rem;
+      height: 7.5rem;
+      perspective: 30rem;
+    }
+
+    .dic-source {
+      width: 1.375rem;
+      height: 2rem;
+      gap: 0.25rem;
+    }
+
+    .dic-seg {
+      height: 0.3rem;
+    }
+
+    .dic-field {
+      min-width: 1.25rem;
+    }
+
+    .dic-sig--3,
+    .dic-out--3 {
+      display: none;
+    }
+
+    .dic-core {
+      width: 5.25rem;
+      height: 5.25rem;
+    }
+
+    .dic-grid {
+      inset: -0.5rem;
+      background-size: 0.6rem 0.6rem;
+    }
+
+    .dic-plane--top {
+      inset: 1rem;
+    }
+
+    .dic-plane--mid {
+      inset: 0.5rem;
+    }
+
+    .dic-orbit--b {
+      display: none;
+    }
+
+    .dic-node--3 {
+      display: none;
+    }
+
+    .dic-output {
+      width: 1.875rem;
+      height: 1.875rem;
+      gap: 0.1875rem;
+    }
+
+    .dic-badge {
+      position: absolute;
+      top: 0;
+      right: 0;
+      margin: 0;
+    }
+  }
+
+  /* Reduced motion: a static composition of the whole system — source
+     signal, layered core with orbit beads at rest, completed output. No
+     continuous animation. */
+  @media (prefers-reduced-motion: reduce) {
+    .dic-scene,
+    .dic-scene * {
+      animation: none !important;
+      transition: none !important;
+    }
+
+    .dic-seg {
+      opacity: 1;
+    }
+
+    .dic-sig {
+      opacity: 1;
+      transform: translateX(30%);
+    }
+
+    .dic-sig--2 {
+      transform: translateX(55%);
+    }
+
+    .dic-sig--3 {
+      transform: translateX(80%);
+    }
+
+    .dic-out {
+      opacity: 1;
+      transform: translateX(30%);
+    }
+
+    .dic-out--2 {
+      transform: translateX(55%);
+    }
+
+    .dic-out--3 {
+      transform: translateX(80%);
+    }
+
+    .dic-node {
+      opacity: 0.6;
+    }
+
+    .dic-ambient {
+      opacity: 0.35;
+    }
+
+    .dic-cell {
+      opacity: 1;
+    }
+  }
+}
+
+/* Master-loop keyframes (6s — one shared clock, zero JavaScript). */
+
+/* The source signal breathes and, mid-loop, compresses as it emits. */
+@keyframes dic-source {
+  0%,
+  8% {
+    transform: rotateY(14deg) rotateX(4deg) translateX(0) scale(1);
+  }
+
+  14% {
+    transform: rotateY(18deg) rotateX(5deg) translateX(0.125rem) scale(1.04);
+  }
+
+  22% {
+    transform: rotateY(12deg) rotateX(3deg) translateX(-0.125rem) scale(0.97);
+  }
+
+  30%,
+  100% {
+    transform: rotateY(14deg) rotateX(4deg) translateX(0) scale(1);
+  }
+}
+
+/* Signal particles: source -> core, staggered. */
+@keyframes dic-sig {
+  0%,
+  10% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+
+  14% {
+    opacity: 1;
+  }
+
+  34% {
+    transform: translateX(100%);
+    opacity: 1;
+  }
+
+  38%,
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes dic-out {
+  0%,
+  42% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+
+  46% {
+    opacity: 1;
+  }
+
+  66% {
+    transform: translateX(100%);
+    opacity: 1;
+  }
+
+  70%,
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* A gentle tumble while a particle travels. */
+@keyframes dic-dot-in {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+
+  50% {
+    transform: rotate(90deg) scale(1.08);
+  }
+
+  100% {
+    transform: rotate(180deg) scale(1);
+  }
+}
+
+/* The precision grid brightens while the core is reorganizing. */
+@keyframes dic-grid {
+  0%,
+  10% {
+    opacity: 0.55;
+  }
+
+  30%,
+  55% {
+    opacity: 1;
+  }
+
+  80%,
+  100% {
+    opacity: 0.55;
+  }
+}
+
+/* Layered planes: breathing 3D oscillation — separate, reorganize, settle.
+   (Keyframes carry the full transform; insets differ per plane.) */
+@keyframes dic-plane-top {
+  0%,
+  10% {
+    transform: rotateY(0deg) rotateX(0deg) translateZ(0);
+  }
+
+  35% {
+    transform: rotateY(14deg) rotateX(-8deg) translateZ(0.75rem);
+  }
+
+  60% {
+    transform: rotateY(-10deg) rotateX(9deg) translateZ(0.5rem);
+  }
+
+  85%,
+  100% {
+    transform: rotateY(0deg) rotateX(0deg) translateZ(0);
+  }
+}
+
+@keyframes dic-plane-mid {
+  0%,
+  10% {
+    transform: rotateY(0deg) rotateX(0deg) translateZ(0);
+  }
+
+  35% {
+    transform: rotateY(-12deg) rotateX(10deg) translateZ(-0.5rem);
+  }
+
+  60% {
+    transform: rotateY(13deg) rotateX(-7deg) translateZ(-0.25rem);
+  }
+
+  85%,
+  100% {
+    transform: rotateY(0deg) rotateX(0deg) translateZ(0);
+  }
+}
+
+@keyframes dic-plane-deep {
+  0%,
+  10% {
+    transform: rotateY(0deg) rotateX(0deg) translateZ(0);
+  }
+
+  35% {
+    transform: rotateY(10deg) rotateX(-10deg) translateZ(-1rem);
+  }
+
+  60% {
+    transform: rotateY(-14deg) rotateX(6deg) translateZ(-0.75rem);
+  }
+
+  85%,
+  100% {
+    transform: rotateY(0deg) rotateX(0deg) translateZ(0);
+  }
+}
+
+/* The nucleus breathes on its own calm clock. */
+@keyframes dic-nucleus {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
+/* Orbit rings sway gently in 3D while their rotors spin continuously. */
+@keyframes dic-orbit-a {
+  0%,
+  100% {
+    transform: rotateX(68deg) rotateZ(-12deg);
+  }
+
+  50% {
+    transform: rotateX(62deg) rotateZ(-18deg);
+  }
+}
+
+@keyframes dic-orbit-b {
+  0%,
+  100% {
+    transform: rotateX(68deg) rotateZ(28deg) rotateY(24deg);
+  }
+
+  50% {
+    transform: rotateX(74deg) rotateZ(22deg) rotateY(20deg);
+  }
+}
+
+@keyframes dic-rotor {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Nodes pulse as the particle waves pass. */
+@keyframes dic-node {
+  0%,
+  12% {
+    opacity: 0.35;
+    transform: rotate(45deg) scale(1);
+  }
+
+  18% {
+    opacity: 1;
+    transform: rotate(45deg) scale(1.2);
+  }
+
+  24% {
+    opacity: 0.35;
+    transform: rotate(45deg) scale(1);
+  }
+
+  48% {
+    opacity: 0.35;
+    transform: rotate(45deg) scale(1);
+  }
+
+  54% {
+    opacity: 1;
+    transform: rotate(45deg) scale(1.2);
+  }
+
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: rotate(45deg) scale(1);
+  }
+}
+
+@keyframes dic-ambient {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.2;
+  }
+
+  50% {
+    transform: translate(0.25rem, -0.3rem);
+    opacity: 0.5;
+  }
+}
+
+/* Output cells assemble as the output particles arrive. */
+@keyframes dic-cell {
+  0%,
+  62% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  92% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  98%,
+  100% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+/* Success one-shots. */
+@keyframes dic-plane-settle {
+  0% {
+    transform: rotateY(0deg) rotateX(0deg) translateZ(0);
+  }
+
+  100% {
+    transform: rotateY(0deg) rotateX(0deg) translateZ(0);
+    opacity: 0.9;
+  }
+}
+
+@keyframes dic-output-settle {
+  0% {
+    transform: rotateY(-14deg) rotateX(4deg) scale(1);
+  }
+
+  55% {
+    transform: rotateY(0deg) rotateX(0deg) scale(1.06);
+  }
+
+  100% {
+    transform: rotateY(0deg) rotateX(0deg) scale(1.03);
+  }
+}
+
+/* ------------------------------------------------------------------------ */
+/* Phase 75D.5 — compact workspace micro-interactions (UI-only). Short,     */
+/* restrained entrances for workspace state changes; all transform/opacity, */
+/* 160-240ms, disabled under prefers-reduced-motion (both by the global     */
+/* rule and the explicit guards below).                                     */
+/* ------------------------------------------------------------------------ */
+@layer components {
+  .workspace-enter {
+    animation: pdfkit-workspace-enter 0.2s ease-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .workspace-enter {
+      animation: none !important;
+    }
+  }
+}
+
+@keyframes pdfkit-workspace-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.25rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

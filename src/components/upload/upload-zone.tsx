@@ -53,6 +53,19 @@ export interface UploadZoneProps extends FileConstraints {
    * cannot be changed. Different from `disabled`, which means "not available".
    */
   busy?: boolean;
+  /**
+   * Phase 75D.5 (compact workspace): when "compact" and files are selected,
+   * the tall drop zone collapses into a slim replace affordance instead of
+   * staying a large mostly-empty box. Default "default" keeps the classic
+   * spacious zone at all times.
+   */
+  variant?: "default" | "compact";
+  /**
+   * Render the selected-files list (default true). A compact workspace may
+   * render its own richer file row instead and set this to false — selection
+   * state and change reporting are unaffected.
+   */
+  showFileList?: boolean;
   className?: string;
 }
 
@@ -80,6 +93,8 @@ export function UploadZone({
   onFilesChange,
   orderable = false,
   busy = false,
+  variant = "default",
+  showFileList = true,
   className,
   extensions,
   mimeTypes,
@@ -173,12 +188,16 @@ export function UploadZone({
         : files.length
           ? "selected"
           : "empty";
+  // Phase 75D.5: with a file selected, a compact workspace collapses the
+  // big drop box into a slim replace strip (never while disabled).
+  const collapsed = variant === "compact" && files.length > 0 && !disabled;
 
   return (
     <div className={cn("flex flex-col gap-4", className)}>
       <div
         data-testid="upload-zone"
         data-state={state}
+        data-collapsed={collapsed ? "true" : undefined}
         onDragEnter={(event) => {
           if (locked) return;
           event.preventDefault();
@@ -208,6 +227,8 @@ export function UploadZone({
         className={cn(
           "relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed",
           "px-6 py-12 text-center transition-colors duration-150 sm:py-16",
+          collapsed &&
+            "w-full flex-row justify-start gap-2.5 px-4 py-2.5 text-start sm:py-3",
           disabled
             ? "cursor-not-allowed border-border bg-surface-muted/50"
             : dragOver
@@ -222,32 +243,18 @@ export function UploadZone({
           </Badge>
         ) : null}
 
-        <span
-          aria-hidden="true"
-          className={cn(
-            "flex size-12 items-center justify-center rounded-full",
-            disabled ? "bg-surface text-subtle" : "bg-surface text-primary shadow-xs",
-          )}
-        >
-          {disabled ? <Lock className="size-5" /> : <CloudUpload className="size-6" />}
-        </span>
-
-        <div>
-          <p className="text-base font-semibold text-foreground">{label}</p>
-          {disabled ? null : (
-            <p id={descriptionId} className="mt-1 text-sm text-muted">
-              {hint ?? "Drag and drop files here, or browse from your device."}
-            </p>
-          )}
-          {details && !disabled ? (
-            <p className="mt-1 text-xs text-subtle">{details}</p>
-          ) : null}
-        </div>
-
-        {disabled ? (
-          <div className="max-w-md text-sm text-muted">{disabledReason}</div>
-        ) : (
+        {collapsed ? (
           <>
+            <span
+              aria-hidden="true"
+              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface text-primary shadow-xs"
+            >
+              <CloudUpload className="size-4" />
+            </span>
+            <p id={descriptionId} className="min-w-0 flex-1 truncate text-sm text-muted">
+              Drop a file here to <span className="font-medium text-foreground">replace</span>{" "}
+              the selected one, or browse.
+            </p>
             <input
               ref={inputRef}
               type="file"
@@ -255,7 +262,7 @@ export function UploadZone({
               multiple={multiple}
               accept={accept || undefined}
               aria-describedby={descriptionId}
-              aria-label={label}
+              aria-label={`Replace selected file`}
               disabled={busy}
               onChange={(event) => {
                 if (event.target.files) addFiles(event.target.files);
@@ -265,11 +272,65 @@ export function UploadZone({
             />
             <Button
               onClick={() => inputRef.current?.click()}
-              variant="primary"
+              variant="secondary"
+              size="sm"
               disabled={busy}
             >
-              Browse files
+              Browse
             </Button>
+          </>
+        ) : (
+          <>
+            <span
+              aria-hidden="true"
+              className={cn(
+                "flex size-12 items-center justify-center rounded-full",
+                disabled ? "bg-surface text-subtle" : "bg-surface text-primary shadow-xs",
+              )}
+            >
+              {disabled ? <Lock className="size-5" /> : <CloudUpload className="size-6" />}
+            </span>
+
+            <div>
+              <p className="text-base font-semibold text-foreground">{label}</p>
+              {disabled ? null : (
+                <p id={descriptionId} className="mt-1 text-sm text-muted">
+                  {hint ?? "Drag and drop files here, or browse from your device."}
+                </p>
+              )}
+              {details && !disabled ? (
+                <p className="mt-1 text-xs text-subtle">{details}</p>
+              ) : null}
+            </div>
+
+            {disabled ? (
+              <div className="max-w-md text-sm text-muted">{disabledReason}</div>
+            ) : (
+              <>
+                <input
+                  ref={inputRef}
+                  type="file"
+                  className="sr-only"
+                  multiple={multiple}
+                  accept={accept || undefined}
+                  aria-describedby={descriptionId}
+                  aria-label={label}
+                  disabled={busy}
+                  onChange={(event) => {
+                    if (event.target.files) addFiles(event.target.files);
+                    // Allow selecting the same file again after removing it.
+                    event.target.value = "";
+                  }}
+                />
+                <Button
+                  onClick={() => inputRef.current?.click()}
+                  variant="primary"
+                  disabled={busy}
+                >
+                  Browse files
+                </Button>
+              </>
+            )}
           </>
         )}
       </div>
@@ -296,7 +357,7 @@ export function UploadZone({
         />
       ) : null}
 
-      {files.length > 0 ? (
+      {files.length > 0 && showFileList ? (
         <section aria-label="Selected files" className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-medium text-foreground">

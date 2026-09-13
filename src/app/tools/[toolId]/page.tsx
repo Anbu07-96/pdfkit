@@ -35,5 +35,10 @@ export default async function ToolPage({ params }: PageProps<"/tools/[toolId]">)
   // implementation get the "coming soon" shell instead.
   const workspace = isToolUsable(tool) ? getToolWorkspace(tool.id) : null;
 
-  return <ToolPageShell tool={tool} workspace={workspace} />;
+  // Phase 75D.5: PDF to Word uses the compact shell so its whole primary
+  // workflow fits a laptop viewport. Every other tool keeps the classic
+  // roomy layout.
+  const variant = tool.id === "pdf-to-word" ? "compact" : "default";
+
+  return <ToolPageShell tool={tool} workspace={workspace} variant={variant} />;
 }
