@@ -196,7 +196,9 @@ export function StructuralReconstructionV1({ status }: JobVisualTreatmentProps) 
 }
 
 /**
- * PDF → Word scene (Phase 75D.5) — DOCUMENT INTELLIGENCE CORE.
+ * PDF → Word scene (Phase 75D.5, ARCHIVED reference) — DOCUMENT INTELLIGENCE CORE.
+ * Not registered; kept for reference. The active Phase 75D.6 treatment is
+ * TypesettingFieldTreatment below.
  *
  * A wide, shallow, centered composition (no two-documents illustration):
  *
@@ -375,10 +377,82 @@ export function GenericConversionTreatment({ status }: JobVisualTreatmentProps) 
  * compress: squeeze; OCR: scan-to-text) and any tool picks its visual up
  * by id.
  */
+/**
+ * PDF → Word scene (Phase 75D.6, ACTIVE) — THE TYPESETTING FIELD.
+ *
+ * "A document being re-set." The bench identity as a processing visual:
+ *
+ * - A shallow field of five baselines — the ruled sheet of a composing
+ *   bench — with eight abstract text marks (rounded bars of varying
+ *   width: words/lines, never file icons) scattered off-baseline.
+ * - A signal-blue working caret sweeps the field once per 6s loop; each
+ *   mark settles onto its baseline exactly as the caret passes (phase-
+ *   locked via per-mark animation delays). After the caret parks, the
+ *   marks lift in settle order — a cascade reset — and the field
+ *   re-composes. Analysis → understanding → re-composition, implied
+ *   without a single word or icon.
+ * - Success: every mark sets, the caret parks and blinks twice, the
+ *   baselines firm up. Error: the caret stops mid-field, the lower
+ *   baselines dim — the page never sets.
+ * - Fixed elements: 5 baselines + 8 marks + 2 ambient specks + 1 caret.
+ *   Pure CSS transform/opacity; no JS animation, no canvas, no deps.
+ *   Reduced motion renders the composed document at rest.
+ */
+export function TypesettingFieldTreatment({ status }: JobVisualTreatmentProps) {
+  return (
+    <div
+      data-status={status}
+      className={cn(
+        "job-visual-scene ts-scene",
+        status === "success" && "is-success",
+        status === "error" && "is-error",
+        status !== "success" && status !== "error" && "is-processing",
+      )}
+    >
+      <div className="ts-field">
+        <span className="ts-base ts-base--1" />
+        <span className="ts-base ts-base--2" />
+        <span className="ts-base ts-base--3" />
+        <span className="ts-base ts-base--4" />
+        <span className="ts-base ts-base--5" />
+
+        <span className="ts-mark ts-mark--1" />
+        <span className="ts-mark ts-mark--2" />
+        <span className="ts-mark ts-mark--3" />
+        <span className="ts-mark ts-mark--4" />
+        <span className="ts-mark ts-mark--5" />
+        <span className="ts-mark ts-mark--6" />
+        <span className="ts-mark ts-mark--7" />
+        <span className="ts-mark ts-mark--8" />
+
+        <span className="ts-speck ts-speck--1" />
+        <span className="ts-speck ts-speck--2" />
+
+        <span className="ts-caret" />
+      </div>
+
+      {status === "success" || status === "error" ? (
+        <span
+          className={cn(
+            "job-visual-badge ts-badge",
+            status === "success"
+              ? "job-visual-badge--success"
+              : "job-visual-badge--error",
+          )}
+        >
+          <OutcomeBadge status={status} />
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 const TREATMENTS: Record<string, React.ComponentType<JobVisualTreatmentProps>> = {
-  // Phase 75D.5: the Document Intelligence Core is the active treatment.
-  // The previous concept is archived as StructuralReconstructionV1 above.
-  "pdf-to-word": DocumentIntelligenceCoreTreatment,
+  // Phase 75D.6: the Typesetting Field is the active treatment. Earlier
+  // concepts are preserved as archived references above/below:
+  // StructuralReconstructionV1 (75D.4.2) and DocumentIntelligenceCore
+  // (75D.5) — exported, but never registered.
+  "pdf-to-word": TypesettingFieldTreatment,
 };
 
 export interface JobProcessingVisualProps {
