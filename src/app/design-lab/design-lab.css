@@ -1,0 +1,1953 @@
+/* -------------------------------------------------------------------------- */
+/* Phase 75D.6R — Design Lab prototypes (internal, never production).         */
+/* Three visual directions for PDF → Word. Scoped: .dl- (chrome), .la- (A),   */
+/* .sb- (B), .pr- (C). Uses the existing pdfkit tokens so light/dark both     */
+/* work. Production styles are untouched.                                     */
+/* -------------------------------------------------------------------------- */
+
+/* ----- shared design-lab chrome (dev only, not under review) ----- */
+.dl-root {
+  min-height: 100%;
+}
+
+.dl-shell {
+  display: flex;
+  flex-direction: column;
+}
+
+.dl-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 20px;
+  border-bottom: 1px dashed var(--pdfkit-border);
+  background: var(--pdfkit-surface-muted);
+  font-size: 12px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.dl-banner__tag {
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 10.5px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.dl-banner__concept {
+  font-weight: 600;
+  color: var(--pdfkit-foreground);
+}
+
+.dl-banner__summary {
+  color: var(--pdfkit-muted-foreground);
+}
+
+.dl-switcher {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--pdfkit-border);
+  border-radius: 8px;
+  background: var(--pdfkit-background);
+}
+
+.dl-switcher__btn {
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pdfkit-muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dl-switcher__btn:hover {
+  color: var(--pdfkit-foreground);
+}
+
+.dl-switcher__btn[aria-pressed="true"] {
+  background: var(--pdfkit-primary);
+  color: var(--pdfkit-primary-foreground);
+}
+
+/* ========================================================================== */
+/* CONCEPT A — "The Atelier" (refined layered workspace)                      */
+/* ========================================================================== */
+
+.la-page {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 40px 24px 56px;
+}
+
+.la-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.la-header__id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.la-header__badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--pdfkit-primary-soft);
+  color: var(--pdfkit-primary-soft-foreground);
+}
+
+.la-header__badge svg {
+  width: 20px;
+  height: 20px;
+}
+
+.la-header__title {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--pdfkit-foreground);
+}
+
+.la-header__privacy {
+  font-size: 13px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+/* The worktop: one layered surface with real, restrained depth. */
+.la-worktop {
+  position: relative;
+  background: var(--pdfkit-surface);
+  border: 1px solid var(--pdfkit-border);
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 45%),
+    0 1px 2px oklch(21% 0.02 264 / 6%),
+    0 12px 32px -16px oklch(21% 0.02 264 / 14%);
+}
+
+.dark .la-worktop {
+  background: var(--pdfkit-surface-raised);
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 5%),
+    0 12px 32px -16px oklch(0% 0 0 / 55%);
+}
+
+/* ----- empty: an inset drop field (solid hairline, not dashed) ----- */
+.la-dropfield {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 288px;
+  border-radius: 12px;
+  border: 1px solid var(--pdfkit-border);
+  background: var(--pdfkit-surface-muted);
+  box-shadow: inset 0 2px 6px oklch(21% 0.02 264 / 5%);
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.dark .la-dropfield {
+  box-shadow: inset 0 2px 6px oklch(0% 0 0 / 30%);
+}
+
+.la-dropfield:hover {
+  border-color: var(--pdfkit-primary);
+  background: var(--pdfkit-primary-soft);
+}
+
+.la-dropfield__glyph {
+  position: relative;
+  width: 64px;
+  height: 58px;
+  margin-bottom: 14px;
+}
+
+.la-doc {
+  position: absolute;
+  width: 42px;
+  height: 54px;
+  border-radius: 7px;
+  background: var(--pdfkit-background);
+  border: 1px solid var(--pdfkit-border-strong);
+  box-shadow: 0 2px 6px oklch(21% 0.02 264 / 10%);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 9px,
+    var(--pdfkit-border) 9px 10px
+  );
+  background-size: 60% 100%;
+  background-position: 50% 12px;
+  background-repeat: no-repeat;
+}
+
+.la-doc--back {
+  left: 4px;
+  top: 0;
+  transform: rotate(-8deg);
+  opacity: 0.55;
+}
+
+.la-doc--mid {
+  left: 11px;
+  top: 2px;
+  transform: rotate(-2deg);
+  opacity: 0.8;
+}
+
+.la-doc--front {
+  left: 18px;
+  top: 4px;
+}
+
+.la-dropfield__title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--pdfkit-foreground);
+}
+
+.la-dropfield__sub {
+  font-size: 13.5px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.la-link {
+  color: var(--pdfkit-primary);
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.la-chips {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.la-chip {
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--pdfkit-border);
+  background: var(--pdfkit-background);
+  font-size: 11.5px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+/* ----- selected / completed: the file plate ----- */
+.la-plate {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid var(--pdfkit-border);
+  background: var(--pdfkit-background);
+  box-shadow: 0 1px 3px oklch(21% 0.02 264 / 5%);
+}
+
+.la-plate--enter {
+  animation: la-rise 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.la-plate--result {
+  animation: la-settle 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes la-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes la-settle {
+  from { opacity: 0; transform: translateY(10px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+
+.la-filecard {
+  position: relative;
+  flex: none;
+  width: 58px;
+  height: 74px;
+  border-radius: 9px;
+  background: var(--pdfkit-surface);
+  border: 1px solid var(--pdfkit-border-strong);
+  box-shadow:
+    2px 2px 0 -1px var(--pdfkit-surface),
+    2px 2px 0 0 var(--pdfkit-border),
+    0 4px 10px -2px oklch(21% 0.02 264 / 18%);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 10px,
+    var(--pdfkit-border) 10px 11px
+  );
+  background-size: 64% 100%;
+  background-position: 50% 14px;
+  background-repeat: no-repeat;
+}
+
+.la-filecard__tag {
+  position: absolute;
+  right: -8px;
+  top: -8px;
+  min-width: 24px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--pdfkit-foreground);
+  color: var(--pdfkit-background);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+}
+
+.la-filecard--result {
+  background-image:
+    linear-gradient(var(--pdfkit-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--pdfkit-border) 1px, transparent 1px);
+  background-size: 14px 14px;
+  background-position: -1px -1px;
+}
+
+.la-plate__info {
+  min-width: 0;
+  flex: 1;
+}
+
+.la-plate__name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--pdfkit-foreground);
+  overflow-wrap: anywhere;
+}
+
+.la-plate__meta {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--pdfkit-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.la-plate__caveat {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.la-plate__details {
+  margin-top: 2px;
+}
+
+.la-plate__details summary {
+  display: inline;
+  cursor: pointer;
+  list-style: none;
+  font-size: inherit;
+  color: inherit;
+}
+
+.la-plate__caveat-long {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.la-plate__done {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pdfkit-success);
+  margin-bottom: 5px;
+}
+
+.la-done__glyph {
+  width: 16px;
+  height: 16px;
+}
+
+.la-plate__actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex: none;
+}
+
+.la-plate__actions--stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* ----- buttons ----- */
+.la-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 20px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease,
+    transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.la-btn:focus-visible {
+  outline: 2px solid var(--pdfkit-ring);
+  outline-offset: 2px;
+}
+
+.la-btn--primary {
+  background: var(--pdfkit-primary);
+  color: var(--pdfkit-primary-foreground);
+  box-shadow: 0 1px 2px oklch(21% 0.02 264 / 20%);
+}
+
+.la-btn--primary:hover {
+  background: var(--pdfkit-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px -2px oklch(21% 0.02 264 / 30%);
+}
+
+.la-btn--primary:active {
+  transform: translateY(0);
+}
+
+.la-btn--ghost {
+  background: transparent;
+  color: var(--pdfkit-muted-foreground);
+  border-color: var(--pdfkit-border);
+}
+
+.la-btn--ghost:hover {
+  color: var(--pdfkit-foreground);
+  background: var(--pdfkit-surface-muted);
+}
+
+.la-btn--download {
+  height: 48px;
+  padding: 0 26px;
+  background: var(--pdfkit-primary);
+  color: var(--pdfkit-primary-foreground);
+  box-shadow:
+    0 1px 2px oklch(21% 0.02 264 / 20%),
+    0 8px 20px -8px oklch(52% 0.14 266 / 55%);
+}
+
+.la-btn--download:hover {
+  background: var(--pdfkit-primary-hover);
+  transform: translateY(-1px);
+}
+
+.la-btn__glyph {
+  width: 16px;
+  height: 16px;
+}
+
+/* ----- processing: the stage + Layered Document Morph ----- */
+.la-processing__head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.la-processing__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pdfkit-foreground);
+}
+
+.la-processing__file {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--pdfkit-muted-foreground);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.la-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 224px;
+  max-width: 640px;
+  margin: 8px auto 0;
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 140% at 50% 50%, transparent 40%, oklch(21% 0.02 264 / 4%) 100%),
+    var(--pdfkit-surface-muted);
+  border: 1px solid var(--pdfkit-border);
+  overflow: hidden;
+}
+
+.dark .la-stage {
+  background:
+    radial-gradient(120% 140% at 50% 50%, transparent 40%, oklch(0% 0 0 / 22%) 100%),
+    var(--pdfkit-surface-muted);
+}
+
+/* A faint center guide anchors the composition. */
+.la-stage::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 50%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--pdfkit-border-strong) 20%,
+    var(--pdfkit-border-strong) 80%,
+    transparent
+  );
+  opacity: 0.6;
+}
+
+.la-morph {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  perspective: 900px;
+  transform-style: preserve-3d;
+}
+
+.la-morph__layer {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 168px;
+  height: 120px;
+  margin: -60px 0 0 -84px;
+  border-radius: 12px;
+  background: var(--pdfkit-surface);
+  border: 1px solid var(--pdfkit-border-strong);
+  box-shadow: 0 6px 16px -6px oklch(21% 0.02 264 / 25%);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 13px,
+    var(--pdfkit-border) 13px 14px
+  );
+  background-size: 62% 100%;
+  background-position: 50% 16px;
+  background-repeat: no-repeat;
+  animation: la-layer 6s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+
+.la-morph__layer--1 { animation-delay: -0.12s; }
+.la-morph__layer--2 { animation-delay: -0.06s; }
+.la-morph__layer--3 { animation-delay: 0s; }
+
+@keyframes la-layer {
+  0%, 100% {
+    transform: translate3d(-88px, -10px, 0) rotate(-10deg);
+    opacity: 0.85;
+  }
+  24% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  46% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  72% {
+    transform: translate3d(88px, -10px, 0) rotate(10deg);
+    opacity: 0.85;
+  }
+}
+
+/* The converged composite's structured face (grid fades in at convergence). */
+.la-morph__face {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 168px;
+  height: 120px;
+  margin: -60px 0 0 -84px;
+  border-radius: 12px;
+  border: 1px solid var(--pdfkit-primary);
+  background-image:
+    linear-gradient(oklch(52% 0.14 266 / 22%) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(52% 0.14 266 / 22%) 1px, transparent 1px);
+  background-size: 26px 26px;
+  opacity: 0;
+  animation: la-face 6s ease infinite;
+}
+
+@keyframes la-face {
+  0%, 22% { opacity: 0; }
+  30%, 44% { opacity: 1; }
+  54%, 100% { opacity: 0; }
+}
+
+/* Signal dots: fragments crossing between layers during the fan. */
+.la-morph__sig {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: var(--pdfkit-primary);
+  opacity: 0;
+  animation: la-sig 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.la-morph__sig--1 { --sx: -84px; --sy: -18px; animation-delay: 0s; }
+.la-morph__sig--2 { --sx: 84px; --sy: -22px; animation-delay: 0.5s; }
+.la-morph__sig--3 { --sx: -66px; --sy: 16px; animation-delay: 1.0s; }
+.la-morph__sig--4 { --sx: 76px; --sy: 12px; animation-delay: 1.5s; }
+
+@keyframes la-sig {
+  0%, 4% {
+    opacity: 0;
+    transform: translate(var(--sx), var(--sy)) scale(0.6);
+  }
+  10% {
+    opacity: 1;
+    transform: translate(calc(var(--sx) * 0.7), calc(var(--sy) * 0.6)) scale(1);
+  }
+  24% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.5);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.5);
+  }
+}
+
+.la-processing__status {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--pdfkit-muted-foreground);
+  text-align: center;
+}
+
+/* ----- trust line ----- */
+.la-trustline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 18px;
+  font-size: 12.5px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.la-trustline__glyph {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+/* ----- Concept A mobile ----- */
+@media (max-width: 680px) {
+  .la-page {
+    padding: 20px 16px 40px;
+  }
+
+  .la-worktop {
+    padding: 18px;
+    border-radius: 12px;
+  }
+
+  .la-dropfield {
+    min-height: 230px;
+  }
+
+  .la-plate {
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+
+  .la-plate__actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .la-plate__actions--stacked {
+    flex-direction: row;
+    justify-content: stretch;
+  }
+
+  .la-plate__actions--stacked .la-btn--download {
+    flex: 1;
+  }
+
+  .la-stage {
+    height: 176px;
+  }
+
+  .la-stage {
+    max-width: none;
+    height: 180px;
+  }
+
+  .la-morph__layer,
+  .la-morph__face {
+    width: 128px;
+    height: 92px;
+    margin: -46px 0 0 -64px;
+  }
+
+  .la-morph__sig--3,
+  .la-morph__sig--4 {
+    display: none;
+  }
+
+  .la-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+}
+
+/* ----- Concept A reduced motion: the composed object at rest ----- */
+@media (prefers-reduced-motion: reduce) {
+  .la-morph__layer,
+  .la-morph__face,
+  .la-morph__sig {
+    animation: none !important;
+  }
+
+  .la-morph__layer {
+    transform: none;
+    opacity: 1;
+  }
+
+  .la-morph__face {
+    opacity: 1;
+  }
+
+  .la-morph__sig {
+    opacity: 0;
+  }
+
+  .la-plate--enter,
+  .la-plate--result {
+    animation: none !important;
+  }
+}
+
+/* ========================================================================== */
+/* CONCEPT B — "Signal Studio" (soft technical / ambient)                     */
+/* ========================================================================== */
+
+.sb-page {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 40px 24px 56px;
+}
+
+.sb-panel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid var(--pdfkit-border);
+  background:
+    linear-gradient(180deg, oklch(99% 0.004 250), oklch(96.5% 0.012 250));
+  padding: 30px 34px 34px;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 60%),
+    0 1px 2px oklch(21% 0.02 264 / 6%),
+    0 18px 44px -20px oklch(40% 0.05 255 / 22%);
+}
+
+.dark .sb-panel {
+  background:
+    linear-gradient(180deg, oklch(20% 0.02 262), oklch(15% 0.018 262));
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 5%),
+    0 18px 44px -18px oklch(0% 0 0 / 60%);
+}
+
+/* Ambient glow: quiet at rest, alive during processing, one bloom on done. */
+.sb-glow {
+  position: absolute;
+  inset: -20% -10% auto;
+  height: 90%;
+  background: radial-gradient(
+    46% 62% at 50% 38%,
+    oklch(62% 0.14 266 / 13%),
+    transparent 70%
+  );
+  opacity: 0.55;
+  transition: opacity 0.7s ease;
+  pointer-events: none;
+}
+
+.sb-glow--live {
+  opacity: 1;
+  animation: sb-glow-breathe 5s ease-in-out infinite;
+}
+
+.sb-glow--bloom {
+  opacity: 1;
+  animation: sb-glow-bloom 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes sb-glow-breathe {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+
+@keyframes sb-glow-bloom {
+  0% { opacity: 1; transform: scale(1); }
+  60% { opacity: 0.9; transform: scale(1.06); }
+  100% { opacity: 0.55; transform: scale(1); }
+}
+
+.sb-head {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--pdfkit-border);
+}
+
+.sb-eyebrow {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pdfkit-primary);
+}
+
+.sb-title {
+  margin-top: 3px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--pdfkit-foreground);
+}
+
+.sb-head__privacy {
+  font-size: 12.5px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+/* ----- empty: the concentric target ----- */
+.sb-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 44px 0 26px;
+}
+
+.sb-target {
+  position: relative;
+  width: 264px;
+  height: 264px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sb-ring {
+  position: absolute;
+  inset: 0;
+  border: 1px solid oklch(52% 0.14 266 / 28%);
+  border-radius: 50%;
+  animation: sb-ring-breathe 6s ease-in-out infinite;
+}
+
+.sb-ring--2 { inset: 32px; animation-delay: 0.4s; }
+.sb-ring--3 { inset: 64px; animation-delay: 0.8s; }
+
+@keyframes sb-ring-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.02); opacity: 1; }
+}
+
+.sb-target__disc {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--pdfkit-surface);
+  border: 1px solid oklch(52% 0.14 266 / 35%);
+  color: var(--pdfkit-primary);
+  box-shadow:
+    0 0 0 8px oklch(52% 0.14 266 / 6%),
+    0 10px 24px -8px oklch(40% 0.05 255 / 35%);
+}
+
+.sb-target__disc svg {
+  width: 34px;
+  height: 34px;
+}
+
+.sb-empty__copy {
+  margin-top: 22px;
+  text-align: center;
+}
+
+.sb-empty__title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--pdfkit-foreground);
+}
+
+.sb-empty__sub {
+  margin-top: 3px;
+  font-size: 13.5px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.sb-link {
+  color: var(--pdfkit-primary);
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.sb-empty__constraints {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--pdfkit-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----- selected ----- */
+.sb-selected {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 2px;
+}
+
+.sb-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--pdfkit-primary);
+  box-shadow: 0 0 0 4px oklch(52% 0.14 266 / 15%);
+}
+
+.sb-selected__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sb-selected__name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--pdfkit-foreground);
+  overflow-wrap: anywhere;
+}
+
+.sb-selected__meta {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--pdfkit-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.sb-selected__actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* ----- buttons ----- */
+.sb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 20px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sb-btn:focus-visible {
+  outline: 2px solid var(--pdfkit-ring);
+  outline-offset: 2px;
+}
+
+.sb-btn--primary {
+  background: var(--pdfkit-primary);
+  color: var(--pdfkit-primary-foreground);
+  box-shadow: 0 1px 2px oklch(21% 0.02 264 / 20%);
+}
+
+.sb-btn--primary:hover {
+  background: var(--pdfkit-primary-hover);
+  transform: translateY(-1px);
+}
+
+.sb-btn--ghost {
+  background: transparent;
+  color: var(--pdfkit-muted-foreground);
+  border-color: var(--pdfkit-border);
+}
+
+.sb-btn--ghost:hover {
+  color: var(--pdfkit-foreground);
+  background: var(--pdfkit-surface-muted);
+}
+
+.sb-btn--download {
+  height: 48px;
+  padding: 0 26px;
+  background: var(--pdfkit-primary);
+  color: var(--pdfkit-primary-foreground);
+  box-shadow:
+    0 1px 2px oklch(21% 0.02 264 / 20%),
+    0 10px 24px -8px oklch(52% 0.14 266 / 60%);
+}
+
+.sb-btn--download:hover {
+  background: var(--pdfkit-primary-hover);
+  transform: translateY(-1px);
+}
+
+.sb-btn__glyph {
+  width: 16px;
+  height: 16px;
+}
+
+/* ----- processing: the signal stage ----- */
+.sb-processing__head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-top: 20px;
+}
+
+.sb-processing__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pdfkit-foreground);
+}
+
+.sb-processing__file {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--pdfkit-muted-foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sb-stage {
+  position: relative;
+  height: 230px;
+  margin-top: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--pdfkit-border);
+  background: oklch(100% 0 0 / 55%);
+}
+
+.dark .sb-stage {
+  background: oklch(0% 0 0 / 25%);
+}
+
+.sb-guides {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.sb-guides__path {
+  stroke: oklch(52% 0.14 266 / 30%);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 5;
+  stroke-linecap: round;
+}
+
+/* Source fragment stack at the entry. */
+.sb-instack {
+  position: absolute;
+  left: 46px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.sb-instack span {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  background: var(--pdfkit-foreground);
+  opacity: 0.3;
+}
+
+.sb-instack span:nth-child(1) { opacity: 0.5; }
+.sb-instack span:nth-child(2) { opacity: 0.4; }
+
+/* Station nodes on the paths. */
+.sb-node {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--pdfkit-background);
+  border: 1.5px solid oklch(52% 0.14 266 / 45%);
+  animation: sb-node-pulse 6s ease-in-out infinite;
+}
+
+.sb-node--a { left: 51.5%; top: 64.5%; }
+.sb-node--b { left: 53%; top: 35.5%; animation-delay: 0.45s; }
+
+@keyframes sb-node-pulse {
+  0%, 8%, 100% {
+    border-color: oklch(52% 0.14 266 / 45%);
+    box-shadow: none;
+  }
+  12%, 20% {
+    border-color: var(--pdfkit-primary);
+    box-shadow: 0 0 0 5px oklch(52% 0.14 266 / 18%);
+  }
+}
+
+/* Traveling fragments — exact path following via CSS offset-path. */
+.sb-frag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 2.5px;
+  background: var(--pdfkit-primary);
+  opacity: 0;
+}
+
+.sb-frag--1 { offset-path: path("M 70 78 C 200 78, 240 148, 330 148 S 470 96, 570 96"); animation: sb-frag-travel 6s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.sb-frag--2 { offset-path: path("M 70 152 C 190 152, 250 82, 340 82 S 460 150, 570 150"); animation: sb-frag-travel 6s cubic-bezier(0.4, 0, 0.6, 1) infinite 0.6s; }
+.sb-frag--3 { offset-path: path("M 70 78 C 200 78, 240 148, 330 148 S 470 96, 570 96"); animation: sb-frag-travel 6s cubic-bezier(0.4, 0, 0.6, 1) infinite 1.2s; }
+.sb-frag--4 { offset-path: path("M 70 152 C 190 152, 250 82, 340 82 S 460 150, 570 150"); animation: sb-frag-travel 6s cubic-bezier(0.4, 0, 0.6, 1) infinite 1.8s; }
+.sb-frag--5 { offset-path: path("M 70 78 C 200 78, 240 148, 330 148 S 470 96, 570 96"); animation: sb-frag-travel 6s cubic-bezier(0.4, 0, 0.6, 1) infinite 2.4s; }
+
+@keyframes sb-frag-travel {
+  0% { offset-distance: 0%; opacity: 0; }
+  3% { opacity: 1; }
+  34% { offset-distance: 100%; opacity: 1; }
+  38%, 100% { offset-distance: 100%; opacity: 0; }
+}
+
+/* Output geometry: a 2x3 grid that fills as signals arrive. */
+.sb-outgrid {
+  position: absolute;
+  right: 44px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  grid-template-columns: repeat(2, 22px);
+  gap: 6px;
+}
+
+.sb-cell {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1.5px solid oklch(52% 0.14 266 / 35%);
+  background: transparent;
+  animation: sb-cell-fill 6s ease infinite;
+}
+
+/* Cells fill exactly as their signal arrives (frag travel = 2.04s). */
+.sb-cell--1 { animation-delay: 2.05s; }
+.sb-cell--2 { animation-delay: 2.65s; }
+.sb-cell--3 { animation-delay: 3.25s; }
+.sb-cell--4 { animation-delay: 3.85s; }
+.sb-cell--5 { animation-delay: 4.45s; }
+.sb-cell--6 { animation-delay: 4.75s; }
+
+@keyframes sb-cell-fill {
+  0%, 90%, 100% {
+    background: transparent;
+    border-color: oklch(52% 0.14 266 / 35%);
+  }
+  2%, 86% {
+    background: oklch(52% 0.14 266 / 30%);
+    border-color: var(--pdfkit-primary);
+  }
+}
+
+.sb-processing__status {
+  position: relative;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--pdfkit-muted-foreground);
+  text-align: center;
+}
+
+/* ----- completed ----- */
+.sb-done {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 28px 2px 8px;
+  animation: sb-done-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes sb-done-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.sb-outgrid--final {
+  position: static;
+  transform: none;
+  grid-template-columns: repeat(2, 26px);
+  gap: 7px;
+  flex: none;
+}
+
+.sb-outgrid--final .sb-cell {
+  width: 26px;
+  height: 26px;
+  animation: none;
+  background: oklch(52% 0.14 266 / 30%);
+  border-color: var(--pdfkit-primary);
+}
+
+.sb-done__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sb-done__title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pdfkit-success);
+}
+
+.sb-done__check {
+  width: 16px;
+  height: 16px;
+}
+
+.sb-done__name {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--pdfkit-foreground);
+  overflow-wrap: anywhere;
+}
+
+.sb-done__meta {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--pdfkit-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.sb-done__caveat {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.sb-done__actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.sb-footnote {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+/* ----- Concept B mobile ----- */
+@media (max-width: 680px) {
+  .sb-page {
+    padding: 20px 16px 40px;
+  }
+
+  .sb-panel {
+    padding: 22px 18px 24px;
+    border-radius: 16px;
+  }
+
+  .sb-target {
+    width: 212px;
+    height: 212px;
+  }
+
+  .sb-ring--3 { inset: 52px; }
+  .sb-target__disc { width: 80px; height: 80px; }
+  .sb-target__disc svg { width: 28px; height: 28px; }
+
+  .sb-selected {
+    flex-wrap: wrap;
+  }
+
+  .sb-selected__actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .sb-stage {
+    height: 196px;
+  }
+
+  .sb-guides { display: none; }
+
+  .sb-frag--1,
+  .sb-frag--3,
+  .sb-frag--5 {
+    offset-path: path("M 70 60 C 200 60, 240 140, 320 140 S 440 90, 560 90");
+  }
+
+  .sb-frag--2,
+  .sb-frag--4 {
+    offset-path: path("M 70 140 C 180 140, 250 66, 330 66 S 450 140, 560 140");
+  }
+
+  .sb-instack { left: 30px; }
+  .sb-outgrid { right: 26px; grid-template-columns: repeat(2, 18px); gap: 5px; }
+  .sb-cell { width: 18px; height: 18px; }
+
+  .sb-done {
+    flex-wrap: wrap;
+  }
+
+  .sb-done__actions {
+    width: 100%;
+  }
+
+  .sb-done__actions .sb-btn--download {
+    flex: 1;
+  }
+
+  .sb-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+}
+
+/* ----- Concept B reduced motion: the composed result at rest ----- */
+@media (prefers-reduced-motion: reduce) {
+  .sb-ring,
+  .sb-glow--live,
+  .sb-glow--bloom,
+  .sb-node,
+  .sb-frag,
+  .sb-cell,
+  .sb-done {
+    animation: none !important;
+  }
+
+  .sb-frag {
+    opacity: 0;
+  }
+
+  .sb-guides__path {
+    stroke-dasharray: none;
+    opacity: 0.45;
+  }
+
+  .sb-cell {
+    background: oklch(52% 0.14 266 / 30%);
+    border-color: var(--pdfkit-primary);
+  }
+}
+
+/* ========================================================================== */
+/* CONCEPT C — "The Press" (editorial / spatial hybrid)                       */
+/* ========================================================================== */
+
+.pr-page {
+  width: 100%;
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 44px 24px 56px;
+}
+
+.pr-grid {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 44px;
+  align-items: start;
+}
+
+/* ----- left rail: editorial column ----- */
+.pr-rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 480px;
+}
+
+.pr-masthead {
+  font-size: 27px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--pdfkit-foreground);
+  line-height: 1.05;
+}
+
+.pr-masthead span {
+  color: var(--pdfkit-primary);
+  padding: 0 2px;
+}
+
+.pr-serial {
+  margin-top: 8px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid var(--pdfkit-foreground);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.pr-protocol {
+  list-style: none;
+  padding: 0;
+  margin: 22px 0 0;
+}
+
+.pr-step {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--pdfkit-border);
+  transition: opacity 0.2s ease;
+}
+
+.pr-step__number {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 11px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.pr-step__label {
+  font-size: 14px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.pr-step.is-active .pr-step__number {
+  color: var(--pdfkit-primary);
+  font-weight: 600;
+}
+
+.pr-step.is-active .pr-step__label {
+  color: var(--pdfkit-foreground);
+  font-weight: 500;
+}
+
+.pr-rail__hint {
+  margin-top: 20px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.pr-file {
+  margin-top: 22px;
+  padding: 14px 16px;
+  border-left: 2px solid var(--pdfkit-primary);
+  background: var(--pdfkit-surface-muted);
+}
+
+.pr-file__name {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--pdfkit-foreground);
+  overflow-wrap: anywhere;
+}
+
+.pr-file__meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--pdfkit-muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.pr-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pr-btn:focus-visible {
+  outline: 2px solid var(--pdfkit-ring);
+  outline-offset: 2px;
+}
+
+.pr-btn--convert {
+  height: 48px;
+  margin-top: 18px;
+  background: var(--pdfkit-foreground);
+  color: var(--pdfkit-background);
+  box-shadow: 0 2px 6px -1px oklch(21% 0.02 264 / 25%);
+}
+
+.pr-btn--convert:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px -4px oklch(21% 0.02 264 / 35%);
+}
+
+/* Editorial accent: the convert action is ink, not blue; the download is blue. */
+.pr-btn--download {
+  height: 58px;
+  width: 100%;
+  background: var(--pdfkit-primary);
+  color: var(--pdfkit-primary-foreground);
+  box-shadow:
+    0 1px 2px oklch(21% 0.02 264 / 20%),
+    0 12px 28px -10px oklch(52% 0.14 266 / 55%);
+}
+
+.pr-btn--download:hover {
+  background: var(--pdfkit-primary-hover);
+  transform: translateY(-1px);
+}
+
+.pr-download__meta {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+
+.pr-btn--ghost {
+  height: 44px;
+  width: 100%;
+  margin-top: 10px;
+  background: transparent;
+  color: var(--pdfkit-muted-foreground);
+  border-color: var(--pdfkit-border);
+}
+
+.pr-btn--ghost:hover {
+  color: var(--pdfkit-foreground);
+  background: var(--pdfkit-surface-muted);
+}
+
+.pr-rail__status {
+  margin-top: 20px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.pr-trust {
+  margin-top: auto;
+  padding-top: 24px;
+}
+
+.pr-trust__line {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.pr-trust__details summary {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--pdfkit-primary);
+  cursor: pointer;
+}
+
+.pr-trust__details p {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--pdfkit-muted-foreground);
+}
+
+/* ----- right: the spatial stage ----- */
+.pr-stage {
+  perspective: 1200px;
+  min-height: 480px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.pr-tray {
+  position: relative;
+  height: 320px;
+  border-radius: 18px;
+  transform: rotateX(14deg);
+  transform-style: preserve-3d;
+  background: var(--pdfkit-surface-muted);
+  border: 1px solid var(--pdfkit-border);
+  box-shadow:
+    inset 0 2px 10px oklch(21% 0.02 264 / 7%),
+    inset 0 0 0 1px oklch(100% 0 0 / 25%),
+    0 24px 40px -24px oklch(21% 0.02 264 / 28%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dark .pr-tray {
+  box-shadow:
+    inset 0 2px 10px oklch(0% 0 0 / 35%),
+    0 24px 40px -20px oklch(0% 0 0 / 60%);
+}
+
+.pr-tray__copy {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.pr-tray__browse {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.pr-link {
+  color: var(--pdfkit-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The ghost card: hints where the document will land. */
+.pr-ghost {
+  position: absolute;
+  width: 190px;
+  height: 250px;
+  border-radius: 10px;
+  border: 1.5px dashed var(--pdfkit-border-strong);
+  background: var(--pdfkit-surface);
+  opacity: 0.5;
+  transform: translateZ(26px);
+  animation: pr-ghost-float 5s ease-in-out infinite;
+}
+
+@keyframes pr-ghost-float {
+  0%, 100% { transform: translateZ(26px); }
+  50% { transform: translateZ(40px); }
+}
+
+/* The document card. */
+.pr-card {
+  position: relative;
+  width: 230px;
+  height: 300px;
+  transform: translateZ(18px);
+  transform-style: preserve-3d;
+  animation: pr-card-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pr-card-in {
+  from { opacity: 0; transform: translateZ(70px); }
+  to { opacity: 1; transform: translateZ(18px); }
+}
+
+.pr-card__face {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  border: 1px solid var(--pdfkit-border-strong);
+  background: var(--pdfkit-surface);
+  box-shadow: 0 18px 30px -14px oklch(21% 0.02 264 / 30%);
+  backface-visibility: hidden;
+}
+
+.pr-card__face--front {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 22px,
+    var(--pdfkit-border) 22px 23px
+  );
+  background-size: 72% 100%;
+  background-position: 50% 30px;
+  background-repeat: no-repeat;
+}
+
+.pr-card__face--back {
+  transform: rotateY(180deg);
+  background-image:
+    linear-gradient(oklch(52% 0.14 266 / 20%) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(52% 0.14 266 / 20%) 1px, transparent 1px);
+  background-size: 34px 34px;
+  background-position: -1px -1px;
+}
+
+.pr-card__tag {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  min-width: 30px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--pdfkit-foreground);
+  color: var(--pdfkit-background);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 22px;
+  text-align: center;
+}
+
+.pr-card__check {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  border-radius: 50%;
+  background: var(--pdfkit-success-soft);
+  border: 1.5px solid var(--pdfkit-success);
+}
+
+.pr-card__check::after {
+  content: "";
+  position: absolute;
+  left: 17px;
+  top: 15px;
+  width: 16px;
+  height: 9px;
+  border-left: 3px solid var(--pdfkit-success);
+  border-bottom: 3px solid var(--pdfkit-success);
+  transform: rotate(-45deg);
+}
+
+.pr-card--result {
+  animation: pr-card-result 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pr-card-result {
+  from { opacity: 0; transform: translateZ(60px) rotateY(180deg); }
+  to { opacity: 1; transform: translateZ(18px) rotateY(360deg); }
+}
+
+/* ----- processing: the dimensional transformation ----- */
+.pr-card--flip {
+  transform: translateZ(18px);
+  animation: pr-flip 6s linear infinite;
+}
+
+@keyframes pr-flip {
+  from { transform: translateZ(18px) rotateY(0deg); }
+  to { transform: translateZ(18px) rotateY(360deg); }
+}
+
+/* Orbiting fragments: the document's content, in transit. */
+.pr-orbit {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  animation: pr-orbit 6s linear infinite;
+}
+
+.pr-orbit__frag {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 3px;
+  background: var(--pdfkit-primary);
+  box-shadow: 0 2px 6px oklch(52% 0.14 266 / 45%);
+}
+
+.pr-orbit--1 { animation-duration: 6s; }
+.pr-orbit--1 .pr-orbit__frag { transform: translateX(150px); }
+.pr-orbit--2 { animation-duration: 7.5s; animation-delay: -1.2s; }
+.pr-orbit--2 .pr-orbit__frag { transform: translateX(172px); opacity: 0.85; }
+.pr-orbit--3 { animation-duration: 9s; animation-delay: -3s; }
+.pr-orbit--3 .pr-orbit__frag { transform: translateX(136px); opacity: 0.7; }
+.pr-orbit--4 { animation-duration: 7.5s; animation-delay: -4.4s; }
+.pr-orbit--4 .pr-orbit__frag { transform: translateX(186px); opacity: 0.9; }
+.pr-orbit--5 { animation-duration: 9s; animation-delay: -6.2s; }
+.pr-orbit--5 .pr-orbit__frag { transform: translateX(158px); opacity: 0.75; }
+
+@keyframes pr-orbit {
+  from { transform: rotateY(0deg); }
+  to { transform: rotateY(360deg); }
+}
+
+.pr-stage__label {
+  margin-top: 26px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--pdfkit-muted-foreground);
+}
+
+.pr-download {
+  margin-top: 26px;
+  display: flex;
+  flex-direction: column;
+  animation: pr-download-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pr-download-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ----- Concept C mobile ----- */
+@media (max-width: 820px) {
+  .pr-page {
+    padding: 20px 16px 40px;
+  }
+
+  .pr-grid {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+
+  .pr-rail {
+    min-height: 0;
+  }
+
+  .pr-masthead {
+    font-size: 23px;
+  }
+
+  .pr-serial {
+    padding-bottom: 12px;
+  }
+
+  .pr-protocol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 14px;
+    margin-top: 14px;
+  }
+
+  .pr-step {
+    flex: none;
+    border-bottom: 0;
+    padding: 4px 10px 4px 0;
+    gap: 8px;
+  }
+
+  .pr-step__label {
+    font-size: 12.5px;
+  }
+
+  .pr-trust {
+    margin-top: 20px;
+    padding-top: 14px;
+    border-top: 1px solid var(--pdfkit-border);
+  }
+
+  .pr-stage {
+    min-height: 0;
+    perspective: 900px;
+  }
+
+  .pr-tray {
+    height: 240px;
+    border-radius: 14px;
+  }
+
+  .pr-card {
+    width: 168px;
+    height: 224px;
+  }
+
+  .pr-ghost {
+    width: 140px;
+    height: 186px;
+  }
+
+  .pr-orbit--1 .pr-orbit__frag { transform: translateX(106px); }
+  .pr-orbit--2 .pr-orbit__frag { transform: translateX(122px); }
+  .pr-orbit--3 .pr-orbit__frag { transform: translateX(96px); }
+  .pr-orbit--4 .pr-orbit__frag { transform: translateX(130px); }
+  .pr-orbit--5 .pr-orbit__frag { transform: translateX(112px); }
+}
+
+/* ----- Concept C reduced motion: the resting document ----- */
+@media (prefers-reduced-motion: reduce) {
+  .pr-ghost,
+  .pr-card,
+  .pr-card--flip,
+  .pr-orbit,
+  .pr-download {
+    animation: none !important;
+  }
+
+  .pr-card--flip {
+    transform: translateZ(18px) rotateY(180deg);
+  }
+
+  .pr-card--flip .pr-orbit {
+    display: none;
+  }
+}
