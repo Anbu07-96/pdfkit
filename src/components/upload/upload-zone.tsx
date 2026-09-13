@@ -234,15 +234,6 @@ export function UploadZone({
             : dragOver
               ? "border-primary bg-primary-soft/70"
               : "border-border bg-surface-muted/40 hover:border-border-strong hover:bg-surface-muted/70",
-          // Phase 75D.6 (bench): the compact well is a hairline inset; the
-          // collapsed strip is an open row — no box at all. These come last
-          // so they win the merge.
-          variant === "compact" &&
-            !collapsed &&
-            "border px-6 py-10 sm:py-12",
-          variant === "compact" &&
-            collapsed &&
-            "gap-2 border-0 bg-transparent px-0 py-0 hover:bg-transparent",
           busy && "opacity-70",
         )}
       >
@@ -256,14 +247,9 @@ export function UploadZone({
           <>
             <span
               aria-hidden="true"
-              className={cn(
-                "flex shrink-0 items-center justify-center text-primary",
-                variant === "compact"
-                  ? "size-5"
-                  : "size-8 rounded-full bg-surface shadow-xs",
-              )}
+              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface text-primary shadow-xs"
             >
-              <CloudUpload className={variant === "compact" ? "size-4" : "size-4"} />
+              <CloudUpload className="size-4" />
             </span>
             <p id={descriptionId} className="min-w-0 flex-1 truncate text-sm text-muted">
               Drop a file here to <span className="font-medium text-foreground">replace</span>{" "}

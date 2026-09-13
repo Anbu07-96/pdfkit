@@ -48,7 +48,7 @@ describe("ToolPageShell", () => {
     expect(screen.getByText(/working today/i)).toBeInTheDocument();
   });
 
-  it("compact variant: a quiet trust line with the full policy one disclosure away (Phase 75D.6)", () => {
+  it("compact variant: one Trust & details card with a full-privacy disclosure (Phase 75D.5)", () => {
     render(
       <ToolPageShell
         tool={mergeTool}
@@ -57,22 +57,28 @@ describe("ToolPageShell", () => {
       />,
     );
 
-    // No sidebar, no "Privacy information" card, no metadata table…
-    expect(screen.queryByText(/^privacy information$/i)).not.toBeInTheDocument();
-    expect(screen.queryByText("Category")).not.toBeInTheDocument();
-    // …just the essentials, stated as a fact under the workspace…
-    expect(screen.getByText("Private")).toBeInTheDocument();
-    expect(screen.getAllByText(/Processed in memory/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText(/discarded as soon as the result is returned/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/no account, tracking or advertising/i)).toBeInTheDocument();
-    // …with the full policy behind the disclosure.
-    expect(screen.getByText(/full privacy details/i)).toBeInTheDocument();
+    // A single compact card replaces the two stacked sidebar cards…
+    expect(screen.getByText("Trust & details")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/^privacy information$/i),
+    ).not.toBeInTheDocument();
+    // …with the essentials always visible…
+    expect(screen.getByText(/Private processing/i)).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/server-side, in memory/i).length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getAllByText(/discarded as soon as the result is returned/i)
+        .length,
+    ).toBeGreaterThanOrEqual(1);
+    // …and the full privacy text available through the disclosure.
+    expect(screen.getByText(/full privacy information/i)).toBeInTheDocument();
     expect(
       screen.getAllByText(/never written to disk/i).length,
     ).toBeGreaterThanOrEqual(1);
   });
 
-  it("compact variant: open sections, no card grids (Phase 75D.6)", () => {
+  it("compact variant: metadata collapses into the card", () => {
     render(
       <ToolPageShell
         tool={mergeTool}
@@ -80,16 +86,9 @@ describe("ToolPageShell", () => {
         workspace={<div data-testid="workspace">workspace</div>}
       />,
     );
-    // The workspace renders…
-    expect(screen.getByTestId("workspace")).toBeInTheDocument();
-    // …sections are labeled with quiet eyebrows instead of big headings…
-    expect(screen.getByText("How it works")).toBeInTheDocument();
-    expect(screen.getByText("Related tools")).toBeInTheDocument();
-    expect(screen.getByText("Frequently asked questions")).toBeInTheDocument();
-    // …steps use mono numerals, not circled badges…
-    expect(screen.getByText("01")).toBeInTheDocument();
-    // …and related tools are text links, not a card grid.
-    expect(screen.getByRole("link", { name: /split pdf/i })).toBeInTheDocument();
+    expect(screen.getByText("Category")).toBeInTheDocument();
+    expect(screen.getAllByText("Organize PDF").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Processing")).toBeInTheDocument();
   });
 
   it("default variant keeps the classic two-card sidebar for other tools", () => {

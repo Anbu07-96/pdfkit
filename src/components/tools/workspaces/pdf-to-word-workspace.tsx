@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Download, FileText, Info, Type } from "lucide-react";
+import { CheckCircle2, Download, FileText, Info, Type, X } from "lucide-react";
 import * as React from "react";
 import { JobProcessingVisual } from "@/components/jobs/job-processing-visual";
 import { Badge } from "@/components/ui/badge";
@@ -65,23 +65,20 @@ function prefersReducedMotion(): boolean {
 }
 
 /**
- * PDF to Word workspace — Phase 75D.6 "Precision Document Bench".
+ * PDF to Word workspace — Phase 75D.5 compact layout.
  *
- * One raised surface carries the whole journey — SELECT (an inset well
- * that collapses to a quiet replace strip), CONFIGURE (the document as an
- * open row: mono filename, measured facts, the primary action), PROCESS
- * (the Typesetting Field in the same region) and RESULT (the field settles
- * into the download row). No card inside a card; hierarchy comes from
- * hairline dividers, an editorial type scale and one blue action.
+ * The primary workflow (upload → select → convert → processing → result)
+ * is designed to fit a laptop viewport without scrolling: a spacious upload
+ * zone only while empty, a slim replace strip plus one premium file row
+ * once a file is selected, the conversion caveat as a compact strip with an
+ * expandable disclosure, and a processing/result region that always renders
+ * in the same place so the user's eyes stay put.
  *
- * The 75D.5 compact engineering is preserved: the workflow fits a laptop
- * viewport, processing and result render in the same place so the user's
- * eyes stay put, and the setup rows collapse while a job is running.
- *
- * Honesty is unchanged: text-only extraction is stated up front, the page
- * count always comes from the server's inspect endpoint, the result always
- * comes from the server's measured extraction, and the tool never implies
- * layout, image or table reconstruction.
+ * Honesty is unchanged from the earlier layouts: text-only extraction is
+ * stated up front (now in the disclosure), the page count always comes from
+ * the server's inspect endpoint, the result always comes from the server's
+ * measured extraction, and the tool never implies layout, image or table
+ * reconstruction.
  */
 export function PdfToWordWorkspace({ limits }: PdfToWordWorkspaceProps) {
   const [files, setFiles] = React.useState<SelectedFile[]>([]);
@@ -222,44 +219,46 @@ export function PdfToWordWorkspace({ limits }: PdfToWordWorkspaceProps) {
   }
 
   return (
-    <div className="flex flex-col">
-      <section className="bench p-4 sm:p-5" aria-label="Convert a PDF to Word">
-        {/* SELECT — a hairline inset well while empty; a quiet open strip
-            once a file is selected (the upload zone collapses itself). */}
-        <UploadZone
-          label="Upload a PDF"
-          hint="Drag and drop a PDF, or browse from your device."
-          files={files}
-          onFilesChange={handleFilesChange}
-          multiple={false}
-          maxFiles={1}
-          busy={busy || status === "reading"}
-          extensions={[".pdf"]}
-          mimeTypes={["application/pdf"]}
-          maxFileSize={limits.maxFileSize}
-          variant="compact"
-          showFileList={false}
-        />
+    <div className="flex flex-col gap-4">
+      {/* Selection: spacious while empty, a slim replace strip once a file
+          is selected (the upload zone collapses itself — variant compact). */}
+      <UploadZone
+        label="Upload a PDF"
+        hint="Drag and drop a PDF here, or browse from your device."
+        files={files}
+        onFilesChange={handleFilesChange}
+        multiple={false}
+        maxFiles={1}
+        busy={busy || status === "reading"}
+        extensions={[".pdf"]}
+        mimeTypes={["application/pdf"]}
+        maxFileSize={limits.maxFileSize}
+        variant="compact"
+        showFileList={false}
+      />
 
-        {/* CONFIGURE — the selected document as an open row: mono filename,
-            measured facts and the primary action. The filename appears
-            exactly once on the page. */}
-        {file && !working ? (
-          <div
-            className="workspace-enter mt-4 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-border pt-4"
-            data-testid="selected-file-row"
+      {/* The selected file: one premium compact row — icon, name, size,
+          server-verified page count, remove. The filename appears exactly
+          once on the page. */}
+      {file && !working ? (
+        <div
+          className="workspace-enter flex items-center gap-3 rounded-xl border border-border bg-surface p-3 shadow-xs"
+          data-testid="selected-file-row"
+        >
+          <span
+            aria-hidden="true"
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary-soft-foreground"
           >
-            <FileText
-              aria-hidden="true"
-              className="size-4 shrink-0 text-subtle"
-            />
-            <p className="mono-tech min-w-0 truncate font-medium text-foreground">
+            <FileText className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-foreground">
               {file.name}
             </p>
-            <p className="mono-tech flex flex-wrap items-center gap-x-2 gap-y-1 text-subtle">
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
               <span>{formatBytes(file.size)}</span>
               {status === "reading" ? (
-                <span>· Reading…</span>
+                <span>· Reading PDF…</span>
               ) : pageCount !== null ? (
                 <>
                   <span>
@@ -267,235 +266,230 @@ export function PdfToWordWorkspace({ limits }: PdfToWordWorkspaceProps) {
                     {pageCount === 1 ? "1 page" : `${pageCount} pages`}
                   </span>
                   {overLimit ? (
-                    <Badge tone="warning">
-                      Over {limits.maxPages}-page limit
-                    </Badge>
+                    <Badge tone="warning">Over {limits.maxPages}-page limit</Badge>
                   ) : null}
                 </>
               ) : (
                 <span>· Page count unavailable</span>
               )}
             </p>
-            <div className="ms-auto flex items-center gap-2">
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleFilesChange([])}
+            disabled={working}
+          >
+            <X aria-hidden="true" className="size-4" />
+            Remove
+          </Button>
+        </div>
+      ) : null}
+
+      {/* Conversion caveat as a compact strip: the material limitation is
+          always visible; the full explanation stays one disclosure away. */}
+      {file && pageCount !== null && !working && status !== "error" ? (
+        overLimit ? (
+          <ErrorState
+            title="Too many pages to convert"
+            description={`This PDF has ${pageCount} pages; Word export is limited to ${limits.maxPages}. Split the PDF first, then convert the parts.`}
+          />
+        ) : (
+          <div className="flex items-start gap-2.5 rounded-lg border border-border bg-surface-muted/40 px-3 py-2 text-sm">
+            <Info
+              aria-hidden="true"
+              className="mt-0.5 size-4 shrink-0 text-primary"
+            />
+            <p className="min-w-0 flex-1 text-muted">
+              <span className="font-medium text-foreground">
+                Text extraction
+              </span>{" "}
+              — formatting, images, tables and exact layout may not be
+              preserved.
+              <details className="mt-1 text-xs">
+                <summary className="cursor-pointer font-medium text-primary marker:content-['']">
+                  Details
+                </summary>
+                <p className="mt-1.5 leading-relaxed text-muted">
+                  Your{" "}
+                  <span className="font-medium text-foreground">
+                    {pageCount === 1 ? "1 page" : `${pageCount} pages`}
+                  </span>{" "}
+                  become a Word document containing the text of each page, in
+                  order, one paragraph per line. Pages without extractable
+                  text are marked as such. This tool extracts text — it does
+                  not rebuild the document.
+                </p>
+              </details>
+            </p>
+          </div>
+        )
+      ) : null}
+
+      {status === "error" && failure ? (
+        <ErrorState
+          title="Conversion failed"
+          description={
+            <>
+              <span>{failure.message}</span>
+              {failure.details ? (
+                <ul className="mt-2 list-disc space-y-1 ps-4">
+                  {failure.details.map((detail) => (
+                    <li key={detail}>{detail}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </>
+          }
+          action={
+            file ? (
+              <Button variant="secondary" size="sm" onClick={handleConvert}>
+                Try again
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : null}
+
+      {/* Primary action. */}
+      {file && !working && status !== "error" ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button size="lg" onClick={handleConvert} disabled={!canConvert}>
+            <Type aria-hidden="true" className="size-4" />
+            Convert to Word
+          </Button>
+          <Button variant="ghost" size="lg" onClick={handleStartOver}>
+            Start over
+          </Button>
+        </div>
+      ) : null}
+
+      <p role="status" aria-live="polite" className="sr-only">
+        {status === "reading"
+          ? "Reading the PDF to count its pages."
+          : status === "completing"
+            ? "Finishing up."
+            : status === "processing"
+              ? "Converting your PDF to a Word document. This may take a moment."
+              : status === "success" && result
+                ? `Word document ready. ${
+                    result.extraction?.characters === 0
+                      ? "No text was found — the PDF may contain only images."
+                      : `${(result.extraction?.characters ?? 0).toLocaleString()} characters extracted.`
+                  }`
+                : status === "error" && failure
+                  ? `Conversion failed. ${failure.message}`
+                  : status === "ready" && pageCount !== null
+                    ? `PDF loaded with ${pageCount} pages.`
+                    : ""}
+      </p>
+
+      {/* Processing and result always render in this same region — the
+          user's eyes stay in one place through convert → processing →
+          complete → download. Setup UI above collapses while working. */}
+      {working ? (
+        <div className="workspace-enter flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-foreground">
+              {settling ? "Finishing up…" : "Converting to Word"}
+            </p>
+            {file ? (
+              <p className="min-w-0 truncate text-xs text-muted">{file.name}</p>
+            ) : null}
+            {busy ? (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => handleFilesChange([])}
-                disabled={working}
+                onClick={() => abortRef.current?.abort()}
               >
-                Remove
+                Cancel
               </Button>
-              {/* The primary action stands down in the error state — the
-                  borderless alert carries an inline retry instead. */}
-              {status !== "error" ? (
-                <Button size="sm" onClick={handleConvert} disabled={!canConvert}>
-                  <Type aria-hidden="true" className="size-4" />
-                  Convert to Word
-                </Button>
-              ) : null}
-            </div>
+            ) : null}
           </div>
-        ) : null}
 
-        {/* The conversion caveat: the material limitation is always visible
-            as a quiet line; the full explanation stays one disclosure away.
-            Over-limit documents get the same slot as a borderless alert. */}
-        {file && pageCount !== null && !working && status !== "error" && status !== "success" ? (
-          overLimit ? (
-            <ErrorState
-              className="bench-alert mt-3"
-              title="Too many pages to convert"
-              description={`This PDF has ${pageCount} pages; Word export is limited to ${limits.maxPages}. Split the PDF first, then convert the parts.`}
-            />
-          ) : (
-            <div className="mt-2.5 flex items-start gap-2 text-[13px] leading-relaxed">
-              <Info
-                aria-hidden="true"
-                className="mt-0.5 size-3.5 shrink-0 text-subtle"
-              />
-              <div className="min-w-0 flex-1 text-muted">
-                <span className="font-medium text-foreground">
-                  Text extraction
-                </span>{" "}
-                — formatting, images, tables and exact layout may not be
-                preserved.
-                <details className="mt-0.5">
-                  <summary className="cursor-pointer font-medium text-primary marker:content-['']">
-                    Details
-                  </summary>
-                  <p className="mt-1.5 text-xs leading-relaxed text-muted">
-                    Your{" "}
-                    <span className="font-medium text-foreground">
-                      {pageCount === 1 ? "1 page" : `${pageCount} pages`}
-                    </span>{" "}
-                    become a Word document containing the text of each page, in
-                    order, one paragraph per line. Pages without extractable
-                    text are marked as such. This tool extracts text — it does
-                    not rebuild the document.
-                  </p>
-                </details>
-              </div>
-            </div>
-          )
-        ) : null}
-
-        {status === "error" && failure ? (
-          <ErrorState
-            className="bench-alert mt-3"
-            title="Conversion failed"
-            description={
-              <>
-                <span>{failure.message}</span>
-                {failure.details ? (
-                  <ul className="mt-2 list-disc space-y-1 ps-4">
-                    {failure.details.map((detail) => (
-                      <li key={detail}>{detail}</li>
-                    ))}
-                  </ul>
-                ) : null}
-              </>
-            }
-            action={
-              file ? (
-                <Button variant="secondary" size="sm" onClick={handleConvert}>
-                  Try again
-                </Button>
-              ) : undefined
-            }
+          {/* Phase 75D.5: the Document Intelligence Core — decorative,
+              aria-hidden, wide and shallow. The job, its text and its
+              status handling are unchanged; remove this element and the
+              layer is gone. */}
+          <JobProcessingVisual
+            toolId="pdf-to-word"
+            status={settling ? "success" : "processing"}
           />
-        ) : null}
 
-        <p role="status" aria-live="polite" className="sr-only">
-          {status === "reading"
-            ? "Reading the PDF to count its pages."
-            : status === "completing"
-              ? "Finishing up."
-              : status === "processing"
-                ? "Converting your PDF to a Word document. This may take a moment."
-                : status === "success" && result
-                  ? `Word document ready. ${
-                      result.extraction?.characters === 0
-                        ? "No text was found — the PDF may contain only images."
-                        : `${(result.extraction?.characters ?? 0).toLocaleString()} characters extracted.`
-                    }`
-                  : status === "error" && failure
-                    ? `Conversion failed. ${failure.message}`
-                    : status === "ready" && pageCount !== null
-                      ? `PDF loaded with ${pageCount} pages.`
-                      : ""}
-        </p>
+          <p className="text-sm text-muted">
+            {settling
+              ? "Building your Word document."
+              : "Analyzing document structure and extracting text."}
+          </p>
+          <p className="text-xs text-subtle">
+            Processed on the server, in memory only, and discarded as soon as
+            the result is returned. Cancelling stops the download; work that
+            already started may finish on the server.
+          </p>
+        </div>
+      ) : null}
 
-        {/* PROCESS — always in this same region: context line, the
-            Typesetting Field (decorative, aria-hidden, wide and shallow),
-            and the honest status line. The job, its text and its status
-            handling are unchanged; remove the visual and the layer is
-            gone. */}
-        {working ? (
-          <div className="workspace-enter mt-4 border-t border-border pt-4">
-            <div className="flex items-center justify-between gap-3">
-              <p className="eyebrow">
-                {settling ? "Finishing up" : "Converting to Word"}
-              </p>
-              {file ? (
-                <p className="mono-tech min-w-0 truncate text-subtle">
-                  {file.name}
-                </p>
-              ) : null}
-              {busy ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => abortRef.current?.abort()}
-                >
-                  Cancel
-                </Button>
-              ) : null}
-            </div>
-
-            <JobProcessingVisual
-              toolId="pdf-to-word"
-              status={settling ? "success" : "processing"}
-              className="mt-3"
+      {status === "success" && result ? (
+        <div className="workspace-enter rounded-xl border border-success/40 bg-success-soft/50 p-4">
+          <div className="flex items-start gap-3">
+            <CheckCircle2
+              aria-hidden="true"
+              className="mt-0.5 size-5 shrink-0 text-success"
             />
+            <div className="min-w-0 flex-1">
+              <h3 className="text-base font-semibold text-foreground">
+                {result.extraction?.characters === 0
+                  ? "Word document created — no text found"
+                  : "Word document ready"}
+              </h3>
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
+                <FileText aria-hidden="true" className="size-4" />
+                <span className="font-medium text-foreground">
+                  {result.fileName}
+                </span>
+                <span>· {formatBytes(result.size)}</span>
+                {result.extraction && result.extraction.characters > 0 ? (
+                  <>
+                    <span>
+                      · {result.extraction.characters.toLocaleString()} characters
+                    </span>
+                    <span>· {result.extraction.paragraphs} paragraphs</span>
+                  </>
+                ) : null}
+                <span>
+                  · {result.pages ?? pageCount}{" "}
+                  {(result.pages ?? pageCount) === 1 ? "page" : "pages"}
+                </span>
+              </p>
+              <p className="mt-2 text-sm text-muted">
+                {result.extraction?.characters === 0
+                  ? "This PDF contains no extractable text — it may consist of images or scans. The document lists the pages that had none."
+                  : "Text only — formatting, images, tables and exact layout are not preserved."}
+              </p>
 
-            <p className="mt-3 text-sm text-muted">
-              {settling
-                ? "Building your Word document."
-                : "Analyzing document structure and extracting text."}
-            </p>
-            <p className="mt-1.5 text-xs text-subtle">
-              Processed on the server, in memory only, and discarded as soon
-              as the result is returned. Cancelling stops the download; work
-              that already started may finish on the server.
-            </p>
-          </div>
-        ) : null}
-
-        {/* RESULT — the field settles into the download row. The check is a
-            glyph in context; the download is the only saturated action. */}
-        {status === "success" && result ? (
-          <div className="bench-settle mt-4 border-t border-border pt-4">
-            <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
-              <CheckCircle2
-                aria-hidden="true"
-                className="mt-0.5 size-5 shrink-0 text-success"
-              />
-              <div className="min-w-0 flex-1">
-                <h3 className="text-base font-semibold text-foreground">
-                  {result.extraction?.characters === 0
-                    ? "Word document created — no text found"
-                    : "Word document ready"}
-                </h3>
-                <p className="mono-tech mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-muted">
-                  <span className="font-medium text-foreground">
-                    {result.fileName}
-                  </span>
-                  <span>· {formatBytes(result.size)}</span>
-                  {result.extraction && result.extraction.characters > 0 ? (
-                    <>
-                      <span>
-                        ·{" "}
-                        {result.extraction.characters.toLocaleString()}{" "}
-                        characters
-                      </span>
-                      <span>· {result.extraction.paragraphs} paragraphs</span>
-                    </>
-                  ) : null}
-                  <span>
-                    · {result.pages ?? pageCount}{" "}
-                    {(result.pages ?? pageCount) === 1 ? "page" : "pages"}
-                  </span>
-                </p>
-                <p className="mt-2 text-sm text-muted">
-                  {result.extraction?.characters === 0
-                    ? "This PDF contains no extractable text — it may consist of images or scans. The document lists the pages that had none."
-                    : "Text only — formatting, images, tables and exact layout are not preserved."}
-                </p>
-
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <ButtonLink
-                    href={result.url}
-                    download={result.fileName}
-                    size="lg"
-                    className="bench-settle"
-                  >
-                    <Download aria-hidden="true" className="size-4" />
-                    Download Word document
-                  </ButtonLink>
-                  <Button variant="ghost" onClick={handleStartOver}>
-                    Convert another PDF
-                  </Button>
-                </div>
-
-                <p className="mt-2.5 text-xs text-subtle">
-                  The download link points at the file in your browser&rsquo;s
-                  memory. It disappears when you leave or reload this page.
-                </p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <ButtonLink
+                  href={result.url}
+                  download={result.fileName}
+                  size="lg"
+                  className="workspace-enter"
+                >
+                  <Download aria-hidden="true" className="size-4" />
+                  Download Word document
+                </ButtonLink>
+                <Button variant="secondary" onClick={handleStartOver}>
+                  Convert another PDF
+                </Button>
               </div>
+
+              <p className="mt-2.5 text-xs text-subtle">
+                The download link points at the file in your browser&rsquo;s
+                memory. It disappears when you leave or reload this page.
+              </p>
             </div>
           </div>
-        ) : null}
-      </section>
+        </div>
+      ) : null}
     </div>
   );
 }

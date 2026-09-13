@@ -294,11 +294,8 @@ describe("PdfToWordWorkspace", () => {
     await user.click(screen.getByRole("button", { name: /^convert to word$/i }));
     resolveConvert!(docxResponse());
 
-    // The processing panel lingers briefly with the success visual… (the
-    // eyebrow is scoped because the sr-only live region echoes the phrase.)
-    expect(
-      await screen.findByText(/finishing up/i, { selector: ".eyebrow" }),
-    ).toBeInTheDocument();
+    // The processing panel lingers briefly with the success visual…
+    expect(await screen.findByText(/finishing up…/i)).toBeInTheDocument();
     const scene = screen
       .getByTestId("job-visual")
       .querySelector(".job-visual-scene");
@@ -310,7 +307,7 @@ describe("PdfToWordWorkspace", () => {
 
     // …then the existing result UI takes over.
     await screen.findByRole("heading", { name: /word document ready/i });
-    expect(screen.queryByText(/finishing up/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/finishing up…/i)).not.toBeInTheDocument();
     expect(screen.queryByTestId("job-visual")).not.toBeInTheDocument();
   });
 
@@ -471,9 +468,7 @@ describe("PdfToWordWorkspace", () => {
     await user.click(screen.getByRole("button", { name: /^convert to word$/i }));
     await screen.findByRole("heading", { name: /word document ready/i });
 
-    await user.click(
-      screen.getByRole("button", { name: /convert another pdf/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /start over/i }));
     expect(screen.getByTestId("upload-zone")).toHaveAttribute("data-state", "empty");
     expect(screen.queryByTestId("selected-file-row")).not.toBeInTheDocument();
     expect(screen.queryByText(/Text extraction/i)).not.toBeInTheDocument();
