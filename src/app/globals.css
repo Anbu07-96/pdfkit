@@ -257,14 +257,15 @@
 }
 
 /* ------------------------------------------------------------------------ */
-/* Phase 75D.4.1 — job processing visual (UI-only, easy to remove).         */
-/* Premium 3D document transformation: PDF stack -> transformation zone ->  */
-/* Word stack. Real CSS 3D: perspective on the scene, preserve-3d chains    */
-/* through the stacks and the zone, so sheets, peeling pages and travelling */
-/* fragments are depth-sorted by the browser. Every animation is            */
-/* transform/opacity on a fixed handful of elements; no canvas, no WebGL,  */
-/* no JS timers, nothing per-page. The whole layer is aria-hidden; the     */
-/* real job status always remains in the surrounding UI.                   */
+/* Phase 75D.4.2 — job processing visual: Intelligent Document              */
+/* Reconstruction (UI-only, easy to remove).                               */
+/* PDF page -> scan + deconstruct into structural blocks -> transformation */
+/* field (lanes, processing nodes, typed motes) -> progressive Word        */
+/* reconstruction. One shared 7.5s master loop keeps the choreography in   */
+/* sync with zero JavaScript. Every animation is transform/opacity on a    */
+/* fixed element count; no canvas, no WebGL, no per-page animation. The    */
+/* whole layer is aria-hidden; the real job status always remains in the  */
+/* surrounding UI.                                                         */
 /* ------------------------------------------------------------------------ */
 @layer components {
   .job-visual {
@@ -274,238 +275,419 @@
   .job-visual-scene {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 1.25rem;
     height: 8.5rem;
-    perspective: 52rem;
-    perspective-origin: 50% 40%;
+    perspective: 50rem;
+    perspective-origin: 50% 45%;
   }
 
-  /* Sides and stacks ----------------------------------------------- */
+  /* Documents ------------------------------------------------------- */
 
-  .job-visual-side {
+  .rec-doc {
     position: relative;
-    width: 3rem;
-    height: 3.75rem;
+    width: 3.5rem;
+    height: 4.5rem;
     flex: none;
     transform-style: preserve-3d;
   }
 
-  .job-visual-stack {
-    position: absolute;
-    inset: 0;
-    transform-style: preserve-3d;
+  .rec-doc--pdf {
+    transform: rotateY(7deg) rotateX(4deg);
   }
 
-  .job-visual-side--pdf .job-visual-stack {
-    transform: rotateY(24deg) rotateX(6deg);
-    animation: pdfkit-job-stack 4s ease-in-out infinite;
+  .rec-doc--word {
+    transform: rotateY(-7deg) rotateX(4deg);
   }
 
-  .job-visual-side--word .job-visual-stack {
-    transform: rotateY(-24deg) rotateX(6deg);
-    animation: pdfkit-job-stack-alt 4.6s ease-in-out infinite;
-  }
-
-  .job-visual-sheet {
+  .rec-frame {
     position: absolute;
     inset: 0;
     border-radius: 0.375rem;
     border: 1px solid var(--color-border);
     background: var(--color-surface-raised);
-    box-shadow: var(--pdfkit-shadow-xs);
-    transition: transform 0.5s ease, opacity 0.5s ease;
-  }
-
-  /* Receding layers behind the face — depth through translateZ. */
-  .job-visual-side--pdf .job-visual-sheet--1 {
-    transform: translate3d(-0.25rem, -0.25rem, -0.5rem);
-    opacity: 0.8;
-  }
-
-  .job-visual-side--pdf .job-visual-sheet--2 {
-    transform: translate3d(-0.5rem, -0.5rem, -1rem);
-    opacity: 0.6;
-  }
-
-  .job-visual-side--pdf .job-visual-sheet--3 {
-    transform: translate3d(-0.75rem, -0.75rem, -1.5rem);
-    opacity: 0.4;
-  }
-
-  .job-visual-side--word .job-visual-sheet--1 {
-    transform: translate3d(0.25rem, -0.25rem, -0.5rem);
-    opacity: 0.8;
-  }
-
-  .job-visual-sheet--front,
-  .job-visual-sheet--peel {
-    display: flex;
-    flex-direction: column;
-    gap: 0.1875rem;
-    padding: 0.45rem 0.35rem;
     box-shadow: var(--pdfkit-shadow-sm);
   }
 
-  /* Soft floor shadow grounding each stack. */
-  .job-visual-ground {
+  /* Dashed layout geometry — the page's margins/grid. */
+  .rec-guides {
     position: absolute;
-    left: -10%;
-    width: 120%;
-    bottom: -0.6rem;
-    height: 0.5rem;
-    border-radius: 50%;
-    background: color-mix(in oklab, var(--color-foreground) 10%, transparent);
+    inset: 0.3rem;
+    border-radius: 0.25rem;
+    border: 1px dashed color-mix(in oklab, var(--color-border-strong) 70%, transparent);
   }
 
-  /* Page content ---------------------------------------------------- */
-
-  .job-visual-pdf-line {
-    height: 2px;
-    border-radius: 9999px;
+  /* Structural blocks (abstract shapes only — never real content). */
+  .rec-block {
+    position: absolute;
+    border-radius: 0.125rem;
     background: var(--color-border-strong);
+    animation: rec-block 7.5s ease-in-out infinite;
   }
 
-  .job-visual-pdf-line:nth-child(1) {
-    width: 100%;
+  .rec-block--bar1 {
+    top: 0.55rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    height: 0.25rem;
+    --lx: -0.3rem;
+    --ly: -0.35rem;
+    --lz: 1.1rem;
   }
 
-  .job-visual-pdf-line:nth-child(2) {
-    width: 85%;
+  .rec-block--bar2 {
+    top: 0.95rem;
+    left: 0.5rem;
+    width: 80%;
+    height: 0.25rem;
+    --lx: -0.45rem;
+    --ly: -0.05rem;
+    --lz: 0.7rem;
   }
 
-  .job-visual-pdf-line:nth-child(3) {
-    width: 60%;
+  .rec-block--bar3 {
+    top: 1.35rem;
+    left: 0.5rem;
+    width: 62%;
+    height: 0.25rem;
+    --lx: -0.2rem;
+    --ly: 0.2rem;
+    --lz: 1.4rem;
   }
 
-  .job-visual-line {
-    height: 3px;
+  /* Image region: rounded surface with an abstract picture glyph. */
+  .rec-block--image {
+    top: 1.95rem;
+    left: 0.5rem;
+    width: 1.05rem;
+    height: 0.85rem;
+    border-radius: 0.1875rem;
+    border: 1px solid var(--color-border);
+    background:
+      radial-gradient(
+        circle at 32% 30%,
+        color-mix(in oklab, var(--color-muted) 85%, transparent) 0 1.5px,
+        transparent 2px
+      ),
+      linear-gradient(
+        115deg,
+        transparent 52%,
+        color-mix(in oklab, var(--color-muted) 55%, transparent) 52% 62%,
+        transparent 62%
+      ),
+      var(--color-surface-muted);
+    --lx: 0.25rem;
+    --ly: -0.5rem;
+    --lz: 1.7rem;
+  }
+
+  /* Table region: a surface with internal grid lines. */
+  .rec-block--table {
+    top: 1.95rem;
+    left: 1.75rem;
+    right: 0.5rem;
+    height: 0.85rem;
+    border-radius: 0.1875rem;
+    border: 1px solid var(--color-border);
+    background:
+      linear-gradient(
+        var(--color-border-strong),
+        var(--color-border-strong)
+      )
+      50% 50% / 100% 1px no-repeat,
+      linear-gradient(
+        var(--color-border-strong),
+        var(--color-border-strong)
+      )
+      50% 50% / 1px 100% no-repeat,
+      var(--color-surface-muted);
+    --lx: 0.4rem;
+    --ly: 0.3rem;
+    --lz: 0.9rem;
+  }
+
+  /* Scanning plane: a soft light bar sweeping the page. */
+  .rec-scan {
+    position: absolute;
+    left: 0.15rem;
+    right: 0.15rem;
+    top: 0;
+    height: 0.5rem;
+    border-radius: 0.375rem;
+    border-top: 1px solid color-mix(in oklab, var(--color-primary) 50%, transparent);
+    background: linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--color-primary) 14%, transparent),
+      transparent
+    );
+    opacity: 0;
+    animation: rec-scan 7.5s ease-in-out infinite;
+  }
+
+  /* Transformation field --------------------------------------------- */
+
+  .rec-field {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 3rem;
+    height: 100%;
+  }
+
+  .rec-path {
+    position: absolute;
+    left: 6%;
+    right: 6%;
+    height: 1px;
     border-radius: 9999px;
-    background: var(--color-muted);
+    background: var(--color-border);
+    transition: background 0.4s ease, opacity 0.4s ease;
+  }
+
+  .rec-path--top {
+    top: 27%;
+  }
+
+  .rec-path--mid {
+    top: 50%;
+  }
+
+  .rec-path--bot {
+    top: 73%;
+  }
+
+  /* Processing nodes: small diamonds on the mid lane that pulse as the
+     pieces pass through them. */
+  .rec-node {
+    position: absolute;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 0.125rem;
+    border: 1px solid color-mix(in oklab, var(--color-primary) 45%, transparent);
+    background: var(--color-primary-soft);
+    transform: rotate(45deg);
     opacity: 0.35;
-    animation: pdfkit-job-line 1.8s ease-in-out infinite;
+    animation: rec-node 7.5s ease-in-out infinite;
   }
 
-  .job-visual-line:nth-child(2) {
-    animation-delay: 0.2s;
+  .rec-node--1 {
+    left: 22%;
+    top: 50%;
+    margin-top: -0.25rem;
   }
 
-  .job-visual-line:nth-child(3) {
-    animation-delay: 0.4s;
-  }
-
-  .job-visual-line:nth-child(4) {
+  .rec-node--2 {
+    left: 50%;
+    top: 27%;
+    margin-top: -0.25rem;
+    margin-left: -0.25rem;
     animation-delay: 0.6s;
   }
 
-  .job-visual-line:nth-child(5) {
-    animation-delay: 0.8s;
-  }
-
-  .job-visual-line:nth-last-child(1) {
-    width: 62%;
-  }
-
-  /* Page separation / convergence ------------------------------------
-     A sheet peels off the PDF stack into the zone; a sheet arrives from
-     the zone and settles onto the Word stack. Both live in the scene's
-     shared 3D space (sides are preserve-3d), so their travel has true
-     depth: toward the viewer mid-flight, receding as they land. */
-
-  .job-visual-leaf,
-  .job-visual-arrival {
-    position: absolute;
-    inset: 0;
-    transform-style: preserve-3d;
-  }
-
-  .job-visual-leaf {
-    animation: pdfkit-job-leaf 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  }
-
-  .job-visual-arrival {
-    animation: pdfkit-job-arrival 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-    animation-delay: 1.5s;
-  }
-
-  /* Transformation zone ---------------------------------------------- */
-
-  .job-visual-zone {
-    position: relative;
-    flex: 1 1 auto;
-    min-width: 2.5rem;
-    height: 100%;
-    transform-style: preserve-3d;
-  }
-
-  .job-visual-track {
-    position: absolute;
-    left: 0;
-    right: 0;
+  .rec-node--3 {
+    left: 78%;
     top: 50%;
-    height: 2px;
-    margin-top: -1px;
+    margin-top: -0.25rem;
+    margin-left: -0.5rem;
+    animation-delay: 1.2s;
+  }
+
+  /* Restrained particles drifting through the field. */
+  .rec-dust {
+    position: absolute;
+    width: 3px;
+    height: 3px;
     border-radius: 9999px;
-    background: var(--color-border);
-    transition: background 0.4s ease;
+    background: color-mix(in oklab, var(--color-primary) 40%, transparent);
+    opacity: 0.3;
+    animation: rec-dust 4.2s ease-in-out infinite;
   }
 
-  /* The conversion ring: an ellipse standing in 3D (rotateY) that the
-     fragments genuinely pass through — depth sorting is real, not painted. */
-  .job-visual-ring {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 2.6rem;
-    height: 3.4rem;
-    margin: -1.7rem 0 0 -1.3rem;
-    border-radius: 50%;
-    border: 1.5px solid color-mix(in oklab, var(--color-primary) 32%, transparent);
-    transform: rotateY(70deg);
-    animation: pdfkit-job-ring 3.6s ease-in-out infinite;
-    transition: border-color 0.4s ease, opacity 0.4s ease;
+  .rec-dust--1 {
+    left: 30%;
+    top: 38%;
   }
 
-  /* Each fragment wrapper travels the full channel width (translateX
-     0 -> 100%); the chip inside sits at its own translateZ depth, so
-     near fragments render larger and far ones smaller — parallax without
-     JavaScript. */
-  .job-visual-spark {
+  .rec-dust--2 {
+    left: 58%;
+    top: 62%;
+    animation-delay: 1.4s;
+  }
+
+  .rec-dust--3 {
+    left: 76%;
+    top: 33%;
+    animation-delay: 2.8s;
+  }
+
+  /* Typed motes: full-field wrappers whose translateX carries the chip
+     exactly across the field; each mote's chip rides its own lane and its
+     shape mirrors the source block it represents. */
+  .rec-mote {
     position: absolute;
     inset: 0;
-    transform-style: preserve-3d;
-    animation: pdfkit-job-spark 2.6s linear infinite;
+    opacity: 0;
   }
 
-  .job-visual-spark--far {
-    animation-delay: 0.87s;
-  }
-
-  .job-visual-spark--mid {
-    animation-delay: 1.73s;
-  }
-
-  .job-visual-chip {
+  .rec-chip {
     position: absolute;
     left: 0;
-    top: 50%;
-    width: 0.625rem;
-    height: 0.625rem;
-    margin: -0.3125rem 0 0 -0.3125rem;
+    top: var(--lane, 50%);
     border-radius: 0.1875rem;
-    background: var(--color-primary-soft);
     border: 1px solid color-mix(in oklab, var(--color-primary) 45%, transparent);
+    background: var(--color-primary-soft);
   }
 
-  .job-visual-spark--near .job-visual-chip {
-    transform: translateZ(1.6rem) rotate(8deg);
+  .rec-mote--text1 {
+    animation: rec-mote-text1 7.5s linear infinite;
+    --lane: 47%;
   }
 
-  .job-visual-spark--far .job-visual-chip {
-    transform: translateZ(-1rem) rotate(-6deg);
+  .rec-mote--text1 .rec-chip {
+    width: 0.9rem;
+    height: 0.28rem;
+    border-radius: 9999px;
   }
 
-  .job-visual-spark--mid .job-visual-chip {
-    transform: translateZ(0.4rem) rotate(4deg);
+  .rec-mote--text2 {
+    animation: rec-mote-text2 7.5s linear infinite;
+    --lane: 58%;
+  }
+
+  .rec-mote--text2 .rec-chip {
+    width: 0.78rem;
+    height: 0.28rem;
+    border-radius: 9999px;
+    margin-left: 0.35rem;
+  }
+
+  .rec-mote--image {
+    animation: rec-mote-image 7.5s linear infinite;
+    --lane: 26%;
+  }
+
+  .rec-mote--image .rec-chip {
+    width: 0.65rem;
+    height: 0.55rem;
+    background:
+      radial-gradient(
+        circle at 32% 30%,
+        color-mix(in oklab, var(--color-primary) 55%, transparent) 0 1.5px,
+        transparent 2px
+      ),
+      linear-gradient(
+        115deg,
+        transparent 52%,
+        color-mix(in oklab, var(--color-primary) 40%, transparent) 52% 62%,
+        transparent 62%
+      ),
+      var(--color-primary-soft);
+  }
+
+  .rec-mote--table {
+    animation: rec-mote-table 7.5s linear infinite;
+    --lane: 74%;
+  }
+
+  .rec-mote--table .rec-chip {
+    width: 0.7rem;
+    height: 0.55rem;
+    background:
+      linear-gradient(
+        color-mix(in oklab, var(--color-primary) 45%, transparent),
+        color-mix(in oklab, var(--color-primary) 45%, transparent)
+      )
+      50% 50% / 100% 1px no-repeat,
+      linear-gradient(
+        color-mix(in oklab, var(--color-primary) 45%, transparent),
+        color-mix(in oklab, var(--color-primary) 45%, transparent)
+      )
+      50% 50% / 1px 100% no-repeat,
+      var(--color-primary-soft);
+  }
+
+  /* Reconstructed Word page ------------------------------------------
+     Elements are visible by default (that base IS the completed document
+     once animations stop); the processing loop choreographs them in. */
+
+  .rec-wline {
+    position: absolute;
+    left: 0.5rem;
+    height: 0.25rem;
+    border-radius: 9999px;
+    background: var(--color-muted);
+    transform-origin: left center;
+  }
+
+  .rec-wline--1 {
+    top: 0.55rem;
+    right: 0.5rem;
+    animation: rec-w-line1 7.5s ease-out infinite;
+  }
+
+  .rec-wline--2 {
+    top: 0.95rem;
+    width: 85%;
+    animation: rec-w-line2 7.5s ease-out infinite;
+  }
+
+  .rec-wline--3 {
+    top: 1.35rem;
+    width: 92%;
+    animation: rec-w-line3 7.5s ease-out infinite;
+  }
+
+  .rec-wline--4 {
+    top: 1.75rem;
+    width: 68%;
+    animation: rec-w-line4 7.5s ease-out infinite;
+  }
+
+  .rec-wimg {
+    position: absolute;
+    top: 2.35rem;
+    left: 0.5rem;
+    width: 1.05rem;
+    height: 0.9rem;
+    border-radius: 0.1875rem;
+    border: 1px solid var(--color-border);
+    background:
+      radial-gradient(
+        circle at 32% 30%,
+        color-mix(in oklab, var(--color-muted) 85%, transparent) 0 1.5px,
+        transparent 2px
+      ),
+      linear-gradient(
+        115deg,
+        transparent 52%,
+        color-mix(in oklab, var(--color-muted) 55%, transparent) 52% 62%,
+        transparent 62%
+      ),
+      var(--color-surface-muted);
+    animation: rec-w-img 7.5s ease-out infinite;
+  }
+
+  .rec-wtable {
+    position: absolute;
+    top: 2.35rem;
+    left: 1.75rem;
+    right: 0.5rem;
+    height: 0.9rem;
+    border-radius: 0.1875rem;
+    border: 1px solid var(--color-border);
+    background:
+      linear-gradient(var(--color-border-strong), var(--color-border-strong))
+        50% 50% / 100% 1px no-repeat,
+      linear-gradient(var(--color-border-strong), var(--color-border-strong))
+        50% 50% / 1px 100% no-repeat,
+      var(--color-surface-muted);
+    animation: rec-w-table 7.5s ease-out infinite;
+  }
+
+  .rec-doc--word .rec-guides {
+    animation: rec-w-guides 7.5s ease-out infinite;
+  }
+
+  .rec-doc--word .rec-frame {
+    animation: rec-w-frame 7.5s ease-out infinite;
   }
 
   /* Outcome badge ----------------------------------------------------- */
@@ -520,7 +702,7 @@
     width: 1.375rem;
     height: 1.375rem;
     border-radius: 9999px;
-    animation: pdfkit-job-badge 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: rec-badge-pop 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
   .job-visual-badge--success {
@@ -535,177 +717,147 @@
     border: 1px solid color-mix(in oklab, var(--color-danger) 40%, transparent);
   }
 
-  /* Success: the scene settles, the travelling pieces retire, the PDF
-     stack recedes, the Word stack swings to face the viewer and its
-     sheets converge — a short, satisfying beat before the result UI. */
-  .job-visual-scene.is-success {
-    animation: pdfkit-job-settle 0.6s ease-out;
-  }
-
-  .job-visual-scene.is-success .job-visual-spark,
-  .job-visual-scene.is-success .job-visual-leaf,
-  .job-visual-scene.is-success .job-visual-arrival {
-    animation: none;
-    opacity: 0;
-  }
-
-  .job-visual-scene.is-success .job-visual-stack {
-    animation: none;
-  }
-
-  .job-visual-scene.is-success .job-visual-side--pdf .job-visual-stack {
-    transform: rotateY(24deg) rotateX(6deg) scale(0.94);
-    opacity: 0.6;
-  }
-
-  .job-visual-scene.is-success .job-visual-side--word .job-visual-stack {
-    animation: pdfkit-job-wordsettle 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-
-  .job-visual-scene.is-success .job-visual-side--pdf .job-visual-sheet--1,
-  .job-visual-scene.is-success .job-visual-side--word .job-visual-sheet--1 {
-    transform: translate3d(0, 0, -0.25rem);
-    opacity: 0.9;
-  }
-
-  .job-visual-scene.is-success .job-visual-line {
-    animation: none;
-    opacity: 1;
-  }
-
-  .job-visual-scene.is-success .job-visual-track {
-    background: color-mix(in oklab, var(--color-success) 40%, transparent);
-  }
-
-  .job-visual-scene.is-success .job-visual-ring {
-    animation: none;
-    border-color: color-mix(in oklab, var(--color-success) 45%, transparent);
-  }
-
-  /* Error: everything stops immediately, the target tilts away and dims. */
-  .job-visual-scene.is-error .job-visual-spark,
-  .job-visual-scene.is-error .job-visual-leaf,
-  .job-visual-scene.is-error .job-visual-arrival {
-    animation: none;
-    opacity: 0;
-  }
-
-  .job-visual-scene.is-error .job-visual-stack {
-    animation: none;
-  }
-
-  .job-visual-scene.is-error .job-visual-side--pdf .job-visual-stack {
-    transform: rotateY(24deg) rotateX(6deg);
-    opacity: 0.5;
-  }
-
-  .job-visual-scene.is-error .job-visual-side--word .job-visual-stack {
-    transform: rotateY(-34deg) rotateX(10deg) scale(0.96);
-    opacity: 0.55;
-  }
-
-  .job-visual-scene.is-error .job-visual-line {
-    animation: none;
-    opacity: 0.25;
-  }
-
-  .job-visual-scene.is-error .job-visual-track {
-    background: color-mix(in oklab, var(--color-danger) 40%, transparent);
-  }
-
-  .job-visual-scene.is-error .job-visual-ring {
-    animation: none;
-    border-color: color-mix(in oklab, var(--color-danger) 45%, transparent);
-    opacity: 0.6;
-  }
-
-  /* Mobile: a deliberately recomposed compact scene — tighter perspective
-     and angles, smaller stacks, shorter travel, one fewer fragment. Not a
-     scaled-down desktop scene. */
+  /* Mobile: a deliberately recomposed vertical scene — source page on top,
+     a compact transformation column beneath it, reconstruction below. Not
+     a scaled-down desktop scene. */
   @media (max-width: 639px) {
     .job-visual-scene {
-      gap: 0.25rem;
-      height: 7rem;
-      perspective: 34rem;
+      flex-direction: column;
+      justify-content: center;
+      gap: 0.6rem;
+      height: 11.75rem;
+      perspective: 40rem;
     }
 
-    .job-visual-side {
-      width: 2.25rem;
-      height: 2.875rem;
+    .rec-doc {
+      width: 3rem;
+      height: 3.875rem;
     }
 
-    .job-visual-sheet--front,
-    .job-visual-sheet--peel {
-      gap: 0.125rem;
-      padding: 0.35rem 0.3rem;
+    .rec-doc--pdf {
+      transform: rotateY(5deg) rotateX(4deg);
     }
 
-    .job-visual-side--pdf .job-visual-sheet--1 {
-      transform: translate3d(-0.1875rem, -0.1875rem, -0.375rem);
+    .rec-doc--word {
+      transform: rotateY(-5deg) rotateX(4deg);
     }
 
-    .job-visual-side--pdf .job-visual-sheet--2 {
-      transform: translate3d(-0.375rem, -0.375rem, -0.75rem);
+    .rec-block--bar1,
+    .rec-block--bar2,
+    .rec-block--bar3 {
+      height: 0.22rem;
     }
 
-    .job-visual-side--pdf .job-visual-sheet--3 {
-      transform: translate3d(-0.5625rem, -0.5625rem, -1.125rem);
+    .rec-block--image,
+    .rec-block--table {
+      top: 1.85rem;
+      height: 0.8rem;
     }
 
-    .job-visual-side--word .job-visual-sheet--1 {
-      transform: translate3d(0.1875rem, -0.1875rem, -0.375rem);
+    .rec-wimg,
+    .rec-wtable {
+      top: 2.2rem;
+      height: 0.85rem;
     }
 
-    .job-visual-side--pdf .job-visual-stack {
-      transform: rotateY(18deg) rotateX(5deg);
-      animation-name: pdfkit-job-stack-sm;
+    .rec-scan {
+      animation-name: rec-scan-m;
     }
 
-    .job-visual-side--word .job-visual-stack {
-      transform: rotateY(-18deg) rotateX(5deg);
-      animation-name: pdfkit-job-stack-alt-sm;
-    }
-
-    .job-visual-leaf {
-      animation-name: pdfkit-job-leaf-sm;
-    }
-
-    .job-visual-arrival {
-      animation-name: pdfkit-job-arrival-sm;
-    }
-
-    .job-visual-zone {
-      min-width: 1.75rem;
-    }
-
-    .job-visual-ring {
-      width: 2rem;
+    .rec-field {
+      flex: none;
+      width: 5.5rem;
       height: 2.6rem;
-      margin: -1.3rem 0 0 -1rem;
-      animation-name: pdfkit-job-ring-sm;
+      margin-inline: auto;
     }
 
-    .job-visual-spark--mid {
-      display: none;
+    .rec-path {
+      top: 6%;
+      bottom: 6%;
+      left: auto;
+      right: auto;
+      width: 1px;
+      height: auto;
     }
 
-    .job-visual-ground {
-      bottom: -0.45rem;
-      height: 0.375rem;
+    .rec-path--top {
+      left: 27%;
     }
 
-    .job-visual-badge {
-      top: -0.5rem;
-      right: -0.5rem;
-      width: 1.1875rem;
-      height: 1.1875rem;
+    .rec-path--mid {
+      left: 50%;
+    }
+
+    .rec-path--bot {
+      left: 73%;
+    }
+
+    .rec-node--1 {
+      left: 50%;
+      top: 22%;
+      margin-top: 0;
+      margin-left: -0.25rem;
+    }
+
+    .rec-node--2 {
+      left: 27%;
+      top: 50%;
+      margin-top: -0.25rem;
+      margin-left: -0.25rem;
+    }
+
+    .rec-node--3 {
+      left: 50%;
+      top: 78%;
+      margin-top: -0.25rem;
+      margin-left: -0.25rem;
+    }
+
+    .rec-dust--1 {
+      left: 62%;
+      top: 30%;
+    }
+
+    .rec-dust--2 {
+      left: 38%;
+      top: 66%;
+    }
+
+    .rec-dust--3 {
+      left: 70%;
+      top: 72%;
+    }
+
+    /* Chips ride horizontal lanes while the wrapper travels downward. */
+    .rec-chip {
+      top: 0;
+      left: var(--lane, 50%);
+    }
+
+    .rec-mote--text1 {
+      animation-name: rec-mote-text1-m;
+      --lane: 47%;
+    }
+
+    .rec-mote--text2 {
+      animation-name: rec-mote-text2-m;
+      --lane: 58%;
+    }
+
+    .rec-mote--image {
+      animation-name: rec-mote-image-m;
+      --lane: 26%;
+    }
+
+    .rec-mote--table {
+      animation-name: rec-mote-table-m;
+      --lane: 74%;
     }
   }
 
-  /* Reduced motion: the scene becomes a static 3D composition — tilted
-     stacks, ring, fragments resting along the track, solid text lines.
-     (On top of the global rule that already zeroes every animation and
-     transition duration.) */
+  /* Reduced motion: a polished static representation of the whole
+     pipeline — deconstructed source, pieces resting in the field,
+     completed reconstruction. No continuous animation. */
   @media (prefers-reduced-motion: reduce) {
     .job-visual-scene,
     .job-visual-scene * {
@@ -713,278 +865,707 @@
       transition: none !important;
     }
 
-    .job-visual-line {
-      opacity: 0.8;
+    .rec-block {
+      transform: translate3d(var(--lx, 0), var(--ly, 0), var(--lz, 0));
+      opacity: 0.9;
     }
 
-    .job-visual-leaf,
-    .job-visual-arrival {
+    .rec-scan {
       opacity: 0;
     }
 
-    .job-visual-spark {
-      transform: translateX(30%);
+    .rec-mote {
+      opacity: 1;
+      transform: translateX(32%);
     }
 
-    .job-visual-spark--far {
-      transform: translateX(55%);
+    .rec-mote--text2 {
+      transform: translateX(52%);
     }
 
-    .job-visual-spark--mid {
-      transform: translateX(78%);
+    .rec-mote--image {
+      transform: translateX(70%);
+    }
+
+    .rec-mote--table {
+      transform: translateX(86%);
+    }
+
+    .rec-node {
+      opacity: 0.6;
+    }
+
+    .rec-dust {
+      opacity: 0.35;
     }
   }
-}
 
-/* Stack breathing: tiny rotateY/translateY oscillation around the rest
-   transform (keyframes always carry the full transform). */
-@keyframes pdfkit-job-stack {
-  0%,
-  100% {
-    transform: rotateY(24deg) rotateX(6deg) translateY(0);
+  @media (max-width: 639px) and (prefers-reduced-motion: reduce) {
+    .rec-mote {
+      transform: translateY(32%);
+    }
+
+    .rec-mote--text2 {
+      transform: translateY(52%);
+    }
+
+    .rec-mote--image {
+      transform: translateY(70%);
+    }
+
+    .rec-mote--table {
+      transform: translateY(86%);
+    }
   }
 
-  50% {
-    transform: rotateY(27deg) rotateX(7deg) translateY(-0.1875rem);
-  }
-}
+  /* Status presentation ------------------------------------------------ */
 
-@keyframes pdfkit-job-stack-alt {
-  0%,
-  100% {
-    transform: rotateY(-24deg) rotateX(6deg) translateY(0);
-  }
-
-  50% {
-    transform: rotateY(-27deg) rotateX(7deg) translateY(-0.1875rem);
-  }
-}
-
-@keyframes pdfkit-job-stack-sm {
-  0%,
-  100% {
-    transform: rotateY(18deg) rotateX(5deg) translateY(0);
-  }
-
-  50% {
-    transform: rotateY(21deg) rotateX(6deg) translateY(-0.125rem);
-  }
-}
-
-@keyframes pdfkit-job-stack-alt-sm {
-  0%,
-  100% {
-    transform: rotateY(-18deg) rotateX(5deg) translateY(0);
-  }
-
-  50% {
-    transform: rotateY(-21deg) rotateX(6deg) translateY(-0.125rem);
-  }
-}
-
-/* Page separation: a sheet peels off the PDF stack, straightens, glides
-   through the zone toward the viewer, then recedes and dissolves. */
-@keyframes pdfkit-job-leaf {
-  0% {
-    transform: translate3d(0, 0, 0) rotateY(24deg) rotateX(6deg);
+  /* Success: the loop stops with everything settled into the completed
+     document; the source recedes; a short settle pop and check badge. */
+  .job-visual-scene.is-success .rec-scan,
+  .job-visual-scene.is-success .rec-mote,
+  .job-visual-scene.is-success .rec-dust {
+    animation: none;
     opacity: 0;
   }
 
-  10% {
-    opacity: 1;
+  .job-visual-scene.is-success .rec-block {
+    animation: none;
   }
 
-  38% {
-    transform: translate3d(1.6rem, -0.5rem, 1.75rem) rotateY(6deg) rotateX(2deg);
-    opacity: 1;
+  .job-visual-scene.is-success .rec-node {
+    animation: none;
+    opacity: 0.25;
   }
 
-  72% {
-    transform: translate3d(3.4rem, 0.1rem, 0.25rem) rotateY(-8deg) rotateX(3deg);
-    opacity: 0.85;
+  /* The reconstruction animations stop at their base — the completed
+     document — so nothing fades back out while the beat plays. */
+  .job-visual-scene.is-success .rec-wline,
+  .job-visual-scene.is-success .rec-wimg,
+  .job-visual-scene.is-success .rec-wtable,
+  .job-visual-scene.is-success .rec-doc--word .rec-guides,
+  .job-visual-scene.is-success .rec-doc--word .rec-frame {
+    animation: none;
   }
 
-  100% {
-    transform: translate3d(4.8rem, 0.5rem, -0.75rem) rotateY(-14deg)
-      rotateX(4deg);
-    opacity: 0;
-  }
-}
-
-@keyframes pdfkit-job-leaf-sm {
-  0% {
-    transform: translate3d(0, 0, 0) rotateY(18deg) rotateX(5deg);
-    opacity: 0;
+  .job-visual-scene.is-success .rec-doc--pdf {
+    transform: rotateY(7deg) rotateX(4deg) scale(0.95);
+    opacity: 0.65;
   }
 
-  10% {
-    opacity: 1;
+  .job-visual-scene.is-success .rec-doc--word {
+    animation: rec-word-settle 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
-  38% {
-    transform: translate3d(1rem, -0.3rem, 1.25rem) rotateY(5deg)
-      rotateX(2deg);
-    opacity: 1;
+  .job-visual-scene.is-success .rec-path {
+    background: color-mix(in oklab, var(--color-success) 40%, transparent);
+    opacity: 0.5;
   }
 
-  72% {
-    transform: translate3d(2rem, 0.1rem, 0.25rem) rotateY(-6deg)
-      rotateX(3deg);
-    opacity: 0.85;
-  }
-
-  100% {
-    transform: translate3d(2.9rem, 0.3rem, -0.5rem) rotateY(-10deg)
-      rotateX(4deg);
-    opacity: 0;
-  }
-}
-
-/* Convergence: a sheet arrives from the zone and settles onto the Word
-   stack — the mirrored counterpart of the leaf, phase-offset. */
-@keyframes pdfkit-job-arrival {
-  0% {
-    transform: translate3d(-4.8rem, 0.5rem, -0.75rem) rotateY(14deg)
-      rotateX(4deg);
+  /* Error: the transformation stops; the reconstruction stays visibly
+     incomplete — frame and the earliest lines only. */
+  .job-visual-scene.is-error .rec-scan,
+  .job-visual-scene.is-error .rec-mote,
+  .job-visual-scene.is-error .rec-dust {
+    animation: none;
     opacity: 0;
   }
 
-  28% {
-    transform: translate3d(-3.4rem, 0.1rem, 0.25rem) rotateY(8deg)
-      rotateX(3deg);
-    opacity: 0.85;
+  .job-visual-scene.is-error .rec-block {
+    animation: none;
   }
 
-  62% {
-    transform: translate3d(-1.6rem, -0.5rem, 1.75rem) rotateY(-6deg)
-      rotateX(2deg);
-    opacity: 1;
+  .job-visual-scene.is-error .rec-node {
+    animation: none;
+    opacity: 0.2;
   }
 
-  90%,
-  100% {
-    transform: translate3d(0, 0, 0) rotateY(-24deg) rotateX(6deg);
-    opacity: 0;
-  }
-}
-
-@keyframes pdfkit-job-arrival-sm {
-  0% {
-    transform: translate3d(-2.9rem, 0.3rem, -0.5rem) rotateY(10deg)
-      rotateX(4deg);
-    opacity: 0;
+  /* Same for error: the animations must stop so the partial-document
+     opacity treatment below is what the user actually sees. */
+  .job-visual-scene.is-error .rec-wline,
+  .job-visual-scene.is-error .rec-wimg,
+  .job-visual-scene.is-error .rec-wtable,
+  .job-visual-scene.is-error .rec-doc--word .rec-guides,
+  .job-visual-scene.is-error .rec-doc--word .rec-frame {
+    animation: none;
   }
 
-  28% {
-    transform: translate3d(-2rem, 0.1rem, 0.25rem) rotateY(6deg)
-      rotateX(3deg);
-    opacity: 0.85;
+  .job-visual-scene.is-error .rec-doc--pdf {
+    opacity: 0.55;
   }
 
-  62% {
-    transform: translate3d(-1rem, -0.3rem, 1.25rem) rotateY(-5deg)
-      rotateX(2deg);
-    opacity: 1;
+  .job-visual-scene.is-error .rec-doc--word .rec-frame {
+    opacity: 0.55;
   }
 
-  90%,
-  100% {
-    transform: translate3d(0, 0, 0) rotateY(-18deg) rotateX(5deg);
-    opacity: 0;
-  }
-}
-
-@keyframes pdfkit-job-ring {
-  0%,
-  100% {
-    transform: rotateY(70deg);
-    opacity: 0.7;
-  }
-
-  50% {
-    transform: rotateY(64deg);
-    opacity: 1;
-  }
-}
-
-@keyframes pdfkit-job-ring-sm {
-  0%,
-  100% {
-    transform: rotateY(66deg);
-    opacity: 0.7;
-  }
-
-  50% {
-    transform: rotateY(60deg);
-    opacity: 1;
-  }
-}
-
-@keyframes pdfkit-job-spark {
-  0% {
-    transform: translateX(0);
-    opacity: 0;
-  }
-
-  8% {
-    opacity: 1;
-  }
-
-  88% {
-    opacity: 1;
-  }
-
-  100% {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-}
-
-@keyframes pdfkit-job-line {
-  0%,
-  100% {
+  .job-visual-scene.is-error .rec-doc--word .rec-guides {
     opacity: 0.35;
   }
 
-  50% {
-    opacity: 0.9;
+  .job-visual-scene.is-error .rec-wline--1,
+  .job-visual-scene.is-error .rec-wline--2 {
+    opacity: 0.45;
+  }
+
+  .job-visual-scene.is-error .rec-wline--3,
+  .job-visual-scene.is-error .rec-wline--4,
+  .job-visual-scene.is-error .rec-wimg,
+  .job-visual-scene.is-error .rec-wtable {
+    opacity: 0;
+  }
+
+  .job-visual-scene.is-error .rec-path {
+    background: color-mix(in oklab, var(--color-danger) 40%, transparent);
+    opacity: 0.5;
   }
 }
 
-/* The success beat: the Word stack swings to face the viewer, overshoots
-   very slightly and settles. */
-@keyframes pdfkit-job-wordsettle {
+/* Master-loop keyframes (all 7.5s — one shared clock, zero JavaScript). */
+
+/* A — the scanning plane sweeps the source page. */
+@keyframes rec-scan {
   0% {
-    transform: rotateY(-24deg) rotateX(6deg) scale(1);
+    transform: translateY(0);
+    opacity: 0;
+  }
+
+  2% {
+    opacity: 1;
+  }
+
+  11% {
+    transform: translateY(4rem);
+    opacity: 1;
+  }
+
+  13%,
+  100% {
+    transform: translateY(4rem);
+    opacity: 0;
+  }
+}
+
+@keyframes rec-scan-m {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+
+  2% {
+    opacity: 1;
+  }
+
+  11% {
+    transform: translateY(3.4rem);
+    opacity: 1;
+  }
+
+  13%,
+  100% {
+    transform: translateY(3.4rem);
+    opacity: 0;
+  }
+}
+
+/* B — structural blocks lift out of the page in depth, hold, return. */
+@keyframes rec-block {
+  0%,
+  10% {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+
+  20% {
+    transform: translate3d(var(--lx, 0), var(--ly, 0), var(--lz, 0));
+    opacity: 0.85;
+  }
+
+  86% {
+    transform: translate3d(var(--lx, 0), var(--ly, 0), var(--lz, 0));
+    opacity: 0.85;
+  }
+
+  95%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+/* C — typed motes cross the field, staggered (text, text, image, table). */
+@keyframes rec-mote-text1 {
+  0%,
+  17% {
+    transform: translateX(-6%);
+    opacity: 0;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  34% {
+    transform: translateX(92%);
+    opacity: 1;
+  }
+
+  37%,
+  100% {
+    transform: translateX(92%);
+    opacity: 0;
+  }
+}
+
+@keyframes rec-mote-text2 {
+  0%,
+  23% {
+    transform: translateX(-6%);
+    opacity: 0;
+  }
+
+  26% {
+    opacity: 1;
+  }
+
+  40% {
+    transform: translateX(92%);
+    opacity: 1;
+  }
+
+  43%,
+  100% {
+    transform: translateX(92%);
+    opacity: 0;
+  }
+}
+
+@keyframes rec-mote-image {
+  0%,
+  29% {
+    transform: translateX(-6%);
+    opacity: 0;
+  }
+
+  32% {
+    opacity: 1;
+  }
+
+  46% {
+    transform: translateX(92%);
+    opacity: 1;
+  }
+
+  49%,
+  100% {
+    transform: translateX(92%);
+    opacity: 0;
+  }
+}
+
+@keyframes rec-mote-table {
+  0%,
+  35% {
+    transform: translateX(-6%);
+    opacity: 0;
+  }
+
+  38% {
+    opacity: 1;
+  }
+
+  52% {
+    transform: translateX(92%);
+    opacity: 1;
+  }
+
+  55%,
+  100% {
+    transform: translateX(92%);
+    opacity: 0;
+  }
+}
+
+/* Mobile mote travel: downward through the column. */
+@keyframes rec-mote-text1-m {
+  0%,
+  17% {
+    transform: translateY(-10%);
+    opacity: 0;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  34% {
+    transform: translateY(92%);
+    opacity: 1;
+  }
+
+  37%,
+  100% {
+    transform: translateY(92%);
+    opacity: 0;
+  }
+}
+
+@keyframes rec-mote-text2-m {
+  0%,
+  23% {
+    transform: translateY(-10%);
+    opacity: 0;
+  }
+
+  26% {
+    opacity: 1;
+  }
+
+  40% {
+    transform: translateY(92%);
+    opacity: 1;
+  }
+
+  43%,
+  100% {
+    transform: translateY(92%);
+    opacity: 0;
+  }
+}
+
+@keyframes rec-mote-image-m {
+  0%,
+  29% {
+    transform: translateY(-10%);
+    opacity: 0;
+  }
+
+  32% {
+    opacity: 1;
+  }
+
+  46% {
+    transform: translateY(92%);
+    opacity: 1;
+  }
+
+  49%,
+  100% {
+    transform: translateY(92%);
+    opacity: 0;
+  }
+}
+
+@keyframes rec-mote-table-m {
+  0%,
+  35% {
+    transform: translateY(-10%);
+    opacity: 0;
+  }
+
+  38% {
+    opacity: 1;
+  }
+
+  52% {
+    transform: translateY(92%);
+    opacity: 1;
+  }
+
+  55%,
+  100% {
+    transform: translateY(92%);
+    opacity: 0;
+  }
+}
+
+/* Nodes pulse as the pieces pass (four staggered bumps per loop). */
+@keyframes rec-node {
+  0%,
+  8% {
+    opacity: 0.35;
+    transform: rotate(45deg) scale(1);
+  }
+
+  11% {
+    opacity: 1;
+    transform: rotate(45deg) scale(1.2);
+  }
+
+  14% {
+    opacity: 0.35;
+    transform: rotate(45deg) scale(1);
+  }
+
+  20% {
+    opacity: 0.35;
+    transform: rotate(45deg) scale(1);
+  }
+
+  23% {
+    opacity: 1;
+    transform: rotate(45deg) scale(1.2);
+  }
+
+  26% {
+    opacity: 0.35;
+    transform: rotate(45deg) scale(1);
+  }
+
+  32% {
+    opacity: 0.35;
+    transform: rotate(45deg) scale(1);
+  }
+
+  35% {
+    opacity: 1;
+    transform: rotate(45deg) scale(1.2);
+  }
+
+  38% {
+    opacity: 0.35;
+    transform: rotate(45deg) scale(1);
+  }
+
+  44% {
+    opacity: 0.35;
+    transform: rotate(45deg) scale(1);
+  }
+
+  47% {
+    opacity: 1;
+    transform: rotate(45deg) scale(1.2);
+  }
+
+  50%,
+  100% {
+    opacity: 0.35;
+    transform: rotate(45deg) scale(1);
+  }
+}
+
+/* Ambient particles: an independent, very slow drift. */
+@keyframes rec-dust {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.2;
+  }
+
+  50% {
+    transform: translate(0.3rem, -0.25rem);
+    opacity: 0.5;
+  }
+}
+
+/* D — progressive Word reconstruction (guides, frame, lines, image,
+   table), each appearing as its mote arrives, resetting together. */
+@keyframes rec-w-guides {
+  0%,
+  34% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+
+  39% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  96%,
+  100% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+@keyframes rec-w-frame {
+  0%,
+  38% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  44% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  96%,
+  100% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes rec-w-line1 {
+  0%,
+  42% {
+    opacity: 0;
+    transform: scaleX(0.3);
+  }
+
+  46% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  95%,
+  100% {
+    opacity: 0;
+    transform: scaleX(0.3);
+  }
+}
+
+@keyframes rec-w-line2 {
+  0%,
+  45% {
+    opacity: 0;
+    transform: scaleX(0.3);
+  }
+
+  49% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  95%,
+  100% {
+    opacity: 0;
+    transform: scaleX(0.3);
+  }
+}
+
+@keyframes rec-w-line3 {
+  0%,
+  48% {
+    opacity: 0;
+    transform: scaleX(0.3);
+  }
+
+  52% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  95%,
+  100% {
+    opacity: 0;
+    transform: scaleX(0.3);
+  }
+}
+
+@keyframes rec-w-line4 {
+  0%,
+  51% {
+    opacity: 0;
+    transform: scaleX(0.3);
   }
 
   55% {
-    transform: rotateY(0deg) rotateX(0deg) scale(1.07);
+    opacity: 1;
+    transform: scaleX(1);
   }
 
+  90% {
+    opacity: 1;
+  }
+
+  95%,
   100% {
-    transform: rotateY(0deg) rotateX(0deg) scale(1.03);
+    opacity: 0;
+    transform: scaleX(0.3);
   }
 }
 
-@keyframes pdfkit-job-settle {
+@keyframes rec-w-img {
+  0%,
+  57% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+
+  62% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  96%,
+  100% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+}
+
+@keyframes rec-w-table {
+  0%,
+  64% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+
+  69% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  96%,
+  100% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+}
+
+/* Success one-shots: the completed document settles; the badge pops. */
+@keyframes rec-word-settle {
   0% {
-    transform: scale(0.985);
+    transform: rotateY(-7deg) rotateX(4deg) scale(1);
+  }
+
+  55% {
+    transform: rotateY(0deg) rotateX(0deg) scale(1.05);
+  }
+
+  100% {
+    transform: rotateY(0deg) rotateX(0deg) scale(1.02);
+  }
+}
+
+@keyframes rec-badge-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
   }
 
   100% {
     transform: scale(1);
-  }
-}
-
-@keyframes pdfkit-job-badge {
-  0% {
-    transform: rotateY(90deg) scale(0.5);
-    opacity: 0;
-  }
-
-  100% {
-    transform: rotateY(0deg) scale(1);
     opacity: 1;
   }
 }

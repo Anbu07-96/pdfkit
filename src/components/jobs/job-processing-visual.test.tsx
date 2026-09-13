@@ -10,20 +10,21 @@ import {
 } from "@/components/jobs/job-processing-visual";
 
 /**
- * Phase 75D.4.1 — premium 3D transformation visual.
+ * Phase 75D.4.2 — Intelligent Document Reconstruction visual.
  *
- * These tests pin the component's CONTRACT, not its choreography (CSS 3D
- * does not render in jsdom):
- * - the 3D scene structure per status (processing/success/error): stacks
- *   with receding sheets, the peeling/converging pages, the transformation
- *   zone (track + conversion ring + depth-staggered fragments),
- * - the decorative guarantee (aria-hidden, zero text, zero JS timers),
- * - the 3D/mobile/reduced-motion CSS contract (perspective, preserve-3d,
- *   rotateY/translateZ, the compact mobile recomposition, the static
- *   reduced-motion diagram),
+ * These tests pin the component's CONTRACT, not its choreography (CSS does
+ * not animate in jsdom):
+ * - the reconstruction scene structure per status: source page (frame,
+ *   layout guides, five structural blocks, scanning plane), transformation
+ *   field (lanes, nodes, particles, typed motes) and the progressively
+ *   reconstructed Word page,
+ * - that the OLD ring/page-stack concept is fully removed (DOM + CSS),
+ * - the decorative guarantee (aria-hidden, zero text, zero JS animation),
+ * - the fixed element count (nothing scales with real page counts),
+ * - mobile composition, reduced-motion statics and the 3D/loop CSS
+ *   contract,
  * - the failure fallback (a broken treatment never breaks the job UI),
- * - and the registry/extensibility behavior (unknown id → generic scene,
- *   explicit treatment override).
+ * - and the registry/extensibility behavior.
  */
 
 function scene() {
@@ -31,64 +32,76 @@ function scene() {
 }
 
 function css() {
-  return readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8").slice(
-    readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8").indexOf(
-      "Phase 75D.4.1",
-    ),
+  const raw = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
+  return raw.slice(raw.indexOf("Phase 75D.4.2"));
+}
+
+function source() {
+  return readFileSync(
+    join(process.cwd(), "src/components/jobs/job-processing-visual.tsx"),
+    "utf8",
   );
 }
 
-describe("JobProcessingVisual — 3D scene structure", () => {
-  it("processing: tilted PDF stack with receding sheets, peeling page, zone and converging Word stack", () => {
+describe("JobProcessingVisual — reconstruction scene structure", () => {
+  it("processing: source page, transformation field and Word page in the documented composition", () => {
     render(<JobProcessingVisual toolId="pdf-to-word" status="processing" />);
 
     const root = screen.getByTestId("job-visual");
     expect(scene().getAttribute("data-status")).toBe("processing");
     expect(scene().className).toContain("is-processing");
 
-    // Source side: three receding layers behind the face, plus a sheet
-    // that peels off toward the transformation zone.
-    const pdfSide = scene().querySelector(".job-visual-side--pdf")!;
-    expect(
-      pdfSide.querySelectorAll(
-        ".job-visual-sheet--1, .job-visual-sheet--2, .job-visual-sheet--3",
-      ),
-    ).toHaveLength(3);
-    expect(
-      pdfSide.querySelectorAll(".job-visual-sheet--front .job-visual-pdf-line"),
-    ).toHaveLength(3);
-    expect(pdfSide.querySelector(".job-visual-leaf .job-visual-sheet--peel")).not
-      .toBeNull();
+    // Source: one PDF page — frame, dashed layout guides, five abstract
+    // structural blocks (3 text bars, image region, table region) and a
+    // scanning plane. No stacks, no ring.
+    const pdf = scene().querySelector(".rec-doc--pdf")!;
+    expect(pdf.querySelectorAll(".rec-frame")).toHaveLength(1);
+    expect(pdf.querySelectorAll(".rec-guides")).toHaveLength(1);
+    expect(pdf.querySelectorAll(".rec-block")).toHaveLength(5);
+    expect(pdf.querySelectorAll(".rec-block--bar1, .rec-block--bar2, .rec-block--bar3"))
+      .toHaveLength(3);
+    expect(pdf.querySelector(".rec-block--image")).not.toBeNull();
+    expect(pdf.querySelector(".rec-block--table")).not.toBeNull();
+    expect(pdf.querySelector(".rec-scan")).not.toBeNull();
 
-    // Transformation zone: track, 3D conversion ring and three fragments
-    // at different depths.
-    const zone = scene().querySelector(".job-visual-zone")!;
-    expect(zone.querySelector(".job-visual-track")).not.toBeNull();
-    expect(zone.querySelector(".job-visual-ring")).not.toBeNull();
-    expect(zone.querySelectorAll(".job-visual-spark")).toHaveLength(3);
-    expect(zone.querySelector(".job-visual-spark--near .job-visual-chip")).not
-      .toBeNull();
-    expect(zone.querySelector(".job-visual-spark--far .job-visual-chip")).not
-      .toBeNull();
-    expect(zone.querySelector(".job-visual-spark--mid .job-visual-chip")).not
-      .toBeNull();
+    // Field: three lanes, three processing nodes, three particles and four
+    // typed motes whose chips mirror the source blocks.
+    const field = scene().querySelector(".rec-field")!;
+    expect(field.querySelectorAll(".rec-path")).toHaveLength(3);
+    expect(field.querySelectorAll(".rec-node")).toHaveLength(3);
+    expect(field.querySelectorAll(".rec-dust")).toHaveLength(3);
+    expect(field.querySelectorAll(".rec-mote")).toHaveLength(4);
+    expect(field.querySelectorAll(".rec-mote .rec-chip")).toHaveLength(4);
+    expect(field.querySelector(".rec-mote--text1 .rec-chip")).not.toBeNull();
+    expect(field.querySelector(".rec-mote--image .rec-chip")).not.toBeNull();
+    expect(field.querySelector(".rec-mote--table .rec-chip")).not.toBeNull();
 
-    // Target side: Word face with materialising lines, a receding layer,
-    // and a sheet converging in from the zone.
-    const wordSide = scene().querySelector(".job-visual-side--word")!;
-    expect(
-      wordSide.querySelectorAll(".job-visual-sheet--front .job-visual-line"),
-    ).toHaveLength(5);
-    expect(wordSide.querySelector(".job-visual-sheet--1")).not.toBeNull();
-    expect(wordSide.querySelector(".job-visual-arrival .job-visual-sheet--peel"))
-      .not.toBeNull();
+    // Target: the Word page reconstructed from guides, frame, four text
+    // lines, an image placeholder and a table region.
+    const word = scene().querySelector(".rec-doc--word")!;
+    expect(word.querySelectorAll(".rec-guides")).toHaveLength(1);
+    expect(word.querySelectorAll(".rec-frame")).toHaveLength(1);
+    expect(word.querySelectorAll(".rec-wline")).toHaveLength(4);
+    expect(word.querySelector(".rec-wimg")).not.toBeNull();
+    expect(word.querySelector(".rec-wtable")).not.toBeNull();
 
     // No outcome badge while work is in flight.
     expect(scene().querySelector(".job-visual-badge")).toBeNull();
     expect(root).toBeInTheDocument();
   });
 
-  it("success: the target is marked with a flipped-in success badge", () => {
+  it("keeps a fixed element count independent of document size", () => {
+    render(<JobProcessingVisual toolId="pdf-to-word" status="processing" />);
+    // The whole scene is exactly this many visual elements — nothing is
+    // ever added per real PDF page.
+    expect(scene().querySelectorAll(".rec-block")).toHaveLength(5);
+    expect(scene().querySelectorAll(".rec-mote")).toHaveLength(4);
+    expect(scene().querySelectorAll(".rec-wline")).toHaveLength(4);
+    expect(scene().querySelectorAll(".rec-node")).toHaveLength(3);
+    expect(scene().querySelectorAll(".rec-dust")).toHaveLength(3);
+  });
+
+  it("success: the completed document carries a check badge", () => {
     render(<JobProcessingVisual toolId="pdf-to-word" status="success" />);
 
     expect(scene().getAttribute("data-status")).toBe("success");
@@ -98,7 +111,7 @@ describe("JobProcessingVisual — 3D scene structure", () => {
     expect(badge?.querySelector("svg")).not.toBeNull();
   });
 
-  it("error: the scene is marked with an error badge", () => {
+  it("error: the reconstruction stays visibly incomplete with an error badge", () => {
     render(<JobProcessingVisual toolId="pdf-to-word" status="error" />);
 
     expect(scene().getAttribute("data-status")).toBe("error");
@@ -106,11 +119,13 @@ describe("JobProcessingVisual — 3D scene structure", () => {
     expect(
       scene().querySelector(".job-visual-badge--error"),
     ).not.toBeNull();
+    // The later reconstruction pieces are absent; the frame and the
+    // earliest lines remain — a partial document, not a reset one.
+    expect(scene().querySelector(".rec-wline--1")).not.toBeNull();
+    expect(scene().querySelector(".rec-wtable")).not.toBeNull();
   });
 
   it("transitions in place when a mounted scene changes status", () => {
-    // A consumer that keeps the visual mounted across the job lifecycle
-    // gets an in-place transition, not a remount.
     const { rerender } = render(
       <JobProcessingVisual toolId="pdf-to-word" status="processing" />,
     );
@@ -129,48 +144,81 @@ describe("JobProcessingVisual — 3D scene structure", () => {
   });
 });
 
-describe("JobProcessingVisual — 3D, mobile and reduced-motion CSS contract", () => {
-  it("builds the scene from real CSS 3D: perspective, preserve-3d, rotateY, translateZ", () => {
-    const styles = css();
-    // The scene establishes the 3D rendering context…
-    expect(styles).toMatch(/\.job-visual-scene\s*\{[^}]*perspective:/);
-    // …carried through the sides, stacks, peeling pages and the zone so
-    // the browser depth-sorts sheets and fragments…
-    expect(styles).toMatch(/\.job-visual-side\s*\{[^}]*preserve-3d/);
-    expect(styles).toMatch(/\.job-visual-stack\s*\{[^}]*preserve-3d/);
-    expect(styles).toMatch(/\.job-visual-zone\s*\{[^}]*preserve-3d/);
-    expect(styles).toMatch(/\.job-visual-leaf[^{]*\{[^}]*preserve-3d/);
-    // …with tilted stacks and a standing conversion ring…
-    expect(styles).toMatch(/rotateY\(24deg\)/);
-    expect(styles).toMatch(/rotateY\(-24deg\)/);
-    expect(styles).toMatch(/\.job-visual-ring\s*\{[^}]*rotateY\(70deg\)/);
-    // …and genuine depth via translateZ (receding sheets, fragment parallax).
-    expect(styles).toMatch(/\.job-visual-sheet--3\s*\{[^}]*-1\.5rem/);
-    expect(styles).toMatch(
-      /\.job-visual-spark--near \.job-visual-chip\s*\{[^}]*translateZ\(1\.6rem\)/,
-    );
-    expect(styles).toMatch(
-      /\.job-visual-spark--far \.job-visual-chip\s*\{[^}]*translateZ\(-1rem\)/,
-    );
+describe("JobProcessingVisual — old concept fully removed", () => {
+  it("mounts none of the ring/page-stack primitives in the DOM", () => {
+    render(<JobProcessingVisual toolId="pdf-to-word" status="processing" />);
+    for (const old of [
+      ".job-visual-ring",
+      ".job-visual-spark",
+      ".job-visual-leaf",
+      ".job-visual-arrival",
+      ".job-visual-sheet",
+      ".job-visual-stack",
+      ".job-visual-fragment",
+      ".job-visual-flow",
+      ".job-visual-doc",
+    ]) {
+      expect(scene().querySelectorAll(old)).toHaveLength(0);
+    }
   });
 
-  it("recomposes a compact scene for mobile — not a scaled desktop scene", () => {
+  it("ships none of the old concept's CSS or keyframes", () => {
+    const styles = css();
+    for (const old of [
+      "job-visual-ring",
+      "job-visual-spark",
+      "job-visual-leaf",
+      "job-visual-arrival",
+      "job-visual-sheet",
+      "pdfkit-job-leaf",
+      "pdfkit-job-arrival",
+      "pdfkit-job-wordsettle",
+      "pdfkit-job-float",
+    ]) {
+      expect(styles).not.toContain(old);
+    }
+  });
+});
+
+describe("JobProcessingVisual — CSS contract: 3D, loop, mobile, reduced motion", () => {
+  it("builds the scene with perspective and depth, animated by one master loop", () => {
+    const styles = css();
+    // Perspective on the scene; preserve-3d through the documents so the
+    // block lifts (translateZ) render with real depth.
+    expect(styles).toMatch(/\.job-visual-scene\s*\{[^}]*perspective:/);
+    expect(styles).toMatch(/\.rec-doc\s*\{[^}]*preserve-3d/);
+    expect(styles).toMatch(/translate3d\(var\(--lx/);
+    // One shared master-loop duration keeps every element in sync without
+    // JavaScript (the ambient dust may drift on its own slower clock).
+    const loopUsages = styles.match(/7\.5s/g) ?? [];
+    expect(loopUsages.length).toBeGreaterThanOrEqual(10);
+    // The reconstruction sequence exists in order: guides, frame, lines,
+    // image, then table.
+    expect(styles).toMatch(/@keyframes rec-w-guides/);
+    expect(styles).toMatch(/@keyframes rec-w-frame/);
+    expect(styles).toMatch(/@keyframes rec-w-line1/);
+    expect(styles).toMatch(/@keyframes rec-w-img/);
+    expect(styles).toMatch(/@keyframes rec-w-table/);
+    // The scanner and the typed motes exist.
+    expect(styles).toMatch(/@keyframes rec-scan/);
+    expect(styles).toMatch(/@keyframes rec-mote-text1/);
+    expect(styles).toMatch(/@keyframes rec-mote-image/);
+  });
+
+  it("recomposes a vertical scene for mobile — not a scaled desktop scene", () => {
     const styles = css();
     const mobile = styles.slice(styles.indexOf("@media (max-width: 639px)"));
     expect(mobile.length).toBeGreaterThan(0);
-    // Tighter perspective and angles…
-    expect(mobile).toMatch(/perspective:\s*34rem/);
-    expect(mobile).toMatch(/rotateY\(18deg\)/);
-    // …smaller stacks and ring…
-    expect(mobile).toMatch(/\.job-visual-side\s*\{[^}]*width:\s*2\.25rem/);
-    // …shorter page travel (dedicated mobile keyframes)…
-    expect(mobile).toMatch(/pdfkit-job-leaf-sm/);
-    expect(mobile).toMatch(/pdfkit-job-arrival-sm/);
-    // …and one fewer fragment.
-    expect(mobile).toMatch(/\.job-visual-spark--mid\s*\{\s*display:\s*none/);
+    // Vertical composition: source above, field column, target below…
+    expect(mobile).toMatch(/flex-direction:\s*column/);
+    // …with downward mote travel via dedicated keyframes…
+    expect(mobile).toMatch(/rec-mote-text1-m/);
+    expect(mobile).toMatch(/rec-mote-table-m/);
+    // …and chips switching from vertical lanes to horizontal lanes.
+    expect(mobile).toMatch(/\.rec-chip\s*\{[^}]*top:\s*0/);
   });
 
-  it("falls back to a static 3D composition under prefers-reduced-motion", () => {
+  it("falls back to a static pipeline representation under reduced motion", () => {
     const styles = css();
     const reduced = styles.slice(
       styles.indexOf("@media (prefers-reduced-motion: reduce)"),
@@ -178,42 +226,42 @@ describe("JobProcessingVisual — 3D, mobile and reduced-motion CSS contract", (
     expect(reduced.length).toBeGreaterThan(0);
     // All motion stops…
     expect(reduced).toContain("animation: none !important");
-    expect(reduced).toContain("transition: none !important");
-    // …while the composition stays legible: solid text lines and fragments
-    // resting at fixed positions along the track.
-    expect(reduced).toMatch(/\.job-visual-spark\s*\{[^}]*translateX\(30%\)/);
-    expect(reduced).toMatch(/\.job-visual-line\s*\{[^}]*opacity:\s*0\.8/);
+    // …while the pipeline stays legible: blocks held in their lifted
+    // positions and pieces resting along the field.
+    expect(reduced).toMatch(
+      /\.rec-block\s*\{[^}]*translate3d\(var\(--lx/,
+    );
+    expect(reduced).toMatch(/\.rec-mote\s*\{[^}]*opacity:\s*1/);
+    expect(reduced).toMatch(/\.rec-mote--table\s*\{[^}]*translate[XY]\(86%\)/);
   });
 
-  it("defines the success beat: settle, stack convergence, badge flip", () => {
+  it("stops the loop on success and leaves an incomplete document on error", () => {
     const styles = css();
-    expect(styles).toMatch(/@keyframes pdfkit-job-wordsettle/);
-    expect(styles).toMatch(/@keyframes pdfkit-job-settle/);
-    expect(styles).toMatch(/@keyframes pdfkit-job-badge/);
-    // Success retires the travelling pieces and solidifies the lines.
-    expect(styles).toMatch(
-      /\.is-success \.job-visual-spark[^{]*\{[^}]*animation:\s*none/,
-    );
-    expect(styles).toMatch(
-      /\.is-success \.job-visual-line\s*\{[^}]*opacity:\s*1/,
-    );
-    // Error stops everything and tilts the target away.
-    expect(styles).toMatch(
-      /\.is-error \.job-visual-side--word \.job-visual-stack\s*\{[^}]*rotateY\(-34deg\)/,
-    );
+    // Success stops the travelling pieces…
+    expect(styles).toMatch(/is-success \.rec-mote[^{]*\{[^}]*animation:\s*none/);
+    // …settles the completed document with a one-shot pop…
+    expect(styles).toMatch(/is-success \.rec-doc--word\s*\{[^}]*rec-word-settle/);
+    // …the reconstruction animations stop in BOTH outcome states (their
+    // base is the completed document)…
+    expect(styles).toMatch(/is-success \.rec-wline[^{]*\{[^}]*animation:\s*none/);
+    expect(styles).toMatch(/is-error \.rec-wline[^{]*\{[^}]*animation:\s*none/);
+    // …and error hides the later reconstruction pieces (image, table,
+    // later lines) so the document stays visibly incomplete.
+    expect(styles).toMatch(/is-error \.rec-wimg[^{]*\{[^}]*opacity:\s*0/);
+    expect(styles).toMatch(/is-error \.rec-wtable[^{]*\{[^}]*opacity:\s*0/);
   });
 });
 
 describe("JobProcessingVisual — registry and extensibility", () => {
-  it("falls back to a quieter generic scene for unknown tools", () => {
+  it("falls back to a quieter generic reconstruction for unknown tools", () => {
     render(<JobProcessingVisual toolId="merge-pdf" status="processing" />);
-    expect(scene().className).toContain("job-visual-scene--generic");
-    // The same 3D primitives, deliberately quieter: two fragments, no
-    // peeling or converging pages.
-    expect(scene().querySelectorAll(".job-visual-spark")).toHaveLength(2);
-    expect(scene().querySelector(".job-visual-leaf")).toBeNull();
-    expect(scene().querySelector(".job-visual-arrival")).toBeNull();
-    expect(scene().querySelector(".job-visual-ring")).not.toBeNull();
+    expect(scene().className).toContain("rec-scene--generic");
+    // Same primitives, fewer of them: two text motes, one lane, one node.
+    expect(scene().querySelectorAll(".rec-mote")).toHaveLength(2);
+    expect(scene().querySelectorAll(".rec-path")).toHaveLength(1);
+    expect(scene().querySelectorAll(".rec-node")).toHaveLength(1);
+    expect(scene().querySelector(".rec-wtable")).toBeNull();
+    expect(scene().querySelector(".rec-wimg")).toBeNull();
   });
 
   it("accepts an explicit treatment — how future tools plug in", () => {
@@ -236,27 +284,20 @@ describe("JobProcessingVisual — safety contracts", () => {
     render(<JobProcessingVisual toolId="pdf-to-word" status="processing" />);
     const root = screen.getByTestId("job-visual");
     expect(root.getAttribute("aria-hidden")).toBe("true");
-    // No text anywhere — nothing can collide with workspace text queries or
-    // screen-reader output.
     expect(root.textContent).toBe("");
   });
 
   it("contains no JavaScript timers, frames or polling — CSS motion only", () => {
-    const source = readFileSync(
-      join(process.cwd(), "src/components/jobs/job-processing-visual.tsx"),
-      "utf8",
-    );
-    expect(source).not.toMatch(/setTimeout|setInterval|requestAnimationFrame/);
-    expect(source).not.toMatch(/new Worker|<canvas|\.getContext\(/);
-    expect(source).not.toMatch(/useSpring|useTransition|framer/);
+    const src = source();
+    expect(src).not.toMatch(/setTimeout|setInterval|requestAnimationFrame/);
+    expect(src).not.toMatch(/new Worker|<canvas|\.getContext\(/);
+    expect(src).not.toMatch(/useSpring|useTransition|framer/);
   });
 
   it("renders nothing when a treatment throws — the job UI carries on", () => {
     function BrokenTreatment(): never {
       throw new Error("visual exploded");
     }
-    // The error boundary must swallow the failure silently; nothing here
-    // may reach the surrounding (real) processing UI.
     render(
       <JobProcessingVisual
         treatment={BrokenTreatment}

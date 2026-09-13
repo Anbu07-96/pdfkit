@@ -35,11 +35,13 @@ type Status =
   | "error";
 
 /**
- * Phase 75D.4.1: how long the processing panel lingers in its success
+ * Phase 75D.4.2: how long the processing panel lingers in its success
  * state so the visual can play its settle beat before the result UI takes
- * over. Presentational only — the job itself is already finished.
+ * over — kept short (the completion animation is 450 ms) so fast
+ * conversions never feel delayed. Presentational only — the job itself is
+ * already finished.
  */
-const SUCCESS_SETTLE_MS = 650;
+const SUCCESS_SETTLE_MS = 450;
 
 /** True when the user asked for reduced motion (the beat is then skipped). */
 function prefersReducedMotion(): boolean {
